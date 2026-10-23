@@ -1,4 +1,4 @@
-#include "Common.h"
+﻿#include "Common.h"
 #include "Home.h"
 #include <QtGui>
 #include <QtNetwork>
@@ -122,15 +122,6 @@ Home::Home(QWidget *parent)
 		const bool overBar = (bar != nullptr && bar->isVisible() && bar->geometry().contains(cur))
 			|| (info != nullptr && info->isVisible() && info->geometry().contains(cur));
 		const qint64 idle = QDateTime::currentMSecsSinceEpoch() - lastMove;
-		{
-			static int lastInside = -1, lastVis = -1;
-			const int ins = inside ? 1 : 0, vis = (bar && bar->isVisible()) ? 1 : 0;
-			if (ins != lastInside || vis != lastVis){
-				lastInside = ins;
-				lastVis = vis;
-				qWarning("DBG poll inside=%d idle=%lld bar=%d cursor=%d,%d", ins, idle, vis, cur.x(), cur.y());
-			}
-		}
 		if (inside && (overBar || idle < 2000)) {
 			if (bar && !bar->isVisible()) {
 				bar->show();
@@ -659,75 +650,10 @@ void Home::mouseDoubleClickEvent(QMouseEvent * e)
 	QWidget::mouseDoubleClickEvent(e);
 }
 
-#ifdef Q_OS_WIN
-namespace
-{
-	UINT embedMouseMessage()
-	{
-		static const UINT id = RegisterWindowMessageW(L"BiliLocalEmbedMouse");
-		return id;
-	}
-}
-#endif
-
-bool Home::nativeEvent(const QByteArray &eventType, void *message, long *result)
-{
-	Q_UNUSED(eventType);
-#ifdef Q_OS_WIN
-	MSG *msg = static_cast<MSG *>(message);
-	if (msg != nullptr && msg->message == embedMouseMessage()){
-		// Embed 后端下视频是 libvlc 的原生子窗口，鼠标消息被它吃掉；
-		// 那边把它们换成这条自定义消息转回来，这里重新组装成 Qt 事件。
-		QEvent::Type type = QEvent::None;
-		Qt::MouseButton button = Qt::NoButton;
-		Qt::MouseButtons buttons = Qt::NoButton;
-		switch (msg->wParam){
-		case WM_MOUSEMOVE:
-			type = QEvent::MouseMove;
-			break;
-		case WM_LBUTTONDOWN:
-			type = QEvent::MouseButtonPress;
-			button = buttons = Qt::LeftButton;
-			break;
-		case WM_LBUTTONUP:
-			type = QEvent::MouseButtonRelease;
-			button = Qt::LeftButton;
-			break;
-		case WM_LBUTTONDBLCLK:
-			type = QEvent::MouseButtonDblClick;
-			button = buttons = Qt::LeftButton;
-			break;
-		case WM_RBUTTONDOWN:
-			type = QEvent::MouseButtonPress;
-			button = buttons = Qt::RightButton;
-			break;
-		case WM_RBUTTONUP:
-			type = QEvent::MouseButtonRelease;
-			button = Qt::RightButton;
-			break;
-		default:
-			break;
-		}
-		if (type != QEvent::None){
-			const qreal dpr = devicePixelRatioF() > 0.0 ? devicePixelRatioF() : 1.0;
-			const QPointF local(GET_X_LPARAM(msg->lParam) / dpr, GET_Y_LPARAM(msg->lParam) / dpr);
-			QMouseEvent ev(type, local, mapToGlobal(local.toPoint()), button, buttons, Qt::NoModifier);
-			QApplication::sendEvent(this, &ev);
-		}
-		if (result != nullptr){
-			*result = 0;
-		}
-		return true;
-	}
-#endif
-	return QWidget::nativeEvent(eventType, message, result);
-}
-
 void Home::mouseMoveEvent(QMouseEvent * e)
 {
 	lastMove = QDateTime::currentMSecsSinceEpoch();
 	QPoint cur = e->pos();
-	qWarning("DBG move %d,%d", cur.x(), cur.y());
 	if (seekdrag) {
 		if (bar && !bar->isVisible()) {
 			bar->show();

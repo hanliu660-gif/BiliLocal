@@ -162,6 +162,8 @@ LIBS += \
     -lssleay32
 }
 LIBS += -ldwmapi
+# Embed 输出的自动化验证钩子：运行时由 BILILOCAL_EMBED_TEST 环境变量触发，正常使用无影响
+DEFINES += BILILOCAL_EMBED_TEST
 }
 
 macx{

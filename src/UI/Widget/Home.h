@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Editor.h"
 #include "Info.h"
@@ -77,7 +77,6 @@ namespace UI
 		virtual void closeEvent(QCloseEvent *e) override;
 		virtual void dragEnterEvent(QDragEnterEvent *e) override;
 		virtual void dropEvent(QDropEvent *e) override;
-		virtual bool nativeEvent(const QByteArray &eventType, void *message, long *result) override;
 		virtual void mouseDoubleClickEvent(QMouseEvent *e) override;
 		virtual void mouseMoveEvent(QMouseEvent *e) override;
 		virtual void mousePressEvent(QMouseEvent *e) override;

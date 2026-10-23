@@ -8,7 +8,6 @@
 #include <QWidget>
 #ifdef Q_OS_WIN
 #include <windows.h>
-#include <windowsx.h>
 #endif
 
 namespace
@@ -22,8 +21,25 @@ namespace
 			QSurfaceFormat f = format();
 			f.setAlphaBufferSize(8);
 			setFormat(f);
-			setFlags(flags() | Qt::Tool | Qt::FramelessWindowHint | Qt::WindowTransparentForInput | Qt::WindowStaysOnTopHint | Qt::WindowDoesNotAcceptFocus);
+			// 不再点击穿透：覆盖层就是视频区的输入面，事件进来后按位置路由给
+			// 工具条/底栏/Home（见 route()）。VLC 子窗口不需要任何鼠标输入。
+			setFlags(flags() | Qt::Tool | Qt::FramelessWindowHint | Qt::WindowDoesNotAcceptFocus);
 			QObject::connect(this, &EWindow::frameSwapped, std::bind(&OpenGLRenderPrivate::onSwapped, render));
+#ifdef BILILOCAL_EMBED_TEST
+			// 自动化验证：进程内注入合成鼠标事件走完整路由（正式构建不编译，
+			// 且仅当设置了 BILILOCAL_EMBED_TEST 环境变量才启动）
+			if (qEnvironmentVariableIsSet("BILILOCAL_EMBED_TEST")){
+				QTimer *wiggle = new QTimer(this);
+				int n = 0;
+				QObject::connect(wiggle, &QTimer::timeout, [this, &n](){
+					const QPointF local(200.0 + (n++ % 10) * 80.0, 320.0);
+					QMouseEvent ev(QEvent::MouseMove, local, mapToGlobal(local.toPoint()),
+						Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+					QCoreApplication::sendEvent(this, &ev);
+				});
+				wiggle->start(300);
+			}
+#endif
 		}
 
 	private:
@@ -43,6 +59,35 @@ namespace
 			QRect rect(QPoint(0, 0), lApp->findObject<ARender>()->getActualSize());
 			render->drawDanm(&painter, rect);
 		}
+
+		// 把覆盖层收到的鼠标事件路由到覆盖层之下真正应该收它的部件：
+		// 工具条/底栏/它们的子控件 → host->childAt；视频区 → Home 本体。
+		void route(QMouseEvent *e)
+		{
+			QWidget *host = render->hostWidget();
+			if (host == nullptr){
+				return;
+			}
+			const QPoint gp = e->globalPos();
+			const QPoint hp = host->mapFromGlobal(gp);
+			QWidget *w = host->childAt(hp);
+			if (w == nullptr){
+				w = host;
+			}
+			if (e->type() == QEvent::MouseButtonPress){
+				// 覆盖层不接收焦点，点击必须手动把主窗口带到前台，模拟原生行为
+				host->activateWindow();
+			}
+			setCursor(host->cursor());
+			QMouseEvent copy(e->type(), w->mapFromGlobal(gp), gp,
+				e->button(), e->buttons(), e->modifiers());
+			QCoreApplication::sendEvent(w, &copy);
+		}
+
+		void mouseMoveEvent(QMouseEvent *e) override { route(e); }
+		void mousePressEvent(QMouseEvent *e) override { route(e); }
+		void mouseReleaseEvent(QMouseEvent *e) override { route(e); }
+		void mouseDoubleClickEvent(QMouseEvent *e) override { route(e); }
 	};
 
 	/*	The native child window that libvlc draws into.
@@ -96,76 +141,6 @@ namespace
 			return false;
 		}
 	};
-
-#ifdef Q_OS_WIN
-	/*	libvlc 在自己的线程里创建 "VLC video output" 之类的原生子窗口，它盖满整个画面，
-		鼠标消息全被它吃掉，于是界面自己的「移动鼠标显形 / 点击跳转」在 Embed 模式下失效。
-		办法：接管这些子窗口的 WndProc，把鼠标消息换算成主窗口坐标后转发回去。
-	*/
-	QHash<HWND, WNDPROC> g_orig;
-	HWND g_target = nullptr;
-	UINT g_mouse = 0;
-
-	LRESULT CALLBACK forwardMouse(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
-	{
-		switch (msg){
-		case WM_MOUSEMOVE:
-		case WM_LBUTTONDOWN:
-		case WM_LBUTTONUP:
-		case WM_LBUTTONDBLCLK:
-		case WM_RBUTTONDOWN:
-		case WM_RBUTTONUP:
-		case WM_RBUTTONDBLCLK:
-		case WM_MBUTTONDOWN:
-		case WM_MBUTTONUP:
-		case WM_MOUSEWHEEL:
-			if (g_target != nullptr){
-				POINT p;
-				p.x = GET_X_LPARAM(lparam);
-				p.y = GET_Y_LPARAM(lparam);
-				if (msg != WM_MOUSEWHEEL){
-					ClientToScreen(hwnd, &p);
-				}
-				ScreenToClient(g_target, &p);
-				// 直接把原始鼠标消息 PostMessage 过去，Qt 的窗口层会当成"没有真实光标"而丢掉，
-				// 所以改发自定义消息，由 Home::nativeEvent 自己组装成 Qt 事件。
-				PostMessage(g_target, g_mouse, (WPARAM)msg, MAKELPARAM(p.x, p.y));
-			}
-			return 0;
-		default:
-			break;
-		}
-		const WNDPROC proc = g_orig.value(hwnd, nullptr);
-		if (proc != nullptr){
-			return CallWindowProcW(proc, hwnd, msg, wparam, lparam);
-		}
-		return DefWindowProcW(hwnd, msg, wparam, lparam);
-	}
-
-	void subclassTree(HWND parent)
-	{
-		HWND child = nullptr;
-		while ((child = FindWindowExW(parent, child, nullptr, nullptr)) != nullptr){
-			if (!g_orig.contains(child)){
-				const WNDPROC old = (WNDPROC)SetWindowLongPtrW(child, GWLP_WNDPROC, (LONG_PTR)forwardMouse);
-				g_orig.insert(child, old);
-			}
-			subclassTree(child);
-		}
-	}
-
-	void restoreTree(HWND parent)
-	{
-		HWND child = nullptr;
-		while ((child = FindWindowExW(parent, child, nullptr, nullptr)) != nullptr){
-			const WNDPROC old = g_orig.take(child);
-			if (old != nullptr){
-				SetWindowLongPtrW(child, GWLP_WNDPROC, (LONG_PTR)old);
-			}
-			restoreTree(child);
-		}
-	}
-#endif
 }
 
 OpenGLEmbedRenderPrivate::OpenGLEmbedRenderPrivate()
@@ -187,35 +162,21 @@ OpenGLEmbedRenderPrivate::OpenGLEmbedRenderPrivate()
 		}
 	});
 	syncOverlay();
-#ifdef Q_OS_WIN
-	g_target = (HWND)host->winId();
-	g_mouse = RegisterWindowMessageW(L"BiliLocalEmbedMouse");
-	subclassTree((HWND)surface->winId());
-	// VLC 会按需重建视频子窗口（起播、换 vout、全屏切换），所以定期补挂一次。
-	QTimer *scan = new QTimer(overlay);
-	QObject::connect(scan, &QTimer::timeout, [this]() {
-		if (surface != nullptr){
-			subclassTree((HWND)surface->winId());
-		}
-	});
-	scan->start(1000);
-#endif
 }
 
 OpenGLEmbedRenderPrivate::~OpenGLEmbedRenderPrivate()
 {
-#ifdef Q_OS_WIN
-	if (surface != nullptr){
-		restoreTree((HWND)surface->winId());
-	}
-	g_target = nullptr;
-#endif
 	delete overlay;
 }
 
 void OpenGLEmbedRenderPrivate::syncOverlay()
 {
 	if (host == nullptr || overlay == nullptr){
+		return;
+	}
+	// 主窗口最小化/隐藏时弹幕层必须跟着收，否则透明层会孤零零地留在屏幕上
+	if (host->isMinimized() || !host->isVisible()){
+		overlay->hide();
 		return;
 	}
 	const QPoint tl = host->mapToGlobal(QPoint(0, 0));
@@ -226,6 +187,11 @@ void OpenGLEmbedRenderPrivate::syncOverlay()
 void OpenGLEmbedRenderPrivate::showOverlay()
 {
 	if (overlay){
+		// 挂成主窗口的 owned window：始终盖住主窗口（含其中的 VLC 子窗口），
+		// 主窗口失焦后又不会像 WS_EX_TOPMOST 那样浮在别的应用上。
+		if (host != nullptr && host->windowHandle() != nullptr && overlay->transientParent() != host->windowHandle()){
+			overlay->setTransientParent(host->windowHandle());
+		}
 		overlay->show();
 	}
 }
@@ -239,7 +205,6 @@ void OpenGLEmbedRenderPrivate::hideOverlay()
 
 void OpenGLEmbedRenderPrivate::resize(QSize size)
 {
-	qWarning("embed resize: %dx%d", size.width(), size.height());
 	if (surface){
 		surface->setGeometry(0, 0, size.width(), size.height());
 		surface->lower();
@@ -254,7 +219,6 @@ void OpenGLEmbedRenderPrivate::nudge()
 		return;
 	}
 	const QSize s = surface->size();
-	qWarning("nudge: surface=%dx%d dpr=%.2f visible=%d", s.width(), s.height(), surface->devicePixelRatioF(), int(surface->isVisible()));
 	if (s.isEmpty()){
 		return;
 	}
@@ -267,7 +231,6 @@ void OpenGLEmbedRenderPrivate::nudge()
 		}
 		surface->resize(s);
 		syncOverlay();
-		qWarning("nudge: restored %dx%d", s.width(), s.height());
 	});
 }
 

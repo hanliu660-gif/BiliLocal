@@ -62,6 +62,11 @@ public:
 	void hideOverlay();
 	void nudge();
 
+	QWidget *hostWidget() const
+	{
+		return host;
+	}
+
 private:
 	QWidget *host;
 	QWidget *surface;

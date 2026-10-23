@@ -15,6 +15,22 @@ namespace
 	// MSVC 容忍这种写法，MinGW 不容忍，改个名。
 	QMutex timeMutex;
 
+	// fmt/dsp 等回调跑在 VLC 解码线程上，原来每次都 lApp->findObject<T>()
+	// （内部 qobject_cast），与 GUI 线程竞争，曾崩在 Qt5Core 的 QMetaObject::cast。
+	// Local 构造完成后模块表不再增删（退出才销毁），首次解析后缓存裸指针，
+	// 回调线程从此不做类型转换、不碰哈希表。
+	APlayer *cbAPlayer()
+	{
+		static APlayer *p = Local::instance()->findObject<APlayer>();
+		return p;
+	}
+
+	ARender *cbARender()
+	{
+		static ARender *r = Local::instance()->findObject<ARender>();
+		return r;
+	}
+
 	class PixelBuffer : public ABuffer
 	{
 	public:
@@ -142,7 +158,7 @@ namespace
 		PFormat f;
 		f.chroma = chroma;
 		f.size = QSize(*width, *height);
-		lApp->findObject<ARender>()->setFormat(&f);
+		cbARender()->setFormat(&f);
 		if (f.chroma == "NONE" || f.plane.isEmpty()){
 			return 0;
 		}
@@ -170,8 +186,8 @@ namespace
 	void dsp(void *opaque, void *picture)
 	{
 		Q_UNUSED(opaque);
-		lApp->findObject<ARender>()->setBuffer((ABuffer *)picture);
-		emit lApp->findObject<APlayer>()->decode();
+		cbARender()->setBuffer((ABuffer *)picture);
+		emit cbAPlayer()->decode();
 	}
 
 	void clr(void *opaque)
@@ -182,7 +198,7 @@ namespace
 
 	void sta(const libvlc_event_t *, void *)
 	{
-		QMetaObject::invokeMethod(lApp->findObject<APlayer>(), "event", Q_ARG(int, VPlayer::Init));
+		QMetaObject::invokeMethod(cbAPlayer(), "event", Q_ARG(int, VPlayer::Init));
 	}
 
 	void mid(const libvlc_event_t *, void *)
@@ -191,26 +207,26 @@ namespace
 		if ((++n % 10) == 0) {
 		}
 		if (timeMutex.tryLock()) {
-			QMetaObject::invokeMethod(lApp->findObject<APlayer>(),
+			QMetaObject::invokeMethod(cbAPlayer(),
 				"timeChanged",
-				Q_ARG(qint64, lApp->findObject<APlayer>()->getTime()));
+				Q_ARG(qint64, cbAPlayer()->getTime()));
 			timeMutex.unlock();
 		}
 	}
 
 	void hal(const libvlc_event_t *, void *)
 	{
-		QMetaObject::invokeMethod(lApp->findObject<APlayer>(), "event", Q_ARG(int, VPlayer::Wait));
+		QMetaObject::invokeMethod(cbAPlayer(), "event", Q_ARG(int, VPlayer::Wait));
 	}
 
 	void end(const libvlc_event_t *, void *)
 	{
-		QMetaObject::invokeMethod(lApp->findObject<APlayer>(), "event", Q_ARG(int, VPlayer::Free));
+		QMetaObject::invokeMethod(cbAPlayer(), "event", Q_ARG(int, VPlayer::Free));
 	}
 
 	void err(const libvlc_event_t *, void *)
 	{
-		QMetaObject::invokeMethod(lApp->findObject<APlayer>(), "event", Q_ARG(int, VPlayer::Fail));
+		QMetaObject::invokeMethod(cbAPlayer(), "event", Q_ARG(int, VPlayer::Fail));
 	}
 }
 
@@ -223,7 +239,6 @@ VPlayer::VPlayer(QObject *parent)
 	for (QJsonValue arg : Config::getValue<QJsonArray>("/Player/Arguments")){
 		args.append(arg.toString().toUtf8());
 	}
-	// 自定义内存渲染（vmem）不能用 GPU 硬解，VLC 3 默认开硬解会导致 get_buffer() 失败
 	// Embed 输出例外：视频由 VLC 自己直出到原生子窗口，此时应当开 Direct3D11 硬解
 	const bool embed = (Config::getValue("/Render/Option/OpenGL/Output", QString()) == "Embed");
 	if (embed){
@@ -234,13 +249,28 @@ VPlayer::VPlayer(QObject *parent)
 			args.append("--vout=direct3d11");
 		}
 	}
-	else if (Config::getValue("/Player/HardwareDecode", false)){
-		if (!args.contains("--avcodec-hw=any")){
-			args.append("--avcodec-hw=any");
+	else {
+		// Arguments 里已经写了 --avcodec-hw= 时以配置为准，不再自动追加：
+		// libvlc 收到两个 hw 选项只有最后一个生效，自动追加会把手动指定的参数顶掉。
+		bool hwGiven = false;
+		for (const QByteArray &a : args){
+			if (a.startsWith("--avcodec-hw=")){
+				hwGiven = true;
+				break;
+			}
 		}
-	}
-	else if (!args.contains("--avcodec-hw=none")){
-		args.append("--avcodec-hw=none");
+		// 自定义内存渲染（vmem）不能用 GPU 硬解直出（get_buffer 会失败），默认 --avcodec-hw=none；
+		// "GPU 解码拷回内存"的模式（dxva2-copy 等）在 Arguments 里手动指定。
+		if (!hwGiven){
+			if (Config::getValue("/Player/HardwareDecode", false)){
+				if (!args.contains("--avcodec-hw=any")){
+					args.append("--avcodec-hw=any");
+				}
+			}
+			else if (!args.contains("--avcodec-hw=none")){
+				args.append("--avcodec-hw=none");
+			}
+		}
 	}
 	QVector<const char *> argv(args.size());
 	for (int i = 0; i < args.size(); ++i){
@@ -254,6 +284,10 @@ VPlayer::VPlayer(QObject *parent)
 VPlayer::~VPlayer()
 {
 	if (mp){
+		if (state != Stop){
+			// 先停掉解码线程再释放，避免析构期间 VLC 线程还在往已失效的回调里打
+			libvlc_media_player_stop(mp);
+		}
 		libvlc_media_player_release(mp);
 	}
 	libvlc_release(vlc);
@@ -270,7 +304,7 @@ void VPlayer::init()
 			switch (last){
 			case Stop:
 			{
-				lApp->findObject<ARender>()->setMusic(libvlc_video_get_track_count(mp) <= 0);
+				cbARender()->setMusic(libvlc_video_get_track_count(mp) <= 0);
 				if (!Config::getValue("/Player/Subtitle", true)){
 					libvlc_video_set_spu(mp, -1);
 				}
@@ -351,7 +385,7 @@ void VPlayer::parseTracks(Utils::Type type)
 				libvlc_video_set_track(mp, real);
 				slot->current = fake;
 				emit trackChanged(type, fake);
-				lApp->findObject<ARender>()->setMusic(real == -1);
+				cbARender()->setMusic(real == -1);
 			};
 			break;
 		case Utils::Audio:

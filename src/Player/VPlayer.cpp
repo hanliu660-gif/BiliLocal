@@ -224,7 +224,17 @@ VPlayer::VPlayer(QObject *parent)
 		args.append(arg.toString().toUtf8());
 	}
 	// 自定义内存渲染（vmem）不能用 GPU 硬解，VLC 3 默认开硬解会导致 get_buffer() 失败
-	if (Config::getValue("/Player/HardwareDecode", false)){
+	// Embed 输出例外：视频由 VLC 自己直出到原生子窗口，此时应当开 Direct3D11 硬解
+	const bool embed = (Config::getValue("/Render/Option/OpenGL/Output", QString()) == "Embed");
+	if (embed){
+		if (!args.contains("--avcodec-hw=d3d11va")){
+			args.append("--avcodec-hw=d3d11va");
+		}
+		if (!args.contains("--vout=direct3d11")){
+			args.append("--vout=direct3d11");
+		}
+	}
+	else if (Config::getValue("/Player/HardwareDecode", false)){
 		if (!args.contains("--avcodec-hw=any")){
 			args.append("--avcodec-hw=any");
 		}
@@ -373,8 +383,15 @@ void VPlayer::play()
 {
 	if (mp){
 		if (state == Stop){
-			libvlc_video_set_format_callbacks(mp, fmt, clr);
-			libvlc_video_set_callbacks(mp, lck, nullptr, dsp, nullptr);
+			QWidget *surface = qobject_cast<QWidget *>(lApp->findObject<ARender>()->getHandle());
+			if (surface){
+				surface->setAttribute(Qt::WA_NativeWindow, true);
+				libvlc_media_player_set_hwnd(mp, (void *)surface->winId());
+			}
+			else{
+				libvlc_video_set_format_callbacks(mp, fmt, clr);
+				libvlc_video_set_callbacks(mp, lck, nullptr, dsp, nullptr);
+			}
 			int r = libvlc_media_player_play(mp);
 		}
 		else{

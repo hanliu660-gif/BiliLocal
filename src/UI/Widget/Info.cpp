@@ -65,6 +65,9 @@ Info::Info(QWidget *parent) :
 QWidget(parent)
 {
 	setObjectName("Info");
+	// Embed 输出时视频是原生子窗口，非原生控件会被它盖住；底栏必须自己成为原生窗口
+	setAttribute(Qt::WA_NativeWindow, true);
+	setAttribute(Qt::WA_StyledBackground, true);
 	isStay = isPoped = updating = dragging = false;
 	Utils::setGround(this, Qt::white);
 	duration = -1;

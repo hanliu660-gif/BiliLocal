@@ -10,6 +10,9 @@
 #include "Quick2Private.h"
 #endif
 #include "DetachPrivate.h"
+#ifdef INTERFACE_WIDGET
+#include "EmbedPrivate.h"
+#endif
 #include "../../Config.h"
 #include "../../Player/APlayer.h"
 #include "../../UI/Interface.h"
@@ -26,6 +29,7 @@ void OpenGLRender::setup()
 #ifdef INTERFACE_WIDGET
 	l << "Widget";
 	l << "Window";
+	l << "Embed";
 #endif
 #ifdef INTERFACE_QUICK2
 	l << "Quick2";
@@ -48,6 +52,9 @@ void OpenGLRender::setup()
 		d_ptr = new OpenGLDetachRenderPrivate();
 	}
 #ifdef INTERFACE_WIDGET
+	else if (ui->widget() != nullptr && name == "Embed") {
+		d_ptr = new OpenGLEmbedRenderPrivate();
+	}
 	else if (ui->widget() != nullptr && name == "Window") {
 		d_ptr = new OpenGLWindowRenderPrivate();
 	}

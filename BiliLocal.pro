@@ -299,11 +299,13 @@ message(enable opengl render detach output)
 contains(QT, widgets){
 HEADERS += \
     src/Render/OpenGL/WidgetPrivate.h \
-    src/Render/OpenGL/WindowPrivate.h
+    src/Render/OpenGL/WindowPrivate.h \
+    src/Render/OpenGL/EmbedPrivate.h
 
 SOURCES += \
     src/Render/OpenGL/WidgetPrivate.cpp \
-    src/Render/OpenGL/WindowPrivate.cpp
+    src/Render/OpenGL/WindowPrivate.cpp \
+    src/Render/OpenGL/EmbedPrivate.cpp
 
 message(enable opengl render widget output)
 message(enable opengl render window output)

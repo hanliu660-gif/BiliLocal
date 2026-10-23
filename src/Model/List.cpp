@@ -108,6 +108,7 @@ List::List(QObject *parent)
 	setObjectName("List");
 	cur = nullptr;
 	time = 0;
+	resumed = false;
 	for (int i = 0; i < 3; ++i){
 		icons.append(QIcon(new IconEngine(i)));
 	}
@@ -157,6 +158,7 @@ List::List(QObject *parent)
 		time = _time;
 	});
 	connect(lApp->findObject<APlayer>(), &APlayer::mediaChanged, [this](QString file){
+		resumed = false;
 		updateCurrent();
 		QStandardItem *old = cur;
 		cur = itemFromFile(file, true);
@@ -229,6 +231,20 @@ List::List(QObject *parent)
 			if (!success){
 				lApp->findObject<Danmaku>()->clear();
 			}
+		}
+	});
+	connect(lApp->findObject<APlayer>(), &APlayer::begin, this, [this](){
+		// 断点续播：上次看到 10 秒以上且没看到结尾的，自动跳回存档点。
+		// 每个媒体只回跳一次——循环播放重开时不能反复跳回。
+		if (resumed || !cur || !Config::getValue("/Player/Resume", true)){
+			return;
+		}
+		const qint64 saved = cur->data(TimeRole).value<qint64>();
+		APlayer *ap = lApp->findObject<APlayer>();
+		const qint64 dur = ap->getDuration();
+		if (saved > 10000 && (dur <= 0 || saved < dur - 10000)){
+			resumed = true;
+			ap->setTime(saved);
 		}
 	});
 	connect(lApp->findObject<APlayer>(), &APlayer::reach, this, [this](bool m){

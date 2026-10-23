@@ -35,6 +35,10 @@ namespace UI
 	private:
 		QTimer *timer;
 		QTimer *delay;
+		QTimer *holdTimer;
+		bool speedHold;
+		double prevRate;
+		int prevVolume;
 
 		QAction *quitA;
 		QAction *fullA;
@@ -81,6 +85,7 @@ namespace UI
 		virtual void mouseMoveEvent(QMouseEvent *e) override;
 		virtual void mousePressEvent(QMouseEvent *e) override;
 		virtual void mouseReleaseEvent(QMouseEvent *e) override;
+		virtual void wheelEvent(QWheelEvent *e) override;
 		virtual void resizeEvent(QResizeEvent *e) override;
 
 		QSize parseSize(QString string);

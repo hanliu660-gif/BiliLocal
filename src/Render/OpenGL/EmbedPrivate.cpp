@@ -30,9 +30,14 @@ namespace
 			// 且仅当设置了 BILILOCAL_EMBED_TEST 环境变量才启动）
 			if (qEnvironmentVariableIsSet("BILILOCAL_EMBED_TEST")){
 				QTimer *wiggle = new QTimer(this);
-				int n = 0;
-				QObject::connect(wiggle, &QTimer::timeout, [this, &n](){
-					const QPointF local(200.0 + (n++ % 10) * 80.0, 320.0);
+				QObject::connect(wiggle, &QTimer::timeout, [this](){
+					// 计数器必须是静态的：ctor 的局部变量按引用捕获会悬空
+					static int n = 0;
+					// 第 20 拍（约 6 秒，必定已在播放）顺手触发一次截图，自动验证 F10 快照链路
+					if (n == 20){
+						lApp->findObject<APlayer>()->snapshot();
+					}
+					const QPointF local(200.0 + ((n++) % 10) * 80.0, 320.0);
 					QMouseEvent ev(QEvent::MouseMove, local, mapToGlobal(local.toPoint()),
 						Qt::NoButton, Qt::NoButton, Qt::NoModifier);
 					QCoreApplication::sendEvent(this, &ev);
@@ -88,6 +93,13 @@ namespace
 		void mousePressEvent(QMouseEvent *e) override { route(e); }
 		void mouseReleaseEvent(QMouseEvent *e) override { route(e); }
 		void mouseDoubleClickEvent(QMouseEvent *e) override { route(e); }
+		void wheelEvent(QWheelEvent *e) override
+		{
+			// 滚轮统一交给 Home 做音量调节
+			QWheelEvent copy(e->position(), e->globalPos(), e->pixelDelta(), e->angleDelta(),
+				e->buttons(), e->modifiers(), e->phase(), e->inverted());
+			QCoreApplication::sendEvent(render->hostWidget(), &copy);
+		}
 	};
 
 	/*	The native child window that libvlc draws into.

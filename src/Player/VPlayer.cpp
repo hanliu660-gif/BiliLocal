@@ -259,18 +259,19 @@ VPlayer::VPlayer(QObject *parent)
 				break;
 			}
 		}
-		// 自定义内存渲染（vmem）不能用 GPU 硬解直出（get_buffer 会失败），默认 --avcodec-hw=none；
-		// "GPU 解码拷回内存"的模式（dxva2-copy 等）在 Arguments 里手动指定。
-		if (!hwGiven){
-			if (Config::getValue("/Player/HardwareDecode", false)){
-				if (!args.contains("--avcodec-hw=any")){
-					args.append("--avcodec-hw=any");
-				}
-			}
-			else if (!args.contains("--avcodec-hw=none")){
-				args.append("--avcodec-hw=none");
+	// 自定义内存渲染（vmem）不能用 GPU 硬解直出（get_buffer 会失败），默认 --avcodec-hw=none；
+	// "GPU 解码拷回内存"的模式（dxva2-copy 等）在 Arguments 里手动指定。
+	if (!hwGiven){
+		if (Config::getValue("/Player/HardwareDecode", false)){
+			if (!args.contains("--avcodec-hw=any")){
+				args.append("--avcodec-hw=any");
 			}
 		}
+		else if (!args.contains("--avcodec-hw=none")){
+			args.append("--avcodec-hw=none");
+		}
+	}
+	// F10 截图走 libvlc_video_take_snapshot 的显式路径参数，实例创建时无需预配置
 	}
 	QVector<const char *> argv(args.size());
 	for (int i = 0; i < args.size(); ++i){
@@ -661,6 +662,22 @@ void VPlayer::addSubtitle(QString file)
 		};
 		list.append({ n, s });
 		s();
+	}
+}
+
+void VPlayer::snapshot()
+{
+	// d3d11 直出下画面由 VLC 拥有，截图必须走 libvlc 自己的快照；
+	// 宽高传 0 = 保持原始尺寸
+	if (mp){
+		const QString dir = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation) + "/BiliLocal";
+		if (QDir().mkpath(dir)){
+			const QString file = QString("%1/snap-%2.png")
+				.arg(QDir::toNativeSeparators(dir), QDateTime::currentDateTime().toString("yyyyMMdd-hhmmss-zzz"));
+			if (libvlc_video_take_snapshot(mp, 0, file.toUtf8().constData(), 0, 0) != 0){
+				qWarning("snapshot failed: %s", qPrintable(file));
+			}
+		}
 	}
 }
 

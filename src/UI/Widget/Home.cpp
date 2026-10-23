@@ -254,6 +254,24 @@ Home::Home(QWidget *parent)
 	showprg = sliding = seekdrag = false;
 	lastMove = 0;
 	wasMaximized = false;
+	prevRate = 1.0;
+	prevVolume = 0;
+	speedHold = false;
+	holdTimer = new QTimer(this);
+	holdTimer->setSingleShot(true);
+	connect(holdTimer, &QTimer::timeout, [this]() {
+		// PotPlayer 式长按右键快进：按住 350ms 后进入 3 倍速，松开恢复；
+		// 短按右键仍然是上下文菜单（见 mouseReleaseEvent）
+		if (aplayer->getState() != APlayer::Play){
+			return;
+		}
+		speedHold = true;
+		prevRate = aplayer->getRate();
+		if (prevRate < 0.1){
+			prevRate = 1.0;
+		}
+		aplayer->setRate(3.0);
+	});
 	connect(aplayer, &APlayer::timeChanged, [this](qint64 t) {
 		if (!sliding&&aplayer->getState() != APlayer::Stop) {
 			arender->setDisplayTime(showprg ? t / (double)aplayer->getDuration() : -1);
@@ -459,6 +477,73 @@ Home::Home(QWidget *parent)
 		spd->defaultAction()->trigger();
 	});
 	addAction(rstA);
+
+	// 数字键 0-9：按百分比跳转（长录播快速定位）
+	for (int d = 0; d <= 9; ++d){
+		QAction *pctA = new QAction(QString("Jump %1%").arg(d * 10), this);
+		pctA->setObjectName(QString("Pct%1").arg(d));
+		pctA->setShortcut(QKeySequence(QString::number(d)));
+		addAction(pctA);
+		connect(pctA, &QAction::triggered, [this, d]() {
+			const qint64 dur = aplayer->getDuration();
+			if (dur > 0){
+				aplayer->setTime(dur * d / 10);
+			}
+		});
+	}
+
+	// Shift+←/→：大步长跳转（录播几十小时，10 秒一步太慢）
+	QAction *fwd2A = new QAction(tr("Forward 60s"), this);
+	fwd2A->setObjectName("Fowd2");
+	fwd2A->setShortcut(Config::getValue("/Shortcut/Fowd2", QString("Shift+Right")));
+	addAction(fwd2A);
+	connect(fwd2A, &QAction::triggered, [this]() {
+		aplayer->setTime(aplayer->getTime() + 60000);
+	});
+	QAction *bwd2A = new QAction(tr("Backward 60s"), this);
+	bwd2A->setObjectName("Bkwd2");
+	bwd2A->setShortcut(Config::getValue("/Shortcut/Bkwd2", QString("Shift+Left")));
+	addAction(bwd2A);
+	connect(bwd2A, &QAction::triggered, [this]() {
+		aplayer->setTime(aplayer->getTime() - 60000);
+	});
+
+	// M：静音切换，记住静音前的音量
+	QAction *muteA = new QAction(tr("Mute"), this);
+	muteA->setObjectName("Mute");
+	muteA->setShortcut(Config::getValue("/Shortcut/Mute", QString("M")));
+	addAction(muteA);
+	connect(muteA, &QAction::triggered, [this]() {
+		if (aplayer->getVolume() > 0){
+			prevVolume = aplayer->getVolume();
+			aplayer->setVolume(0);
+		}
+		else {
+			aplayer->setVolume(prevVolume > 0 ? prevVolume : 50);
+		}
+	});
+
+	// T：窗口置顶切换（0=不置顶 / 2=始终置顶，见 setWindowFlags 的逻辑）
+	QAction *topA = new QAction(tr("Stay On Top"), this);
+	topA->setObjectName("Top");
+	topA->setShortcut(Config::getValue("/Shortcut/Top", QString("T")));
+	topA->setCheckable(true);
+	topA->setChecked(Config::getValue("/Interface/Top", 0) >= 2);
+	addAction(topA);
+	connect(topA, &QAction::toggled, [this](bool on) {
+		Config::setValue("/Interface/Top", on ? 2 : 0);
+		setWindowFlags();
+	});
+
+	// F10：截图，存到 图片\BiliLocal（libvlc 快照，直出模式下同样可用）
+	QAction *snapA = new QAction(tr("Snapshot"), this);
+	snapA->setObjectName("Snap");
+	snapA->setShortcut(Config::getValue("/Shortcut/Snap", QString("F10")));
+	snapA->setToolTip(tr("Snapshot to Pictures\\BiliLocal"));
+	addAction(snapA);
+	connect(snapA, &QAction::triggered, [this]() {
+		aplayer->snapshot();
+	});
 
 	rat = new QMenu(tr("Ratio"), this);
 	rat->setEnabled(false);
@@ -720,6 +805,10 @@ void Home::seekTo(QPoint p, bool commit)
 void Home::mousePressEvent(QMouseEvent * e)
 {
 	lastMove = QDateTime::currentMSecsSinceEpoch();
+	// 长按右键快进的启动（短按松开仍是右键菜单，见 mouseReleaseEvent）
+	if (e->button() == Qt::RightButton && aplayer->getState() == APlayer::Play){
+		holdTimer->start(350);
+	}
 	if (e->button() == Qt::LeftButton) {
 		QPoint p = e->pos();
 		// 底栏整条横带都能点：即使 Info 还没滑出来，按下也直接定位
@@ -769,9 +858,29 @@ void Home::mouseReleaseEvent(QMouseEvent * e)
 	}
 	sta = wgd = QPoint();
 	if (e->button() == Qt::RightButton) {
-		showContextMenu(e->pos());
+		if (speedHold){
+			// 长按快进结束，恢复原来的倍速
+			speedHold = false;
+			aplayer->setRate(prevRate);
+		}
+		else {
+			holdTimer->stop();
+			showContextMenu(e->pos());
+		}
 	}
 	QWidget::mouseReleaseEvent(e);
+}
+
+// 滚轮：直接调音量（现代播放器惯例），光标处带数字提示
+void Home::wheelEvent(QWheelEvent * e)
+{
+	const int dy = e->angleDelta().y();
+	if (dy != 0){
+		const int vol = qBound(0, aplayer->getVolume() + (dy > 0 ? 5 : -5), 100);
+		aplayer->setVolume(vol);
+		QToolTip::showText(e->globalPos(), QString::number(vol));
+	}
+	QWidget::wheelEvent(e);
 }
 
 void Home::resizeEvent(QResizeEvent * e)

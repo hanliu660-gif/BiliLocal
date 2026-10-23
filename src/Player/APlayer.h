@@ -109,5 +109,8 @@ public slots:
 
 	virtual void    addSubtitle(QString file);
 
+	// 截当前帧到快照目录（Pictures\BiliLocal），不支持的后端为空操作
+	virtual void    snapshot() { }
+
 	virtual void    event(int type);
 };

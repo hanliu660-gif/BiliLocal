@@ -75,5 +75,7 @@ public slots:
 
 	void    addSubtitle(QString file);
 
+	void    snapshot();
+
 	void    event(int type);
 };

@@ -58,6 +58,8 @@ private:
 	QStandardItem *cur;
 	qint64 time;
 	QList<QIcon> icons;
+	// 断点续播：每次 begin 只允许回跳一次，防止循环播放时反复跳回存档点
+	bool resumed;
 	void setRelated(const QModelIndexList &indexes, int reason);
 
 public slots:

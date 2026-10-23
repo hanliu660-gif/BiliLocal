@@ -732,7 +732,13 @@ void Home::dropEvent(QDropEvent * e)
 
 void Home::mouseDoubleClickEvent(QMouseEvent * e)
 {
-	if (!menu->isShown() && !info->isShown()) {
+	// 按位置判断而不是按"条子是否可见"：以前条子可见的 2 秒窗口内双击会被忽略，
+	// 全屏里想双击退出得先等条子收走。现在只要双击点不在条子上就切换。
+	const QPoint p = e->pos();
+	const bool overUi = (info->isVisible() && info->geometry().contains(p))
+		|| (bar != nullptr && bar->isVisible() && bar->geometry().contains(p))
+		|| (menu->isShown() && !menu->isWindow() && menu->geometry().contains(p));
+	if (!overUi) {
 		fullA->toggle();
 	}
 	QWidget::mouseDoubleClickEvent(e);

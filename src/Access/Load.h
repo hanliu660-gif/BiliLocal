@@ -28,7 +28,6 @@
 
 #include <QtCore>
 #include <QtNetwork>
-#include <QStandardItemModel>
 #include <functional>
 
 class Comment;
@@ -42,17 +41,7 @@ public:
 	enum State
 	{
 		None = 0,
-		Page = 381,
-		Part = 407,
-		Code = 379,
 		File = 384,
-	};
-
-	enum Role
-	{
-		UrlRole = Qt::UserRole,
-		StrRole,
-		NxtRole
 	};
 
 	struct Proc
@@ -90,22 +79,9 @@ public slots:
 	void addProc(const Load::Proc *proc);
 	const Load::Proc *getProc(QString code);
 
-	void fixCode(QString &);
-	bool canLoad(QString);
-	bool canFull(const Record *);
-	bool canHist(const Record *);
-
 	void loadDanmaku(QString);
-	void loadDanmaku(const QModelIndex &index = QModelIndex());
-	void fullDanmaku(const Record *);
-	void loadHistory(const Record *, QDate);
-	void dumpDanmaku(const QVector<Comment> *data, bool full);
-	void dumpDanmaku(const QByteArray &data, int site, bool full);
 
-	QStandardItemModel *getModel();
 	void forward();
-	void forward(QNetworkRequest);
-	void forward(QNetworkRequest, int);
 	void dequeue();
 	bool enqueue(const Load::Task &);
 	Load::Task *getHead();

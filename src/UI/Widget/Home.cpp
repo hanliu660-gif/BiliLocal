@@ -98,12 +98,8 @@ Home::Home(QWidget *parent)
 	arender = lApp->findObject<ARender>();
 	menu = new Menu(this);
 	info = new Info(this);
-	type = new Type(this);
 	list = lApp->findObject<List>();
 	load = lApp->findObject<Load>();
-	post = lApp->findObject<Post>();
-	seek = lApp->findObject<Seek>();
-	sign = lApp->findObject<Sign>();
 
 	timer = new QTimer(this);
 	timer->setSingleShot(true);
@@ -119,14 +115,9 @@ Home::Home(QWidget *parent)
 		}
 		const QPoint cur = mapFromGlobal(QCursor::pos());
 		const bool inside = rect().contains(cur);
-		const bool overBar = (bar != nullptr && bar->isVisible() && bar->geometry().contains(cur))
-			|| (info != nullptr && info->isVisible() && info->geometry().contains(cur));
+		const bool overUi = info != nullptr && info->isVisible() && info->geometry().contains(cur);
 		const qint64 idle = QDateTime::currentMSecsSinceEpoch() - lastMove;
-		if (inside && (overBar || idle < 2000)) {
-			if (bar && !bar->isVisible()) {
-				bar->show();
-				bar->raise();
-			}
+		if (inside && (overUi || idle < 2000)) {
 			if (!info->isShown()) {
 				info->pop();
 			}
@@ -134,9 +125,6 @@ Home::Home(QWidget *parent)
 			return;
 		}
 		info->push();
-		if (bar) {
-			bar->hide();
-		}
 	});
 	// Embed 后端下视频是 VLC 的原生子窗口，鼠标消息原则上会被转发过来，
 	// 但转发只覆盖"进入子窗口之后"，起播瞬间仍需自己把两条唤出来，所以常驻轮询。
@@ -226,7 +214,6 @@ Home::Home(QWidget *parent)
 		warning(tr("Warning"), text);
 	});
 
-	connect(load, &Load::progressChanged, this, &Home::percent);
 
 	auto alertNetworkError = [this](int code) {
 		QString info = tr("Network error occurred, error code: %1").arg(code);
@@ -247,9 +234,6 @@ Home::Home(QWidget *parent)
 		warning(tr("Network Error"), sugg.isEmpty() ? info : (info + '\n' + sugg));
 	};
 	connect(load, &Load::errorOccured, this, alertNetworkError);
-	connect(post, &Post::errorOccured, this, alertNetworkError);
-	connect(seek, &Seek::errorOccured, this, alertNetworkError);
-	connect(sign, &Sign::errorOccured, this, alertNetworkError);
 
 	showprg = sliding = seekdrag = false;
 	lastMove = 0;
@@ -332,10 +316,6 @@ Home::Home(QWidget *parent)
 				const QSize sz = size();
 				arender->resize(sz);
 				arender->draw(QRect(QPoint(0, 0), sz));
-				if (bar != nullptr) {
-					bar->setGeometry(0, 0, sz.width(), bar->height());
-					bar->raise();
-				}
 				if (info != nullptr) {
 					info->setGeometry(0, sz.height() - info->height(), sz.width(), info->height());
 					info->raise();
@@ -380,26 +360,6 @@ Home::Home(QWidget *parent)
 		Editor::exec(this);
 	});
 
-	postA = new QAction(tr("Post Danmaku"), this);
-	postA->setObjectName("Post");
-	postA->setEnabled(false);
-	postA->setShortcut(Config::getValue("/Shortcut/Post", QString("Ctrl+P")));
-	addAction(postA);
-	connect(postA, &QAction::triggered, [this]() {
-		menu->push();
-		info->push();
-		type->show();
-	});
-	connect(danmaku, &Danmaku::modelReset, [this]() {
-		bool allow = false;
-		for (const Record &r : danmaku->getPool()) {
-			if (post->canPost(r.access)) {
-				allow = true;
-				break;
-			}
-		}
-		postA->setEnabled(allow);
-	});
 
 	QAction *fwdA = new QAction(tr("Forward"), this);
 	fwdA->setObjectName("Fowd");
@@ -602,56 +562,11 @@ Home::Home(QWidget *parent)
 	});
 	setSingle(spd);
 
-	bar = new QWidget(this);
-	bar->setObjectName("BiliBar");
-	bar->setAttribute(Qt::WA_NativeWindow, true);
-	bar->setAttribute(Qt::WA_StyledBackground, true);
-	bar->setStyleSheet(QStringLiteral(
-		"QWidget#BiliBar{background:rgba(20,22,26,215);}"
-		"QWidget#BiliBar QPushButton{color:#e8e8ea;background:transparent;"
-		"border:1px solid rgba(255,255,255,45);border-radius:4px;padding:3px 12px;}"
-		"QWidget#BiliBar QPushButton:hover{background:rgba(255,255,255,35);}"
-		"QWidget#BiliBar QPushButton:pressed{background:rgba(255,255,255,60);}"));
-	{
-		QHBoxLayout *lay = new QHBoxLayout(bar);
-		lay->setContentsMargins(8, 4, 8, 4);
-		lay->setSpacing(6);
-		lay->addStretch(1);
-		auto addBtn = [&](QString text, QString tip, std::function<void()> slot) {
-			QPushButton *b = new QPushButton(text, bar);
-			b->setToolTip(tip);
-			b->setFocusPolicy(Qt::NoFocus);
-			b->setCursor(Qt::PointingHandCursor);
-			connect(b, &QPushButton::clicked, slot);
-			lay->addWidget(b);
-		};
-		addBtn(tr("打开"), tr("打开本地视频"), [this]() {
-			QString f = QFileDialog::getOpenFileName(this, tr("打开"), QString(),
-				tr("视频 (*.mp4 *.flv *.mkv *.ts *.mov *.wmv *.avi *.m4v *.webm);;所有文件 (*)"));
-			if (!f.isEmpty()) {
-				lApp->tryLocal(f);
-			}
-		});
-		addBtn(tr("弹幕"), tr("加载本地弹幕文件 (xml / json)"), [this]() {
-			QString f = QFileDialog::getOpenFileName(this, tr("加载弹幕"), QString(),
-				tr("弹幕 (*.xml *.json);;所有文件 (*)"));
-			if (!f.isEmpty()) {
-				load->loadDanmaku(f);
-			}
-		});
-		addBtn(tr("播放"), tr("播放 / 暂停 (Space)"), [this]() {
-			aplayer->play();
-		});
-		addBtn(tr("设置"), tr("首选项"), [this]() {
-			Prefer::exec(this, 0);
-		});
-		addBtn(tr("全屏"), tr("全屏 / 退出全屏 (F11)"), [this]() {
-			fullA->setChecked(!fullA->isChecked());
-		});
-	}
-	menu->setWindowFlags(Qt::Window);
+	// 不激活式悬浮窗：弹出时不抢主窗口键盘焦点，快捷键全程可用
+	menu->setWindowFlags(Qt::Window | Qt::WindowDoesNotAcceptFocus);
+	menu->setAttribute(Qt::WA_ShowWithoutActivating);
 	menu->setWindowTitle(tr("文件与弹幕"));
-	menu->resize(320, 600);
+	menu->resize(320, 420);
 	connect(info->listB, &QPushButton::clicked, this, [this]() {
 		if (menu->isShown()) {
 			menu->push(true);
@@ -666,7 +581,6 @@ Home::Home(QWidget *parent)
 	});
 
 	setWindowFlags();
-	checkForUpdate();
 	setGeometry(QSize(), true);
 }
 
@@ -736,7 +650,6 @@ void Home::mouseDoubleClickEvent(QMouseEvent * e)
 	// 全屏里想双击退出得先等条子收走。现在只要双击点不在条子上就切换。
 	const QPoint p = e->pos();
 	const bool overUi = (info->isVisible() && info->geometry().contains(p))
-		|| (bar != nullptr && bar->isVisible() && bar->geometry().contains(p))
 		|| (menu->isShown() && !menu->isWindow() && menu->geometry().contains(p));
 	if (!overUi) {
 		fullA->toggle();
@@ -749,10 +662,6 @@ void Home::mouseMoveEvent(QMouseEvent * e)
 	lastMove = QDateTime::currentMSecsSinceEpoch();
 	QPoint cur = e->pos();
 	if (seekdrag) {
-		if (bar && !bar->isVisible()) {
-			bar->show();
-			bar->raise();
-		}
 		if (!info->isShown()) {
 			info->pop();
 		}
@@ -765,10 +674,6 @@ void Home::mouseMoveEvent(QMouseEvent * e)
 		arender->setDisplayTime(aplayer->getTime() / (double)aplayer->getDuration());
 	}
 	showprg = true;
-	if (bar && !bar->isVisible()) {
-		bar->show();
-		bar->raise();
-	}
 	if (!info->isShown()) {
 		info->pop();
 	}
@@ -820,10 +725,6 @@ void Home::mousePressEvent(QMouseEvent * e)
 		// 底栏整条横带都能点：即使 Info 还没滑出来，按下也直接定位
 		if (p.y() >= height() - infoHeight()) {
 			seekdrag = true;
-			if (bar) {
-				bar->show();
-				bar->raise();
-			}
 			if (!info->isShown()) {
 				info->pop();
 			}
@@ -860,7 +761,6 @@ void Home::mouseReleaseEvent(QMouseEvent * e)
 		if (aplayer->getState() == APlayer::Play) {
 			info->push(true);
 		}
-		type->hide();
 	}
 	sta = wgd = QPoint();
 	if (e->button() == Qt::RightButton) {
@@ -897,21 +797,12 @@ void Home::resizeEvent(QResizeEvent * e)
 	menu->terminate();
 	info->terminate();
 	int l = Config::getValue("/Interface/Popup/Width", 24 * font().pointSizeF())*logicalDpiX() / 72;
-	if (bar) {
-		int bh = bar->sizeHint().height();
-		if (bh <= 0) {
-			bh = int(fontMetrics().height() * 2.2) + 8;
-		}
-		bar->setGeometry(0, 0, w, bh);
-		bar->raise();
-	}
 	if (!menu->isWindow()) {
 		menu->setGeometry(menu->isShown() ? 0 : 0 - l, 0, l, h);
 	}
 	int ih = int(4.2 * logicalDpiY() * font().pointSizeF() / 72);
 	info->setGeometry(0, h - ih, w, ih);
 	info->raise();
-	type->move(w / 2 - type->width() / 2, h - type->height() - 2);
 	for (QAction *action : sca->actions()) {
 		if (action->isSeparator() || !action->isEnabled()) {
 			continue;
@@ -1004,48 +895,6 @@ void Home::setWindowFlags()
 	}
 }
 
-void Home::checkForUpdate()
-{
-	QString url("https://raw.githubusercontent.com/AncientLysine/BiliLocal/master/res/INFO");
-	auto update = Config::getValue("/Interface/Update", QVariant(url));
-	if (QVariant::Bool == update.type()) {
-		if (!update.toBool()) {
-			return;
-		}
-	}
-	else {
-		url = update.toString();
-	}
-	QNetworkAccessManager *manager = new QNetworkAccessManager(this);
-	manager->get(QNetworkRequest(url));
-	connect(manager, &QNetworkAccessManager::finished, [=](QNetworkReply *info) {
-		QUrl redirect = info->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl();
-		if (redirect.isValid()) {
-			manager->get(QNetworkRequest(redirect));
-			return;
-		}
-		manager->deleteLater();
-		if (info->error() != QNetworkReply::NoError) {
-			return;
-		}
-		QFile local(":/Text/DATA");
-		local.open(QIODevice::ReadOnly);
-		QJsonObject l = QJsonDocument::fromJson(local.readAll()).object();
-		QJsonObject r = QJsonDocument::fromJson(info->readAll()).object();
-		if (!r.contains("Version") || l["Version"].toString() >= r["Version"].toString()) {
-			return;
-		}
-		QMessageBox::StandardButton button;
-		QString information = r["String"].toString();
-		button = QMessageBox::information(this,
-			tr("Update"),
-			information,
-			QMessageBox::Ok | QMessageBox::Cancel);
-		if (button == QMessageBox::Ok) {
-			QDesktopServices::openUrl(r["Url"].toString());
-		}
-	});
-}
 
 void Home::showContextMenu(QPoint p)
 {
@@ -1118,11 +967,8 @@ void Home::showContextMenu(QPoint p)
 			Editor::exec(this, 2);
 		});
 		QAction *loadA = menu->findChild<QAction *>("Danm");
-		QAction *seekA = menu->findChild<QAction *>("Sech");
 		dmk.addAction(toggA);
 		dmk.addAction(tr("Load"), loadA, SLOT(trigger()), loadA->shortcut())->setEnabled(loadA->isEnabled());
-		dmk.addAction(tr("Post"), postA, SLOT(trigger()), postA->shortcut())->setEnabled(postA->isEnabled());
-		dmk.addAction(tr("Seek"), seekA, SLOT(trigger()), seekA->shortcut())->setEnabled(seekA->isEnabled());
 		top.addMenu(&dmk);
 		top.addAction(confA);
 		top.addAction(quitA);

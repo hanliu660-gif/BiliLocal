@@ -69,7 +69,12 @@ QWidget(parent)
 	setAttribute(Qt::WA_NativeWindow, true);
 	setAttribute(Qt::WA_StyledBackground, true);
 	isStay = isPoped = updating = dragging = false;
-	Utils::setGround(this, Qt::white);
+	setStyleSheet("QWidget#Info{background:rgba(20,22,26,215);}"
+		"QWidget#Info QPushButton{color:#e8e8ea;background:transparent;"
+		"border:1px solid rgba(255,255,255,45);border-radius:4px;padding:2px 10px;}"
+		"QWidget#Info QPushButton:hover{background:rgba(255,255,255,35);}"
+		"QWidget#Info QPushButton:pressed{background:rgba(255,255,255,60);}");
+	setAttribute(Qt::WA_StyledBackground, true);
 	duration = -1;
 	animation = new QPropertyAnimation(this, "pos", this);
 	animation->setDuration(200);
@@ -117,33 +122,81 @@ QWidget(parent)
 		}
 	});
 	playB = new QPushButton(this);
-	stopB = new QPushButton(this);
 	listB = new QPushButton(tr("列表"), this);
-	listB->setFocusPolicy(Qt::NoFocus);
-	listB->setCursor(Qt::PointingHandCursor);
+	openB = new QPushButton(tr("打开"), this);
+	danmB = new QPushButton(tr("弹幕·开"), this);
+	rateB = new QPushButton(QStringLiteral("1.0x"), this);
+	prefB = new QPushButton(tr("设置"), this);
+	fullB = new QPushButton(tr("全屏"), this);
+	for (QPushButton *b : { openB, danmB, rateB, prefB, fullB, listB }){
+		b->setFocusPolicy(Qt::NoFocus);
+		b->setCursor(Qt::PointingHandCursor);
+	}
 	listB->setToolTip(tr("播放列表"));
+	fullB->setToolTip(tr("全屏 / 退出全屏 (F / F11 / 双击画面)"));
 	playI = QIcon::fromTheme("media-playback-start", QIcon(":/Picture/play.png"));
-	stopI = QIcon::fromTheme("media-playback-stop", QIcon(":/Picture/stop.png"));
 	pausI = QIcon::fromTheme("media-playback-pause", QIcon(":/Picture/pause.png"));
 	playB->setIcon(playI);
-	stopB->setIcon(stopI);
 	playA = new QAction(playI, tr("Play"), this);
-	stopA = new QAction(stopI, tr("Stop"), this);
 	playA->setObjectName("Play");
-	stopA->setObjectName("Stop");
 	QList<QKeySequence> playS;
 	playS << Config::getValue("/Shortcut/Play", QString("Space")) <<
 		Qt::Key_MediaPlay <<
 		Qt::Key_MediaPause <<
 		Qt::Key_MediaTogglePlayPause;
 	playA->setShortcuts(playS);
-	stopA->setShortcut(Config::getValue("/Shortcut/Stop", QString()));
 	addAction(playA);
-	addAction(stopA);
 	connect(playA, SIGNAL(triggered()), lApp->findObject<APlayer>(), SLOT(play()));
-	connect(stopA, SIGNAL(triggered()), lApp->findObject<APlayer>(), SLOT(stop()));
 	connect(playB, &QPushButton::clicked, playA, &QAction::trigger);
-	connect(stopB, &QPushButton::clicked, stopA, &QAction::trigger);
+	// 打开视频
+	connect(openB, &QPushButton::clicked, [this](){
+		QString f = QFileDialog::getOpenFileName(this, tr("打开"), QString(),
+			tr("视频 (*.mp4 *.flv *.mkv *.ts *.mov *.wmv *.avi *.m4v *.webm);;所有文件 (*)"));
+		if (!f.isEmpty()){
+			lApp->tryLocal(f);
+		}
+	});
+	// 设置 / 全屏 / 弹幕开关：转发 Home 上对应的 QAction（Info 构造时它们还没建，点击时再找）
+	connect(prefB, &QPushButton::clicked, [this](){
+		if (QAction *a = parentWidget()->findChild<QAction *>("Conf")){
+			a->trigger();
+		}
+	});
+	connect(fullB, &QPushButton::clicked, [this](){
+		if (QAction *a = parentWidget()->findChild<QAction *>("Full")){
+			a->trigger();
+		}
+	});
+	connect(danmB, &QPushButton::clicked, [this](){
+		if (QAction *a = parentWidget()->findChild<QAction *>("Togg")){
+			a->trigger();
+		}
+	});
+	auto syncDanm = [this](){
+		bool blocked = false;
+		if (QAction *a = parentWidget()->findChild<QAction *>("Togg")){
+			blocked = a->isChecked();
+		}
+		danmB->setText(blocked ? tr("弹幕·关") : tr("弹幕·开"));
+	};
+	connect(lApp->findObject<Shield>(), &Shield::shieldChanged, this, syncDanm);
+	syncDanm();
+	// 倍速按钮：文字实时跟随（包括长按右键 3 倍速）
+	APlayer *ap = lApp->findObject<APlayer>();
+	auto syncRate = [this](double r){ rateB->setText(QString("%1x").arg(r < 0.05 ? 1.0 : r, 0, 'f', 1)); };
+	connect(ap, &APlayer::rateChanged, this, syncRate);
+	syncRate(ap->getRate());
+	connect(rateB, &QPushButton::clicked, [this](){
+		QMenu menu(this);
+		for (double r : { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0 }){
+			QAction *a = menu.addAction(QString("%1x").arg(r, 0, 'f', 1));
+			a->setData(r);
+		}
+		QAction *picked = menu.exec(rateB->mapToGlobal(rateB->rect().bottomLeft()));
+		if (picked){
+			lApp->findObject<APlayer>()->setRate(picked->data().toDouble());
+		}
+	});
 	duraT = new QLabel(this);
 	duraT->setAlignment(Qt::AlignRight | Qt::AlignBottom);
 	duraT->setText("00:00/00:00");
@@ -199,30 +252,8 @@ QWidget(parent)
 	});
 	danmV->addAction(saveA);
 
-	QAction *fullA = new QAction(tr("Full Danmaku"), this);
-	fullA->setObjectName("Char");
-	fullA->setShortcut(Config::getValue("/Shortcut/Char", QString()));
-	fullA->setEnabled(false);
-	connect(fullA, &QAction::triggered, [](){
-		Load *load = lApp->findObject<Load>();
-		for (const Record &r : lApp->findObject<Danmaku>()->getPool()){
-			if (load->canFull(&r)){
-				load->fullDanmaku(&r);
-			}
-		}
-	});
-	danmV->addAction(fullA);
-
 	connect(lApp->findObject<Danmaku>(), &Danmaku::modelReset, [=](){
-		const QList<Record> &pool = lApp->findObject<Danmaku>()->getPool();
-		fullA->setEnabled(false);
-		for (const Record &r : pool){
-			if (lApp->findObject<Load>()->canFull(&r)){
-				fullA->setEnabled(true);
-				break;
-			}
-		}
-		saveA->setEnabled(!pool.isEmpty());
+		saveA->setEnabled(!lApp->findObject<Danmaku>()->getPool().isEmpty());
 	});
 
 	connect(danmV, &QTableView::customContextMenuRequested, [=](QPoint p){
@@ -272,7 +303,6 @@ QWidget(parent)
 			}
 			menu.addSeparator();
 		}
-		menu.addAction(fullA);
 		connect(menu.addAction(tr("Edit Blocking List")), &QAction::triggered, [this](){
 			Prefer::exec(lApp->findObject<Interface>()->widget(), 3);
 		});
@@ -404,7 +434,7 @@ bool Info::eventFilter(QObject *o, QEvent *e)
 }
 
 void Info::resizeEvent(QResizeEvent *e)
-{	if (!playB || !stopB || !timeT || !timeS || !volmS || !listB || !duraT || !volmT || !danmV){
+{	if (!playB || !timeT || !timeS || !volmS || !listB || !duraT || !volmT || !danmV){
 		QWidget::resizeEvent(e);
 		return;
 	}
@@ -414,16 +444,30 @@ void Info::resizeEvent(QResizeEvent *e)
 	int cy = int((h - 2.08*y) / 2);
 	int bx = int(0.83*x), bw = int(2.5*x), bh = int(2.08*y);
 	playB->setGeometry(QRect(bx, cy, bw, bh));
-	stopB->setGeometry(QRect(bx + bx + bw, cy, bw, bh));
-	int left = bx + 2 * (bx + bw);
-	timeT->setGeometry(QRect(left, cy, int(14*x), bh));
+	int left = bx + bw + int(0.6*x);
+	timeT->setGeometry(QRect(left, cy, int(13*x), bh));
 	timeT->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-	int slx = left + int(14.5*x);
-	int slw = w - slx - int(24*x);
+	int slx = left + int(13.5*x);
+	// 右侧从右往左摆：列表/全屏/设置/打开/音量/倍速/弹幕开关
+	int xr = w - bx;
+	auto place = [&](QWidget *b){
+		// 用 sizeHint 自适应文字宽度，避免手工估宽与实际渲染不符导致重叠
+		int wd = qMax(b->sizeHint().width(), int(3*x));
+		xr -= wd;
+		b->setGeometry(QRect(xr, cy, wd, bh));
+		xr -= int(0.4*x);
+	};
+	place(listB);
+	place(fullB);
+	place(prefB);
+	place(openB);
+	volmS->setGeometry(QRect(xr - int(9*x), int(0.4*y), int(9*x), h - int(0.8*y)));
+	xr -= int(9.4*x);
+	place(rateB);
+	place(danmB);
+	int slw = xr - int(0.5*x) - slx;
 	// 进度条铺满整条底栏的高度，鼠标在整条横带上任意位置都能拖动
 	timeS->setGeometry(QRect(slx, int(0.4*y), qMax(slw, int(8*x)), h - int(0.8*y)));
-	volmS->setGeometry(QRect(w - int(21*x), int(0.4*y), int(9*x), h - int(0.8*y)));
-	listB->setGeometry(QRect(w - int(10.5*x), cy, int(9.5*x), bh));
 	duraT->setGeometry(QRect(0, 0, 0, 0));
 	volmT->setGeometry(QRect(0, 0, 0, 0));
 	danmV->setGeometry(QRect(0, 0, 0, 0));

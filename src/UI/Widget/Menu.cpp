@@ -1,4 +1,4 @@
-﻿/*=======================================================================
+/*=======================================================================
 *
 *   Copyright (C) 2013-2015 Lysine.
 *
@@ -27,7 +27,6 @@
 
 #include "Common.h"
 #include "Menu.h"
-#include "Search.h"
 #include "WidgetInterfacePrivate.h"
 #include "../Interface.h"
 #include "../../Config.h"
@@ -42,102 +41,8 @@
 
 using namespace UI;
 
-namespace{
-	class LoadProxyModel :public QAbstractProxyModel
-	{
-	public:
-		explicit LoadProxyModel(QObject *parent = 0) :
-			QAbstractProxyModel(parent)
-		{
-			setSourceModel(lApp->findObject<Load>()->getModel());
-			connect(sourceModel(), &QAbstractItemModel::rowsInserted, this, &LoadProxyModel::endInsertRows);
-			connect(sourceModel(), &QAbstractItemModel::rowsAboutToBeInserted, [this](const QModelIndex &parent, int sta, int end){
-				beginInsertRows(mapFromSource(parent), sta, end);
-			});
-			connect(sourceModel(), &QAbstractItemModel::layoutAboutToBeChanged, this, &LoadProxyModel::layoutAboutToBeChanged);
-			connect(sourceModel(), &QAbstractItemModel::layoutChanged, this, &LoadProxyModel::layoutChanged);
-		}
-
-		int columnCount(const QModelIndex &) const
-		{
-			return 1;
-		}
-
-		QVariant data(const QModelIndex &index, int role) const
-		{
-			if (isFakeItem(index)){
-				switch (role){
-				case Qt::TextAlignmentRole:
-					return Qt::AlignCenter;
-				case Qt::FontRole:
-				{
-					QFont f;
-					f.setBold(true);
-					return f;
-				}
-				case Qt::DisplayRole:
-				case Qt::EditRole:
-					return Menu::tr("Load All");
-				case Qt::BackgroundRole:
-					return QColor(0xA0A0A4);
-				case Qt::ForegroundRole:
-					return QColor(0xFFFFFF);
-				case Qt::SizeHintRole:
-					return QSize(0, 20);
-				case Load::UrlRole:
-					return QUrl();
-				case Load::StrRole:
-					return "";
-				default:
-					return QVariant();
-				}
-			}
-			else{
-				return sourceModel()->data(mapToSource(index), role);
-			}
-		}
-
-		Qt::ItemFlags flags(const QModelIndex &) const
-		{
-			return Qt::ItemIsSelectable | Qt::ItemIsEnabled;
-		}
-
-		QModelIndex index(int r, int c, const QModelIndex &p) const
-		{
-			if (!p.isValid() && r == 0 && c == 0){
-				return createIndex(0, 0, 1);
-			}
-			else{
-				return createIndex(r, c);
-			}
-		}
-
-		QModelIndex parent(const QModelIndex &) const
-		{
-			return QModelIndex();
-		}
-
-		int rowCount(const QModelIndex &parent) const
-		{
-			return sourceModel()->rowCount(mapToSource(parent)) + (parent.isValid() ? 0 : 1);
-		}
-
-		bool isFakeItem(const QModelIndex &index) const
-		{
-			return index.internalId();
-		}
-
-		QModelIndex mapToSource(const QModelIndex &i) const
-		{
-			return (isFakeItem(i) || !i.isValid()) ? QModelIndex() : sourceModel()->index(i.row() - 1, i.column(), mapToSource(i.parent()));
-		}
-
-		QModelIndex mapFromSource(const QModelIndex &i) const
-		{
-			return i.isValid() ? index(i.row() + 1, i.column(), mapFromSource(i.parent())) : QModelIndex();
-		}
-	};
-
+namespace
+{
 	class ListProxyModel :public QSortFilterProxyModel
 	{
 	public:
@@ -209,140 +114,6 @@ namespace{
 			}
 		}
 	};
-
-	class DanmEdit :public QLineEdit
-	{
-	public:
-
-		explicit DanmEdit(QCompleter *completer, QWidget *parent = 0) :
-			QLineEdit(parent)
-		{
-			completer->popup()->installEventFilter(this);
-			connect(this, &DanmEdit::textEdited, this, &DanmEdit::fixCode);
-		}
-
-		bool eventFilter(QObject *, QEvent *e) override
-		{
-			if (e->type() == QEvent::Hide){
-				lApp->findObject<Load>()->dequeue();
-			}
-			return false;
-		}
-
-		void setCode(QString text)
-		{
-			code = text;
-			text = QFileInfo(text).fileName();
-			if (text != this->text()){
-				setText(text);
-			}
-		}
-
-		void fixCode(QString text)
-		{
-			lApp->findObject<Load>()->fixCode(text);
-			setCode(text);
-		}
-
-		QString getCode()
-		{
-			return code.isEmpty() ? text() : code;
-		}
-
-	private:
-		QString code;
-
-		void focusInEvent(QFocusEvent *e)
-		{
-			//tab focus will cause whole selection
-			if (e->reason() != Qt::TabFocusReason){
-				QLineEdit::focusInEvent(e);
-			}
-		}
-	};
-
-	class TimeEdit :public QLineEdit
-	{
-	public:
-		explicit TimeEdit(QWidget *parent = 0) :
-			QLineEdit(parent)
-		{
-			m_wheel = 0;
-			setAlignment(Qt::AlignCenter);
-			setText("00:00");
-			connect(this, &QLineEdit::textEdited, [this](QString time){
-				setText(intToTime(timeToInt(time)));
-			});
-			connect(this, &QLineEdit::editingFinished, lApp->findObject<Danmaku>(), [this](){
-				lApp->findObject<Danmaku>()->delayAll(editingDelay() - currentDelay());
-			});
-			connect(lApp->findObject<Danmaku>(), &Danmaku::layoutChanged, [this](){
-				setText(intToTime(currentDelay()));
-			});
-		}
-
-	private:
-		int m_wheel;
-
-		qint64 currentDelay()
-		{
-			const auto &pool = lApp->findObject<Danmaku>()->getPool();
-			if (pool.isEmpty()){
-				return 0;
-			}
-			qint64 delay = std::numeric_limits<qint64>::max();
-			for (const Record &r : pool){
-				delay = qMin(r.delay, delay);
-			}
-			return delay;
-		}
-
-		qint64 editingDelay()
-		{
-			return timeToInt(text());
-		}
-
-		void setText(QString t)
-		{
-			if (text() != t){
-				int p = text().length() - cursorPosition();
-				QLineEdit::setText(t);
-				setCursorPosition(t.length() - p);
-			}
-		}
-
-		qint64 timeToInt(QString t)
-		{
-			return 1000 * Utils::evaluate(t);
-		}
-
-		QString intToTime(qint64 i)
-		{
-			i /= 1000;
-			QString t("%1:%2");
-			if (i < 0){
-				i = -i;
-				t.prepend("-");
-			}
-			t = t.arg(i / 60, 2, 10, QChar('0'));
-			t = t.arg(i % 60, 2, 10, QChar('0'));
-			return t;
-		}
-
-		void wheelEvent(QWheelEvent *e) override
-		{
-			if (lApp->findObject<Danmaku>()->getPool().isEmpty()){
-				return;
-			}
-			setFocus();
-			m_wheel += e->angleDelta().y();
-			if (qAbs(m_wheel) >= 120){
-				setText(intToTime(editingDelay() + (m_wheel > 0 ? -1000 : 1000)));
-				m_wheel = 0;
-			}
-			e->accept();
-		}
-	};
 }
 
 Menu::Menu(QWidget *parent) :
@@ -353,21 +124,13 @@ QWidget(parent)
 	Utils::setGround(this, Qt::white);
 	ListProxyModel *fileM = new ListProxyModel(this);
 	fileC = new QCompleter(fileM, this);
-	LoadProxyModel *danmM = new LoadProxyModel(this);
-	danmC = new QCompleter(danmM, this);
 	fileL = new FileEdit(fileC, this);
-	danmL = new DanmEdit(danmC, this);
-	sechL = new QLineEdit(this);
 	fileL->installEventFilter(this);
-	danmL->installEventFilter(this);
-	sechL->installEventFilter(this);
 	fileL->setReadOnly(true);
 	fileL->setPlaceholderText(tr("choose a local media"));
-	danmL->setPlaceholderText(tr("input av/ac number"));
-	sechL->setPlaceholderText(tr("search danmaku online"));
-	QAbstractItemView *popup;
 	fileC->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
 	fileC->setWidget(fileL);
+	QAbstractItemView *popup;
 	popup = fileC->popup();
 	popup->setMouseTracking(true);
 	QAction *hdelA = new QAction(popup);
@@ -384,30 +147,16 @@ QWidget(parent)
 		setFocus();
 		lApp->findObject<List>()->jumpToIndex(fileM->mapToSource(qobject_cast<QAbstractProxyModel *>(fileC->completionModel())->mapToSource(index)));
 	});
-	danmC->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
-	danmC->setWidget(danmL);
-	popup = danmC->popup();
-	popup->setMouseTracking(true);
-	connect(popup, SIGNAL(entered(QModelIndex)), popup, SLOT(setCurrentIndex(QModelIndex)));
-	connect<void (QCompleter::*)(const QModelIndex &)>(danmC, &QCompleter::activated, [=](const QModelIndex &index){
-		setFocus();
-		lApp->findObject<Load>()->loadDanmaku(danmM->mapToSource(qobject_cast<QAbstractProxyModel *>(danmC->completionModel())->mapToSource(index)));
-	});
 	fileB = new QPushButton(this);
-	sechB = new QPushButton(this);
 	danmB = new QPushButton(this);
 	fileB->setText(tr("Open"));
-	danmB->setText(tr("Load"));
-	sechB->setText(tr("Seek"));
+	danmB->setText(tr("Load Danmaku"));
 	fileA = new QAction(tr("Open File"), this);
 	fileA->setObjectName("File");
 	fileA->setShortcut(Config::getValue("/Shortcut/File", QString()));
 	danmA = new QAction(tr("Load Danmaku"), this);
 	danmA->setObjectName("Danm");
 	danmA->setShortcut(Config::getValue("/Shortcut/Danm", QString()));
-	sechA = new QAction(tr("Search Danmaku"), this);
-	sechA->setObjectName("Sech");
-	sechA->setShortcut(Config::getValue("/Shortcut/Sech", QString()));
 	connect(fileA, &QAction::triggered, [this](){
 		QString _file = QFileDialog::getOpenFileName(
 			lApp->findObject<Interface>()->widget(),
@@ -419,48 +168,25 @@ QWidget(parent)
 			lApp->findObject<APlayer>()->setMedia(_file);
 		}
 	});
+	// 在线弹幕（av 号/番剧/搜索）已随服务器下线移除，这里只剩本地弹幕文件加载
 	connect(danmA, &QAction::triggered, [this](){
-		if (Config::getValue("/Danmaku/Local", false)){
-			QString _file = QFileDialog::getOpenFileName(
-				lApp->findObject<Interface>()->widget(),
-				tr("Open File"),
-				lApp->findObject<List>()->defaultPath(Utils::Danmaku),
-				tr("Danmaku files (%1);;All files (*.*)").arg(Utils::getSuffix(Utils::Danmaku, "*.%1").join(' ')));
-			if (!_file.isEmpty()){
-				lApp->findObject<Load>()->loadDanmaku(_file);
-			}
+		QString _file = QFileDialog::getOpenFileName(
+			lApp->findObject<Interface>()->widget(),
+			tr("Open File"),
+			lApp->findObject<List>()->defaultPath(Utils::Danmaku),
+			tr("Danmaku files (%1);;All files (*.*)").arg(Utils::getSuffix(Utils::Danmaku, "*.%1").join(' ')));
+		if (!_file.isEmpty()){
+			lApp->findObject<Load>()->loadDanmaku(_file);
 		}
-		else{
-			if (danmL->text().isEmpty()){
-				pop();
-				isStay = true;
-				danmL->setFocus();
-			}
-			else{
-				lApp->findObject<Load>()->loadDanmaku(static_cast<DanmEdit *>(danmL)->getCode());
-			}
-		}
-	});
-	connect(sechA, &QAction::triggered, [this](){
-		Search searchBox(lApp->findObject<Interface>()->widget());
-		sechL->setText(sechL->text().simplified());
-		if (!sechL->text().isEmpty()){
-			searchBox.setKey(sechL->text());
-		}
-		if (searchBox.exec()) {
-			lApp->findObject<Load>()->loadDanmaku(searchBox.getAid());
-		}
-		sechL->setText(searchBox.getKey());
-		sechL->setFocus();
 	});
 	addAction(fileA);
 	addAction(danmA);
-	addAction(sechA);
 	connect(fileB, &QPushButton::clicked, fileA, &QAction::trigger);
 	connect(danmB, &QPushButton::clicked, danmA, &QAction::trigger);
-	connect(sechB, &QPushButton::clicked, sechA, &QAction::trigger);
-	connect(danmL, &QLineEdit::returnPressed, danmA, &QAction::trigger);
-	connect(sechL, &QLineEdit::returnPressed, sechA, &QAction::trigger);
+	connect(lApp->findObject<APlayer>(), &APlayer::mediaChanged, [this](QString _file){
+		fileL->setText(QFileInfo(_file).fileName());
+		fileL->setCursorPosition(0);
+	});
 	alphaT = new QLabel(this);
 	alphaT->setText(tr("Danmaku Alpha"));
 	alphaS = new QSlider(this);
@@ -476,28 +202,6 @@ QWidget(parent)
 			QToolTip::showText(p, QString::number(_alpha));
 		}
 	});
-	delayT = new QLabel(this);
-	delayT->setText(tr("Danmaku Delay"));
-	delayL = new TimeEdit(this);
-	delayL->installEventFilter(this);
-	localT = new QLabel(this);
-	localT->setText(tr("Local Danmaku"));
-	localC = new QCheckBox(this);
-	connect(localC, &QCheckBox::stateChanged, [this](int state){
-		bool local = state == Qt::Checked;
-		danmL->clear();
-		danmL->setReadOnly(local);
-		danmB->setText(local ? tr("Open") : tr("Load"));
-		danmL->setPlaceholderText(local ? tr("choose a local danmaku") : tr("input av/ac number"));
-		for (const Record &r : lApp->findObject<Danmaku>()->getPool()){
-			if (QUrl(r.source).isLocalFile() == local){
-				danmL->setText(r.string);
-			}
-		}
-		danmL->setCursorPosition(0);
-		Config::setValue("/Danmaku/Local", local);
-	});
-	localC->setChecked(Config::getValue("/Danmaku/Local", false));
 	subT = new QLabel(this);
 	subT->setText(tr("Protect Sub"));
 	subC = new QCheckBox(this);
@@ -522,55 +226,6 @@ QWidget(parent)
 			lApp->findObject<Interface>()->widget()->setFocus();
 		}
 	});
-	connect(lApp->findObject<Load>(), &Load::stateChanged, [this](int state){
-		Load::Task *task = lApp->findObject<Load>()->getHead();
-		auto syncDanmL = [&](){
-			QString fix(task->code);
-			if (!task->code.isEmpty() && task->processer->regular(fix)){
-				DanmEdit *danmE = static_cast<DanmEdit *>(danmL);
-				danmE->setCode(fix);
-				danmE->setCursorPosition(0);
-				danmE->clearFocus();
-			}
-		};
-		switch (state){
-		case Load::Page:
-			isStay = 1;
-			syncDanmL();
-			break;
-		case Load::Part:
-			if (isPoped&&animation->state() == QAbstractAnimation::Stopped){
-				danmC->complete();
-				danmC->popup()->setCurrentIndex(QModelIndex());
-			}
-		case Load::File:
-			localC->setChecked(task->request.url().isLocalFile());
-			syncDanmL();
-		case Load::Code:
-			isStay = 1;
-			break;
-		case Load::None:
-			isStay = 0;
-		default:
-			break;
-		}
-	});
-	connect(lApp->findObject<Load>(), &Load::errorOccured, [this](int state){
-		switch (state){
-		case 301:
-			pop();
-			isStay = 1;
-			danmL->setFocus();
-			break;
-		default:
-			isStay = 0;
-			break;
-		}
-	});
-	connect(lApp->findObject<APlayer>(), &APlayer::mediaChanged, [this](QString _file){
-		fileL->setText(QFileInfo(_file).fileName());
-		fileL->setCursorPosition(0);
-	});
 	hide();
 }
 
@@ -578,23 +233,16 @@ void Menu::resizeEvent(QResizeEvent *e)
 {
 	double f = font().pointSizeF();
 	int x = logicalDpiX()*f / 72, y = logicalDpiY()*f / 72, w = e->size().width();
-	fileL->setGeometry(0.83*x, 2.08*y, w - 5.65*x, 2.08*y);
-	danmL->setGeometry(0.83*x, 5.42*y, w - 5.65*x, 2.08*y);
-	sechL->setGeometry(0.83*x, 8.75*y, w - 5.65*x, 2.08*y);
-	fileB->setGeometry(w - 4.44*x, 2.08*y, 3.60*x, 2.08*y);
-	danmB->setGeometry(w - 4.44*x, 5.42*y, 3.60*x, 2.08*y);
-	sechB->setGeometry(w - 4.44*x, 8.75*y, 3.60*x, 2.08*y);
-	alphaT->setGeometry(0.83*x, 12.08*y, w - 1.67*x, 2.08*y);
-	alphaS->setGeometry(0.83*x, 14.17*y, w - 1.67*x, 1.25*y);
-	delayT->setGeometry(0.83*x, 17.08*y, w - 1.67*x, 1.67*y);
-	delayL->setGeometry(w - 4.44*x, 17.08*y, 3.60*x, 1.67*y);
-	localT->setGeometry(0.83*x, 20.00*y, w - 1.67*x, 2.08*y);
-	subT->setGeometry(0.83*x, 22.92*y, w - 1.67*x, 2.08*y);
-	loopT->setGeometry(0.83*x, 25.83*y, w - 1.67*x, 2.08*y);
-	int l = 15 * logicalDpiX() / 96, o = delayL->geometry().center().x() - l / 2;
-	localC->setGeometry(o, 20.00*y, l, 2.08*y);
-	subC->setGeometry(o, 22.92*y, l, 2.08*y);
-	loopC->setGeometry(o, 25.83*y, l, 2.08*y);
+	fileL->setGeometry(0.83*x, 1.2*y, w - 5.65*x, 2.08*y);
+	fileB->setGeometry(w - 4.44*x, 1.2*y, 3.60*x, 2.08*y);
+	danmB->setGeometry(0.83*x, 3.9*y, w - 1.67*x, 2.08*y);
+	alphaT->setGeometry(0.83*x, 6.8*y, w - 1.67*x, 1.7*y);
+	alphaS->setGeometry(0.83*x, 8.5*y, w - 1.67*x, 1.25*y);
+	int l = 15 * logicalDpiX() / 96;
+	subT->setGeometry(0.83*x, 10.4*y, w * 0.45, 1.7*y);
+	subC->setGeometry(int(w * 0.42), 10.55*y, l, 1.7*y);
+	loopT->setGeometry(int(w * 0.52), 10.4*y, w * 0.4, 1.7*y);
+	loopC->setGeometry(w - int(2.2*x), 10.55*y, l, 1.7*y);
 }
 
 bool Menu::eventFilter(QObject *o, QEvent *e)
@@ -626,52 +274,24 @@ bool Menu::eventFilter(QObject *o, QEvent *e)
 
 void Menu::pop()
 {
-	if (isWindow()){
-		if (!isPoped){
-			show();
-			raise();
-			activateWindow();
-			isPoped = true;
-		}
-		return;
-	}
-	if (!isPoped&&animation->state() == QAbstractAnimation::Stopped){
+	if (!isPoped){
+		// 不激活式悬浮面板：弹出时不抢主窗口的键盘焦点，
+		// 空格/方向键等快捷键在列表开着时照样可用
 		show();
 		raise();
-		animation->setStartValue(pos());
-		animation->setEndValue(pos() + QPoint(width(), 0));
-		animation->start();
 		isPoped = true;
 	}
 }
 
 void Menu::push(bool force)
 {
-	if (isWindow()){
-		if (force&&isPoped){
-			isStay = false;
-			hide();
-			isPoped = false;
-		}
-		return;
-	}
-	if (isPoped&&animation->state() == QAbstractAnimation::Stopped && (!preferStay() || force)){
-		if (force){
-			isStay = false;
-		}
-		animation->setStartValue(pos());
-		animation->setEndValue(pos() - QPoint(width(), 0));
-		animation->start();
+	if (force&&isPoped){
+		isStay = false;
+		hide();
 		isPoped = false;
 	}
 }
 
 void Menu::terminate()
 {
-	if (isWindow()){
-		return;
-	}
-	if (animation->state() != QAbstractAnimation::Stopped){
-		animation->setCurrentTime(animation->totalDuration());
-	}
 }

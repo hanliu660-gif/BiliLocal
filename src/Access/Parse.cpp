@@ -116,7 +116,7 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 	case Utils::Bilibili:
 	case Utils::TuCao:
 	{
-		auto future = QtConcurrent::run([data]() {
+		Result result = [data]() {
 			typedef QPair<const char *, const char *> RawChar;
 			QVector<RawChar> raws;
 			const char *dat = data.constData();
@@ -186,13 +186,13 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 				(raws, map, reduce, QtConcurrent::OrderedReduce | QtConcurrent::SequentialReduce);
 			qThreadPool->releaseThread();
 			return result;
-		});
-		return ResultDelegate(new FutureRecord(future));
+		}();
+		return ResultDelegate(new VectorRecord(result));
 
 	}
 	case Utils::AcFun:
 	{
-		auto future = QtConcurrent::run([data]() {
+		Result result = [data]() {
 			QQueue <QJsonArray> wait;
 			wait.append(QJsonDocument::fromJson(data).array());
 			QVector<QJsonValue> raws;
@@ -238,8 +238,8 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 				(raws, map, reduce, QtConcurrent::OrderedReduce | QtConcurrent::SequentialReduce);
 			qThreadPool->releaseThread();
 			return result;
-		});
-		return ResultDelegate(new FutureRecord(future));
+		}();
+		return ResultDelegate(new VectorRecord(result));
 	}
 	case Utils::AcfunLocalizer:
 	{

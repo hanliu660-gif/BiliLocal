@@ -79,10 +79,13 @@ namespace UI
 		QLineEdit *plfmL = nullptr;
 		QTableView *danmV;
 		QPushButton *playB;
-		QPushButton *stopB;
+		QPushButton *openB;
+		QPushButton *danmB;
+		QPushButton *rateB;
+		QPushButton *prefB;
+		QPushButton *fullB;
 		QAction *playA;
-		QAction *stopA;
-		QIcon playI, stopI, pausI;
+		QIcon playI, pausI;
 		QPropertyAnimation *animation;
 		void resizeEvent(QResizeEvent *e);
 		bool eventFilter(QObject *o, QEvent *e);

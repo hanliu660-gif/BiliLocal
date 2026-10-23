@@ -397,6 +397,7 @@ void Running::moveTime(qint64 time)
 		return;
 	}
 	d->time = time;
+	int dbgPulled = 0;
 	int screen = Config::getValue("/Shield/Amount/Screen", 0);
 	int repeat = Config::getValue("/Shield/Amount/Repeat", 5);
 	QMap<qint64, QList<const Comment *>> splited;
@@ -404,8 +405,12 @@ void Running::moveTime(qint64 time)
 	//整批只加一次写锁：原来每条弹幕都 lockForWrite/unlock 一次，
 	//起播或密集段一次要进上千条，加解锁本身就吃掉可观的时间。
 	{
+		int dbgPulled = 0;
 		QWriteLocker locker(&d->lock);
-		for (; d->curr < danm->size() && danm->at(d->curr)->time < time; ++d->curr) {
+		static int dbgCnt = 0;
+	if ((++dbgCnt % 40) == 1){
+	}
+	for (; d->curr < danm->size() && danm->at(d->curr)->time < time; ++d->curr) {
 			const Comment *c = danm->at(d->curr);
 			if (c->blocked) {
 				continue;
@@ -416,6 +421,7 @@ void Running::moveTime(qint64 time)
 			if (repeat > 0 && d->text.value(c->string) >= repeat) {
 				continue;
 			}
+			++dbgPulled;
 			d->wait++;
 			d->text.insert(c);
 			splited[c->time].append(c);

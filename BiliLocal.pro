@@ -13,11 +13,7 @@ CONFIG += c++11
 
 SOURCES += \
     src/Access/Load.cpp \
-    src/Access/NetworkConfiguration.cpp \
     src/Access/Parse.cpp \
-    src/Access/Post.cpp \
-    src/Access/Seek.cpp \
-    src/Access/Sign.cpp \
     src/Graphic/Graphic.cpp \
     src/Graphic/GraphicPrivate.cpp \
     src/Graphic/Mode1.cpp \
@@ -43,7 +39,6 @@ SOURCES += \
 HEADERS += \
     src/Access/AccessPrivate.h \
     src/Access/Load.h \
-    src/Access/NetworkConfiguration.h \
     src/Access/Parse.h \
     src/Access/Post.h \
     src/Access/Seek.h \
@@ -149,7 +144,7 @@ LIBS += \
     -L$$THIRDPARTY/lib/amd64
 }
 
-# OpenSSL 只被 src/Access/Sign.cpp 用于登录 RSA（passport 接口 2016 年后就没了）。
+# 在线登录/搜索/发弹幕模块已随服务器下线整体移除（2026-10-24）。
 # 没有 OpenSSL 头文件时定义 NO_OPENSSL，让那段死代码走 "not supported" 分支，
 # 不要把整个工程卡在链接错误上。
 !exists($$THIRDPARTY/include/openssl/rsa.h){
@@ -218,8 +213,6 @@ SOURCES += \
     src/UI/Widget/Jump.cpp \
     src/UI/Widget/Menu.cpp \
     src/UI/Widget/Prefer.cpp \
-    src/UI/Widget/Search.cpp \
-    src/UI/Widget/Type.cpp \
     src/UI/Widget/WidgetInterfacePrivate.cpp
 
 HEADERS += \
@@ -229,8 +222,6 @@ HEADERS += \
     src/UI/Widget/Jump.h \
     src/UI/Widget/Menu.h \
     src/UI/Widget/Prefer.h \
-    src/UI/Widget/Search.h \
-    src/UI/Widget/Type.h \
     src/UI/Widget/WidgetInterfacePrivate.h
 
 message(enable widget interface)

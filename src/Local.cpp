@@ -35,9 +35,6 @@
 #include "Plugin.h"
 #include "Utils.h"
 #include "Access/Load.h"
-#include "Access/Post.h"
-#include "Access/Seek.h"
-#include "Access/Sign.h"
 #include "Model/Danmaku.h"
 #include "Model/Running.h"
 #include "Model/List.h"
@@ -68,9 +65,6 @@ Local::Local(QObject *parent)
 	objects["APlayer"] = APlayer::create(this);
 	objects["ARender"] = ARender::create(this);
 	lIns(Load);
-	lIns(Post);
-	lIns(Seek);
-	lIns(Sign);
 	lIns(List);
 #define lSet(ModuleType) static_cast<ModuleType *>(this->objects[#ModuleType])->setup()
 	lSet(Interface);

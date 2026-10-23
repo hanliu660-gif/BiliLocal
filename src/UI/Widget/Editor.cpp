@@ -31,7 +31,6 @@
 #include "../../Local.h"
 #include "../../Utils.h"
 #include "../../Access/Load.h"
-#include "../../Access/NetworkConfiguration.h"
 #include "../../Model/Danmaku.h"
 #include "../../Model/List.h"
 #include "../../Player/APlayer.h"
@@ -457,9 +456,6 @@ namespace{
 			QWidget(parent)
 		{
 			setMinimumWidth(100 * logicalDpiX() / 96);
-			manager = new QNetworkAccessManager(this);
-			NetworkConfiguration::instance()->setManager(manager);
-
 			scroll = new MScroll(this);
 			scroll->setSingleStep(20);
 			connect(scroll, &QScrollBar::valueChanged, [this](int value){
@@ -484,59 +480,7 @@ namespace{
 					return;
 				}
 				QMenu menu(this);
-				Load *load = lApp->findObject<Load>();
 				auto &r = c->getRecord();
-				QAction *fullA = menu.addAction(Editor::tr("Full"));
-				fullA->setEnabled(load->canFull(&r));
-				connect(fullA, &QAction::triggered, [=, &r](){
-					load->fullDanmaku(&r);
-				});
-				menu.addSeparator();
-				connect(menu.addAction(Editor::tr("History")), &QAction::triggered, [=, &r](){
-					Calendar history(window());
-					QDate c = r.limit == 0 ? QDate::currentDate() : QDateTime::fromTime_t(r.limit).date().addDays(-1);
-					history.setCurrentDate(c);
-					if (load->canHist(&r)) {
-						QString cid = QFileInfo(r.source).baseName();
-						QString api("http://comment.%1/rolldate,%2");
-						api = api.arg(Utils::customUrl(Utils::Bilibili));
-						QNetworkReply *reply = manager->get(QNetworkRequest(api.arg(cid)));
-						connect(reply, &QNetworkReply::finished, [=, &history]() {
-							QMap<QDate, int> count;
-							for (QJsonValue iter : QJsonDocument::fromJson(reply->readAll()).array()) {
-								QJsonObject obj = iter.toObject();
-								QJsonValue time = obj["timestamp"], size = obj["new"];
-								count[QDateTime::fromTime_t(time.toVariant().toInt()).date()] += size.toVariant().toInt();
-							}
-							count[QDate::currentDate()] = 0;
-							history.setCount(count);
-							history.setCurrentPage(c);
-						});
-					}
-					else {
-						//no history available, use date limit instead
-						{
-							QMap<QDate, int> count;
-							for (const Comment &c : r.danmaku) {
-								++count[QDateTime::fromTime_t(c.date).date()];
-							}
-							count[QDate::currentDate()] = 0;
-							history.setCount(count);
-							history.setCurrentPage(c);
-						}
-					}
-					if (history.exec() == QDialog::Accepted){
-						QDate selected = history.selectedDate();
-						r.limit = selected.isValid() ? QDateTime(selected.addDays(1)).toTime_t() : 0;
-						if (load->canHist(&r)){
-							load->loadHistory(&r, selected);
-						}
-						else{
-							lApp->findObject<Danmaku>()->parse(Danmaku::Block);
-							widget->update();
-						}
-					}
-				});
 				connect(menu.addAction(Editor::tr("Delete")), &QAction::triggered, [&r](){
 					lApp->findObject<Danmaku>()->remove(r.source);
 				});
@@ -551,7 +495,6 @@ namespace{
 		QList<Track *> tracks;
 		QWidget *widget;
 		QScrollBar *scroll;
-		QNetworkAccessManager *manager;
 
 		void paintEvent(QPaintEvent *)
 		{

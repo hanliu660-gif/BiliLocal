@@ -27,7 +27,6 @@
 #pragma once
 
 #include <QtCore>
-#include <QtNetwork>
 #include <QtWidgets>
 
 namespace UI
@@ -91,18 +90,6 @@ namespace UI
 		QLineEdit *limit;
 		QGroupBox *label[2];
 
-		//Network
-		QComboBox *sites;
-		QLineEdit *sheet[3];
-		QPushButton *click;
-		QLabel *info;
-		QGroupBox *login;
-		QLabel *text;
-		QPushButton *clear;
-		QGroupBox *cache;
-		QComboBox *arg;
-		QLineEdit *input[4];
-		QGroupBox *proxy;
 
 		//Shortcut
 		QTreeWidget *hotkey;
@@ -117,7 +104,6 @@ namespace UI
 		QTextEdit *license;
 
 		//Shared
-		QNetworkAccessManager *manager;
 		QHash<QString, QVariant> restart;
 		QHash<QString, QVariant> reparse;
 

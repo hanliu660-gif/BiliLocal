@@ -45,29 +45,20 @@ namespace UI
 
 		bool preferStay()
 		{
-			return isStay || !danmC->popup()->isHidden();
+			return isStay;
 		}
 
 	private:
 		bool isStay;
 		bool isPoped;
 		QLineEdit *fileL;
-		QLineEdit *danmL;
-		QLineEdit *sechL;
 		QCompleter *fileC;
-		QCompleter *danmC;
 		QPushButton *fileB;
 		QPushButton *danmB;
-		QPushButton *sechB;
 		QAction *fileA;
 		QAction *danmA;
-		QAction *sechA;
 		QLabel *alphaT;
 		QSlider *alphaS;
-		QLabel *delayT;
-		QLineEdit *delayL;
-		QLabel *localT;
-		QCheckBox *localC;
 		QLabel *subT;
 		QCheckBox *subC;
 		QLabel *loopT;

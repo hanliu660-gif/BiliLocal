@@ -32,8 +32,6 @@
 #include "../../Local.h"
 #include "../../Plugin.h"
 #include "../../Utils.h"
-#include "../../Access/NetworkConfiguration.h"
-#include "../../Access/Sign.h"
 #include "../../Model/Danmaku.h"
 #include "../../Model/Shield.h"
 #include "../../Player/APlayer.h"
@@ -92,20 +90,10 @@ QHash<QString, QVariant> Prefer::getReparse()
 
 void Prefer::fillPicture(QLabel *label, QString url, QString error, QSize limit)
 {
-	QNetworkReply *reply = manager->get(QNetworkRequest(url));
-	connect(reply, &QNetworkReply::finished, label, [=](){
-		if (reply->error() == QNetworkReply::NoError){
-			QPixmap pixmap;
-			pixmap.loadFromData(reply->readAll());
-			if (!pixmap.isNull()){
-				label->setPixmap(pixmap.scaled(limit, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-			}
-			else{
-				label->setText(error);
-			}
-		}
-		reply->deleteLater();
-	});
+	// 在线功能已移除：不再抓取渲染器 logo 图片，直接显示文字占位
+	Q_UNUSED(url);
+	Q_UNUSED(limit);
+	label->setText(error);
 }
 
 QString Prefer::getLogo(QString name)
@@ -151,8 +139,6 @@ QDialog(parent)
 		tab->widget(index)->setFocus();
 	});
 	outer->addWidget(tab);
-	manager = new QNetworkAccessManager(this);
-	NetworkConfiguration::instance()->setManager(manager);
 	//Playing
 	{
 		widget[0] = new QWidget(this);
@@ -881,233 +867,6 @@ QDialog(parent)
 		grid->addWidget(label[1], 3, 2, 1, 2);
 
 		tab->addTab(widget[3], tr("Shield"));
-	}
-	//Network
-	{
-		widget[4] = new QWidget(this);
-		auto list = new QVBoxLayout(widget[4]);
-
-		auto l = new QGridLayout;
-		l->setColumnStretch(0, 1);
-		l->setColumnStretch(1, 1);
-		l->setColumnStretch(2, 1);
-		l->setColumnStretch(3, 1);
-
-		sheet[0] = new QLineEdit(widget[4]);
-		sheet[0]->setPlaceholderText(tr("Username"));
-		sheet[1] = new QLineEdit(widget[4]);
-		sheet[1]->setPlaceholderText(tr("Password"));
-		sheet[1]->setEchoMode(QLineEdit::Password);
-		sheet[2] = new QLineEdit(widget[4]);
-		sheet[2]->setPlaceholderText(tr("Captcha"));
-		auto checkout = [this](){
-			for (QLineEdit *iter : sheet){
-				if (iter->text().isEmpty()){
-					return;
-				}
-			}
-			click->click();
-		};
-		for (QLineEdit *iter : sheet){
-			connect(iter, &QLineEdit::returnPressed, checkout);
-		}
-		connect(sheet[2], &QLineEdit::textEdited, [this](QString text){
-			sheet[2]->setText(text.toUpper());
-		});
-		l->addWidget(sheet[0], 0, 0);
-		l->addWidget(sheet[1], 0, 1);
-		l->addWidget(sheet[2], 0, 2);
-
-		info = new QLabel(widget[4]);
-		info->setAlignment(Qt::AlignCenter);
-		info->setText(tr("waiting"));
-		l->addWidget(info, 0, 3);
-
-		sites = new QComboBox(widget[4]);
-		sites->addItems(lApp->findObject<Sign>()->modules());
-		connect(tab, &QTabWidget::currentChanged, widget[4], [this](){
-			if (tab->currentWidget() == widget[4] && lApp->findObject<Sign>()->getHead() == nullptr){
-				lApp->findObject<Sign>()->enqueue(sites->currentText());
-			}
-		});
-		connect(sites, &QComboBox::currentTextChanged, lApp->findObject<Sign>(), &Sign::enqueue);
-
-		l->addWidget(sites, 1, 0);
-
-		click = new QPushButton(tr("login"), widget[4]);
-		click->setFocusPolicy(Qt::NoFocus);
-		connect(click, &QPushButton::clicked, [this](){
-			Sign::Task *task = lApp->findObject<Sign>()->getHead();
-			if (task){
-				task->username = sheet[0]->text();
-				task->password = sheet[1]->text();
-				task->captcha = sheet[2]->text();
-				task->processer->process(nullptr);
-			}
-		});
-		l->addWidget(click, 1, 3);
-
-		connect(lApp->findObject<Sign>(), &Sign::stateChanged, widget[4], [this](int code){
-			switch (code){
-			case Sign::Test:
-			case Sign::Code:
-			case Sign::Salt:
-			case Sign::Data:
-				click->setEnabled(false);
-				for (QLineEdit *iter : sheet){
-					iter->setEnabled(false);
-				}
-				info->setText(tr("waiting"));
-				break;
-			case Sign::Wait:
-			{
-				Sign::Task *task = lApp->findObject<Sign>()->getHead();
-				if (task->logged){
-					info->setText(tr("logged"));
-					sheet[0]->setText(task->username);
-					sheet[1]->clear();
-					sheet[2]->clear();
-					click->setText(tr("logout"));
-				}
-				else{
-					QPixmap captcha;
-					if (captcha.loadFromData(task->data)){
-						captcha = captcha.scaledToWidth(info->width(), Qt::SmoothTransformation);
-						info->setPixmap(captcha);
-					}
-					if (!task->error.isEmpty()){
-						lApp->findObject<Interface>()->warning(tr("Login Error"), task->error);
-						task->error.clear();
-					}
-					click->setText(tr("login"));
-				}
-				click->setEnabled(true);
-				for (QLineEdit *iter : sheet){
-					iter->setEnabled(!task->logged);
-				}
-				break;
-			}
-			default:
-				break;
-			}
-		});
-		connect(lApp->findObject<Sign>(), &Sign::errorOccured, widget[4], [this](){
-			click->setEnabled(false);
-			info->setText(tr("error"));
-		});
-		connect(widget[4], &QWidget::destroyed, lApp->findObject<Sign>(), [](){
-			if (lApp->findObject<Sign>()->getHead()){
-				lApp->findObject<Sign>()->dequeue();
-			}
-		});
-
-		login = new QGroupBox(tr("login"), widget[4]);
-		login->setLayout(l);
-		list->addWidget(login);
-		
-		auto c = new QHBoxLayout;
-		text = new QLabel(widget[4]);
-		auto measure = [=](){
-			QString s = tr("current size is %.2fMB");
-			s.sprintf(s.toUtf8(), NetworkConfiguration::instance()->cacheSize() / (1024.0 * 1024));
-			text->setText(s);
-		};
-		measure();
-		c->addWidget(text, 2);
-		c->addStretch(1);
-		clear = new QPushButton(tr("clear"), widget[4]);
-		clear->setFocusPolicy(Qt::NoFocus);
-		connect(clear, &QPushButton::clicked, [=](){
-			NetworkConfiguration::instance()->clear();
-			measure();
-		});
-		c->addWidget(clear, 1);
-		cache = new QGroupBox(tr("cache"), widget[4]);
-		cache->setLayout(c);
-		list->addWidget(cache);
-
-		auto p = new QGridLayout;
-		arg = new QComboBox(widget[4]);
-		arg->addItems({ tr("No Proxy"), tr("Http Proxy"), tr("Socks5 Proxy") });
-		connect<void (QComboBox::*)(int)>(arg, &QComboBox::currentIndexChanged, [=](int index){
-			QNetworkProxy proxy = QNetworkProxy::applicationProxy();
-			switch (index){
-			case 0:
-				proxy.setType(QNetworkProxy::NoProxy);
-				break;
-			case 1:
-				proxy.setType(QNetworkProxy::HttpProxy);
-				break;
-			case 2:
-				proxy.setType(QNetworkProxy::Socks5Proxy);
-				break;
-			}
-			QNetworkProxy::setApplicationProxy(proxy);
-			for (QLineEdit *iter : input){
-				iter->setEnabled(index != 0);
-			}
-		});
-		p->addWidget(arg, 0, 0);
-		input[0] = new QLineEdit(widget[4]);
-		input[0]->setText(QNetworkProxy::applicationProxy().hostName());
-		input[0]->setPlaceholderText(tr("HostName"));
-		connect(input[0], &QLineEdit::editingFinished, [this](){
-			QNetworkProxy proxy = QNetworkProxy::applicationProxy();
-			proxy.setHostName(input[0]->text());
-			QNetworkProxy::setApplicationProxy(proxy);
-		});
-		p->addWidget(input[0], 1, 0);
-		input[1] = new QLineEdit(widget[4]);
-		input[1]->setPlaceholderText(tr("Port"));
-		int port = QNetworkProxy::applicationProxy().port();
-		input[1]->setText(port ? QString::number(port) : QString());
-		connect(input[1], &QLineEdit::editingFinished, [this](){
-			QNetworkProxy proxy = QNetworkProxy::applicationProxy();
-			proxy.setPort(input[1]->text().toInt());
-			if (proxy.port() == 0){
-				input[1]->clear();
-			}
-			QNetworkProxy::setApplicationProxy(proxy);
-		});
-		p->addWidget(input[1], 1, 1);
-		input[2] = new QLineEdit(widget[4]);
-		input[2]->setPlaceholderText(tr("User"));
-		input[2]->setText(QNetworkProxy::applicationProxy().user());
-		connect(input[2], &QLineEdit::editingFinished, [this](){
-			QNetworkProxy proxy = QNetworkProxy::applicationProxy();
-			proxy.setUser(input[2]->text());
-			QNetworkProxy::setApplicationProxy(proxy);
-		});
-		p->addWidget(input[2], 1, 2);
-		input[3] = new QLineEdit(widget[4]);
-		input[3]->setPlaceholderText(tr("Password"));
-		input[3]->setText(QNetworkProxy::applicationProxy().password());
-		connect(input[3], &QLineEdit::editingFinished, [this](){
-			QNetworkProxy proxy = QNetworkProxy::applicationProxy();
-			proxy.setPassword(input[3]->text());
-			QNetworkProxy::setApplicationProxy(proxy);
-		});
-		p->addWidget(input[3], 1, 3);
-		for (QLineEdit *iter : input){
-			iter->setEnabled(false);
-		}
-		switch (QNetworkProxy::applicationProxy().type()){
-		case QNetworkProxy::HttpProxy:
-			arg->setCurrentIndex(1);
-			break;
-		case QNetworkProxy::Socks5Proxy:
-			arg->setCurrentIndex(2);
-			break;
-		default:
-			arg->setCurrentIndex(0);
-			break;
-		}
-		proxy = new QGroupBox(tr("proxy"), widget[4]);
-		proxy->setLayout(p);
-		list->addWidget(proxy);
-
-		list->addStretch(10);
-		tab->addTab(widget[4], tr("Network"));
 	}
 	//Plugin
 	{

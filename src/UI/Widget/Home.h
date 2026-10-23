@@ -4,14 +4,11 @@
 #include "Info.h"
 #include "Menu.h"
 #include "Prefer.h"
-#include "Type.h"
 #include "../Interface.h"
 #include "../../Config.h"
 #include "../../Local.h"
 #include "../../Access/Load.h"
-#include "../../Access/Post.h"
-#include "../../Access/Seek.h"
-#include "../../Access/Sign.h"
+#include "../../Utils.h"
 #include "../../Model/Danmaku.h"
 #include "../../Model/Running.h"
 #include "../../Model/List.h"
@@ -45,7 +42,6 @@ namespace UI
 		QAction *confA;
 		QAction *toggA;
 		QAction *listA;
-		QAction *postA;
 		QMenu *rat;
 		QMenu *sca;
 		QMenu *spd;
@@ -53,13 +49,8 @@ namespace UI
 
 		UI::Menu *menu;
 		UI::Info *info;
-		QWidget *bar;
-		UI::Type *type;
 		List *list;
 		Load *load;
-		Post *post;
-		Seek *seek;
-		Sign *sign;
 		APlayer *aplayer;
 		Danmaku *danmaku;
 		Running *running;
@@ -91,7 +82,6 @@ namespace UI
 		QSize parseSize(QString string);
 		void setGeometry(QSize size, bool center);
 		void setWindowFlags();
-		void checkForUpdate();
 		void showContextMenu(QPoint p);
 	};
 }

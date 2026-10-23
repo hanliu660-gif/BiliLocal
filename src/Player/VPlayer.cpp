@@ -239,14 +239,27 @@ VPlayer::VPlayer(QObject *parent)
 	for (QJsonValue arg : Config::getValue<QJsonArray>("/Player/Arguments")){
 		args.append(arg.toString().toUtf8());
 	}
-	// 自定义内存渲染（vmem）不能用 GPU 硬解，VLC 3 默认开硬解会导致 get_buffer() 失败
-	if (Config::getValue("/Player/HardwareDecode", false)){
-		if (!args.contains("--avcodec-hw=any")){
-			args.append("--avcodec-hw=any");
+	// Arguments 里已经写了 --avcodec-hw= 时以配置为准，不再自动追加：
+	// libvlc 收到两个 hw 选项只有最后一个生效，自动追加会把手动指定的
+	// dxva2-copy 之类实验参数顶掉。
+	bool hwGiven = false;
+	for (const QByteArray &a : args){
+		if (a.startsWith("--avcodec-hw=")){
+			hwGiven = true;
+			break;
 		}
 	}
-	else if (!args.contains("--avcodec-hw=none")){
-		args.append("--avcodec-hw=none");
+	// 自定义内存渲染（vmem）不能用 GPU 硬解直出（get_buffer 会失败），默认 --avcodec-hw=none；
+	// "GPU 解码拷回内存"的模式（dxva2-copy 等）在 Arguments 里手动指定。
+	if (!hwGiven){
+		if (Config::getValue("/Player/HardwareDecode", false)){
+			if (!args.contains("--avcodec-hw=any")){
+				args.append("--avcodec-hw=any");
+			}
+		}
+		else if (!args.contains("--avcodec-hw=none")){
+			args.append("--avcodec-hw=none");
+		}
 	}
 	QVector<const char *> argv(args.size());
 	for (int i = 0; i < args.size(); ++i){

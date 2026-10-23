@@ -218,6 +218,37 @@ void OpenGLEmbedRenderPrivate::nudge()
 	if (surface == nullptr){
 		return;
 	}
+#ifdef Q_OS_WIN
+	// 只在真的出问题时才抖动：交换链卡在旧尺寸时，VLC 的视频子窗口会停在
+	// 创建时的小块上（正常时它会铺满 ESurface）。先量一下子窗口尺寸，
+	// 铺满了就什么都不做——nudge 本身会让画面缩放一次，不能无条件跑。
+	const HWND sparent = (HWND)surface->winId();
+	qint64 childArea = 0;
+	HWND child = nullptr;
+	while ((child = FindWindowExW(sparent, child, nullptr, nullptr)) != nullptr){
+		RECT rc = {};
+		if (GetWindowRect(child, &rc)){
+			childArea = qMax(childArea, qint64(rc.right - rc.left) * (rc.bottom - rc.top));
+		}
+		HWND sub = nullptr;
+		while ((sub = FindWindowExW(child, sub, nullptr, nullptr)) != nullptr){
+			RECT rc2 = {};
+			if (GetWindowRect(sub, &rc2)){
+				childArea = qMax(childArea, qint64(rc2.right - rc2.left) * (rc2.bottom - rc2.top));
+			}
+		}
+	}
+	RECT src = {};
+	if (!GetClientRect(sparent, &src)){
+		return;
+	}
+	const qint64 surfaceArea = qint64(src.right - src.left) * (src.bottom - src.top);
+	// 5% 容差：铺满即视为健康
+	if (surfaceArea <= 0 || childArea * 20 >= surfaceArea * 19){
+		return;
+	}
+	qWarning("Embed: video surface stuck (%lld / %lld), nudging swapchain", childArea, surfaceArea);
+#endif
 	const QSize s = surface->size();
 	if (s.isEmpty()){
 		return;

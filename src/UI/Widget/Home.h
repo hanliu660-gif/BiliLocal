@@ -2,7 +2,6 @@
 
 #include "Editor.h"
 #include "Info.h"
-#include "Jump.h"
 #include "Menu.h"
 #include "Prefer.h"
 #include "Type.h"
@@ -50,7 +49,7 @@ namespace UI
 
 		UI::Menu *menu;
 		UI::Info *info;
-		UI::Jump *jump;
+		QWidget *bar;
 		UI::Type *type;
 		List *list;
 		Load *load;
@@ -68,6 +67,12 @@ namespace UI
 
 		bool showprg;
 		bool sliding;
+		bool seekdrag;
+	qint64 lastMove;
+	bool wasMaximized;
+
+		int  infoHeight() const;
+		void seekTo(QPoint p, bool commit);
 
 		virtual void closeEvent(QCloseEvent *e) override;
 		virtual void dragEnterEvent(QDragEnterEvent *e) override;

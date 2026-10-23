@@ -65,7 +65,7 @@ Info::Info(QWidget *parent) :
 QWidget(parent)
 {
 	setObjectName("Info");
-	isStay = isPoped = updating = false;
+	isStay = isPoped = updating = dragging = false;
 	Utils::setGround(this, Qt::white);
 	duration = -1;
 	animation = new QPropertyAnimation(this, "pos", this);
@@ -82,10 +82,25 @@ QWidget(parent)
 	timeS->setValue(0);
 	volmS->setValue(Config::getValue("/Player/Volume", 50));
 	timeS->setTracking(false);
+	timeS->setSingleStep(5000);
+	timeS->setPageStep(30000);
+	timeS->installEventFilter(this);
+	const QString sliderStyle =
+		"QSlider{background:transparent;}"
+		"QSlider::groove:horizontal{height:6px;background:#c9ccd2;border-radius:3px;}"
+		"QSlider::sub-page:horizontal{background:#3ea6ff;border-radius:3px;}"
+		"QSlider::handle:horizontal{width:14px;height:14px;margin:-5px 0;border-radius:7px;"
+		"background:#ffffff;border:1px solid #9aa0a8;}";
+	timeS->setStyleSheet(sliderStyle);
+	volmS->setStyleSheet(sliderStyle);
 	connect(timeS, &QSlider::valueChanged, [this](int _time){
-		if (duration != -1 && !updating){
-			lApp->findObject<APlayer>()->setTime(duration*_time / 400);
+		if (duration > 0 && !updating && !timeS->isSliderDown()){
+			lApp->findObject<APlayer>()->setTime((qint64)_time);
+			updateTimeText((qint64)_time);
 		}
+	});
+	connect(timeS, &QSlider::sliderMoved, [this](int _time){
+		updateTimeText((qint64)_time);
 	});
 	connect(volmS, &QSlider::sliderMoved, [this](int _volm){
 		QPoint p;
@@ -100,6 +115,10 @@ QWidget(parent)
 	});
 	playB = new QPushButton(this);
 	stopB = new QPushButton(this);
+	listB = new QPushButton(tr("列表"), this);
+	listB->setFocusPolicy(Qt::NoFocus);
+	listB->setCursor(Qt::PointingHandCursor);
+	listB->setToolTip(tr("播放列表"));
 	playI = QIcon::fromTheme("media-playback-start", QIcon(":/Picture/play.png"));
 	stopI = QIcon::fromTheme("media-playback-stop", QIcon(":/Picture/stop.png"));
 	pausI = QIcon::fromTheme("media-playback-pause", QIcon(":/Picture/pause.png"));
@@ -295,30 +314,51 @@ QWidget(parent)
 	hide();
 }
 
+// 底栏「归位点」：父窗口把它摆在哪，就滑回哪。不用 pos() 的历史值当基准，
+// 否则动画被打断时 pos() 停在半路，下一次弹出就会从错的地方算。
+QPoint Info::restPos() const
+{
+	QWidget * parent = parentWidget();
+	if (parent == nullptr) {
+		return pos();
+	}
+	return QPoint(0, parent->height() - height());
+}
+
 void Info::pop()
 {
-	if (!isPoped&&animation->state() == QAbstractAnimation::Stopped){
-		show();
-		animation->setStartValue(pos());
-		animation->setEndValue(pos() - QPoint(width(), 0));
-		animation->start();
+	if (isVisible() && pos() == restPos()) {
 		isPoped = true;
+		return;
 	}
+	// 不管上一个动画是什么状态，先停下再重来：动画被打断后停在 Running 是最容易
+	// 让底栏永久拉不出来的原因（pop 会被 state != Stopped 挡掉）。
+	animation->stop();
+	show();
+	raise();
+	animation->setStartValue(pos());
+	animation->setEndValue(restPos());
+	animation->start();
+	isPoped = true;
 }
 
 void Info::push(bool force)
 {
-	if (isPoped&&animation->state() == QAbstractAnimation::Stopped && (!preferStay() || force)){
-		if (force){
+	if (!isVisible()) {
+		isPoped = false;
+		return;
+	}
+	if (!preferStay() || force) {
+		if (force) {
 			isStay = false;
 		}
+		animation->stop();
 		animation->setStartValue(pos());
-		animation->setEndValue(pos() + QPoint(width(), 0));
+		animation->setEndValue(restPos() + QPoint(0, height()));
 		animation->start();
 		isPoped = false;
 	}
 }
-
 void Info::terminate()
 {
 	if (animation->state() != QAbstractAnimation::Stopped){
@@ -326,19 +366,64 @@ void Info::terminate()
 	}
 }
 
-void Info::resizeEvent(QResizeEvent *e)
+// 进度条按「点哪跳哪、拖到哪松手就跳哪」处理，不依赖 QSlider 默认的
+// 「点一下滚一页」语义；命中区域是整条底栏高度的横带。
+bool Info::eventFilter(QObject *o, QEvent *e)
 {
+	if (o == timeS && duration > 0){
+		const QEvent::Type t = e->type();
+		if (t == QEvent::MouseButtonPress || t == QEvent::MouseMove || t == QEvent::MouseButtonRelease){
+			QMouseEvent *me = static_cast<QMouseEvent *>(e);
+			if (t == QEvent::MouseButtonPress && me->button() != Qt::LeftButton){
+				return false;
+			}
+			if (t == QEvent::MouseMove && !dragging){
+				return QWidget::eventFilter(o, e);
+			}
+			const int w = qMax(timeS->width() - 1, 1);
+			const double ratio = qBound(0.0, me->pos().x() / double(w), 1.0);
+			const qint64 target = qint64(duration * ratio);
+			updating = 1;
+			timeS->setValue(int(target));
+			updating = 0;
+			updateTimeText(target);
+			if (t == QEvent::MouseButtonPress){
+				dragging = true;
+			}
+			else if (t == QEvent::MouseButtonRelease){
+				dragging = false;
+				lApp->findObject<APlayer>()->setTime(target);
+			}
+			return true;
+		}
+	}
+	return QWidget::eventFilter(o, e);
+}
+
+void Info::resizeEvent(QResizeEvent *e)
+{	if (!playB || !stopB || !timeT || !timeS || !volmS || !listB || !duraT || !volmT || !danmV){
+		QWidget::resizeEvent(e);
+		return;
+	}
 	int w = e->size().width(), h = e->size().height();
 	double f = font().pointSizeF();
 	int x = logicalDpiX()*f / 72, y = logicalDpiY()*f / 72;
-	playB->setGeometry(QRect(0.83*x, 1.25*y, 2.08*x, 2.08*y));
-	stopB->setGeometry(QRect(3.33*x, 1.25*y, 2.08*x, 2.08*y));
-	duraT->setGeometry(QRect(5.83*x, 1.25*y, w - 6.67*x, 2.08*y));
-	timeT->setGeometry(QRect(0.83*x, 4.17*y, w - 1.67*x, 2.08*y));
-	timeS->setGeometry(QRect(0.83*x, 6.25*y, w - 1.67*x, 1.25*y));
-	volmT->setGeometry(QRect(0.83*x, 8.33*y, w - 1.67*x, 2.08*y));
-	volmS->setGeometry(QRect(0.83*x, 10.42*y, w - 1.67*x, 1.25*y));
-	danmV->setGeometry(QRect(0.83*x, 14.17*y, w - 1.67*x, h - 15.00*y));
+	int cy = int((h - 2.08*y) / 2);
+	int bx = int(0.83*x), bw = int(2.5*x), bh = int(2.08*y);
+	playB->setGeometry(QRect(bx, cy, bw, bh));
+	stopB->setGeometry(QRect(bx + bx + bw, cy, bw, bh));
+	int left = bx + 2 * (bx + bw);
+	timeT->setGeometry(QRect(left, cy, int(14*x), bh));
+	timeT->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+	int slx = left + int(14.5*x);
+	int slw = w - slx - int(24*x);
+	// 进度条铺满整条底栏的高度，鼠标在整条横带上任意位置都能拖动
+	timeS->setGeometry(QRect(slx, int(0.4*y), qMax(slw, int(8*x)), h - int(0.8*y)));
+	volmS->setGeometry(QRect(w - int(21*x), int(0.4*y), int(9*x), h - int(0.8*y)));
+	listB->setGeometry(QRect(w - int(10.5*x), cy, int(9.5*x), bh));
+	duraT->setGeometry(QRect(0, 0, 0, 0));
+	volmT->setGeometry(QRect(0, 0, 0, 0));
+	danmV->setGeometry(QRect(0, 0, 0, 0));
 	QWidget::resizeEvent(e);
 }
 
@@ -367,37 +452,45 @@ void Info::resizeHeader()
 	danmV->horizontalHeader()->resizeSection(0, m);
 }
 
-void Info::setTime(qint64 _time)
+void Info::updateTimeText(qint64 _time)
 {
-	if (!timeS->isSliderDown()){
-		updating = 1;
-		timeS->setValue(_time * 400 / duration);
-		updating = 0;
-	}
-	int c = _time / 1000;
-	int s = duration / 1000;
+	qint64 dur = duration > 0 ? duration : 0;
+	int c = int(_time / 1000);
+	int s = int(dur / 1000);
 	auto to = [](int num){
 		QString res = QString::number(num);
-		res.prepend(QString(2 - res.length(), '0'));
+		res.prepend(QString(qMax(2 - res.length(), 0), '0'));
 		return res;
 	};
-	QString t;
-	t += to(c / 60) + ':' + to(c % 60);
-	t += '/';
-	t += to(s / 60) + ':' + to(s % 60);
-	duraT->setText(t);
+	timeT->setText(to(c / 60) + ':' + to(c % 60) + " / " + to(s / 60) + ':' + to(s % 60));
+}
+
+void Info::setTime(qint64 _time)
+{
+	if (duration > 0){
+		if (!dragging){
+			updating = 1;
+			timeS->setValue(int(qBound<qint64>(0, _time, duration)));
+			updating = 0;
+		}
+		updateTimeText(_time);
+	}
 }
 
 void Info::setDuration(qint64 _duration)
 {
 	if (_duration > 0){
 		duration = _duration;
-		timeS->setRange(0, 400);
+		timeS->setRange(0, int(qMin<qint64>(_duration, 0x7fffffff)));
+		timeS->setPageStep(int(qMin<qint64>(_duration / 10, 60000)));
+		updateTimeText(0);
 	}
 	else{
 		duration = -1;
+		updating = 1;
 		timeS->setValue(0);
 		timeS->setRange(0, 0);
-		duraT->setText("00:00/00:00");
+		updating = 0;
+		timeT->setText("00:00 / 00:00");
 	}
 }

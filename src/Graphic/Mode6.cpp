@@ -10,7 +10,7 @@ Mode6::Mode6(const Comment &comment) :
 Plain(comment)
 {
 	Q_ASSERT(comment.mode == 6);
-	speed = evaluate(Config::getValue<QString>("/Danmaku/Speed", "125+%{width}/5"));
+	speed = evaluate(Config::getValue<QString>("/Danmaku/Speed", "150"));
 }
 
 QList<QRectF> Mode6::locate()

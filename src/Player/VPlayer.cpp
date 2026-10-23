@@ -10,7 +10,10 @@
 
 namespace
 {
-	QMutex time;
+	// 原名是 time。它位于匿名命名空间里，而下面四处都用 "::time." 做限定查找，
+	// 限定查找看不到匿名命名空间的名字 → GCC 把它解析成 C 库的 time() 函数。
+	// MSVC 容忍这种写法，MinGW 不容忍，改个名。
+	QMutex timeMutex;
 
 	class PixelBuffer : public ABuffer
 	{
@@ -184,11 +187,14 @@ namespace
 
 	void mid(const libvlc_event_t *, void *)
 	{
-		if (::time.tryLock()) {
+		static qint64 n = 0;
+		if ((++n % 10) == 0) {
+		}
+		if (timeMutex.tryLock()) {
 			QMetaObject::invokeMethod(lApp->findObject<APlayer>(),
 				"timeChanged",
 				Q_ARG(qint64, lApp->findObject<APlayer>()->getTime()));
-			::time.unlock();
+			timeMutex.unlock();
 		}
 	}
 
@@ -217,14 +223,20 @@ VPlayer::VPlayer(QObject *parent)
 	for (QJsonValue arg : Config::getValue<QJsonArray>("/Player/Arguments")){
 		args.append(arg.toString().toUtf8());
 	}
+	// 自定义内存渲染（vmem）不能用 GPU 硬解，VLC 3 默认开硬解会导致 get_buffer() 失败
+	if (Config::getValue("/Player/HardwareDecode", false)){
+		if (!args.contains("--avcodec-hw=any")){
+			args.append("--avcodec-hw=any");
+		}
+	}
+	else if (!args.contains("--avcodec-hw=none")){
+		args.append("--avcodec-hw=none");
+	}
 	QVector<const char *> argv(args.size());
 	for (int i = 0; i < args.size(); ++i){
 		argv[i] = args[i].data();
 	}
 	vlc = libvlc_new(argv.size(), argv.data());
-#ifdef Q_OS_WIN
-	libvlc_add_intf(vlc, "bililocal");
-#endif
 	mp = nullptr;
 	state = Stop;
 }
@@ -363,7 +375,7 @@ void VPlayer::play()
 		if (state == Stop){
 			libvlc_video_set_format_callbacks(mp, fmt, clr);
 			libvlc_video_set_callbacks(mp, lck, nullptr, dsp, nullptr);
-			libvlc_media_player_play(mp);
+			int r = libvlc_media_player_play(mp);
 		}
 		else{
 			libvlc_media_player_pause(mp);
@@ -392,11 +404,11 @@ void VPlayer::setTime(qint64 _time)
 			}
 		}
 		else{
-			::time.lock();
+			timeMutex.lock();
 			qApp->processEvents();
 			emit jumped(_time);
 			libvlc_media_player_set_time(mp, qBound<qint64>(0, _time, getDuration()));
-			::time.unlock();
+			timeMutex.unlock();
 		}
 	}
 }

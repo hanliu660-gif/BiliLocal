@@ -83,6 +83,11 @@ class Config :public QObject
 public:
 	explicit Config(QObject *parent = 0);
 
+	// 标记“配置有改动”，稍后统一落盘（1s 去抖）
+	static void touch();
+	// 老配置的一次性升级，只动仍停留在出厂值的那几个键
+	static void migrate();
+
 	template<class T>
 	static T getValue(QString key, T def = T())
 	{
@@ -137,11 +142,13 @@ public:
 		lock.lockForWrite();
 		config = cur;
 		lock.unlock();
+		touch();
 	}
 
 private:
 	static QJsonObject config;
 	static QReadWriteLock lock;
+	QTimer *autoSaveTimer = 0;
 
 signals:
 	void aboutToSave();
@@ -151,4 +158,7 @@ public slots:
 	static void save();
 	void     setVariant(QString key, QVariant val);
 	QVariant getVariant(QString key, QVariant val = QVariant());
+
+private slots:
+	void     autoSave();
 };

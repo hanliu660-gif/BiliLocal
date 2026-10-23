@@ -3,6 +3,10 @@
 #include <QtGui>
 #include <QtNetwork>
 #include <functional>
+#include <QDateTime>
+#ifdef Q_OS_WIN
+#include <dwmapi.h>
+#endif
 
 using namespace UI;
 
@@ -92,7 +96,6 @@ Home::Home(QWidget *parent)
 	arender = lApp->findObject<ARender>();
 	menu = new Menu(this);
 	info = new Info(this);
-	jump = new Jump(this);
 	type = new Type(this);
 	list = lApp->findObject<List>();
 	load = lApp->findObject<Load>();
@@ -101,18 +104,39 @@ Home::Home(QWidget *parent)
 	sign = lApp->findObject<Sign>();
 
 	timer = new QTimer(this);
+	timer->setSingleShot(true);
+	timer->setInterval(400);
 	delay = new QTimer(this);
 	connect(timer, &QTimer::timeout, [this]() {
-		QPoint cur = mapFromGlobal(QCursor::pos());
-		int x = cur.x(), y = cur.y(), w = width(), h = height();
-		if (isActiveWindow()) {
-			if (y<-60 || y>h + 60 || x<-100 || x>w + 100) {
-				menu->push();
-				info->push();
+		// 轮询判据：光标在窗口里、并且最近 2 秒内动过，才保持显形。
+		// 之前的版本只看「光标在不在窗口内」，光标停在画面中间不动时两条会一直挂着。
+		if (seekdrag || sliding) {
+			lastMove = QDateTime::currentMSecsSinceEpoch();
+			timer->start(400);
+			return;
+		}
+		const QPoint cur = mapFromGlobal(QCursor::pos());
+		const bool inside = rect().contains(cur);
+		const bool overBar = (bar != nullptr && bar->isVisible() && bar->geometry().contains(cur))
+			|| (info != nullptr && info->isVisible() && info->geometry().contains(cur));
+		const qint64 idle = QDateTime::currentMSecsSinceEpoch() - lastMove;
+		if (inside && (overBar || idle < 2000)) {
+			if (bar && !bar->isVisible()) {
+				bar->show();
+				bar->raise();
 			}
+			if (!info->isShown()) {
+				info->pop();
+			}
+			timer->start(400);
+			return;
+		}
+		info->push();
+		if (bar) {
+			bar->hide();
 		}
 	});
-	delay->setSingleShot(true);
+		delay->setSingleShot(true);
 	connect(delay, &QTimer::timeout, lApp->findObject<APlayer>(), [this]() {
 		if (aplayer->getState() == APlayer::Play && !menu->isVisible() && !info->isVisible()) {
 			setCursor(QCursor(Qt::BlankCursor));
@@ -219,7 +243,9 @@ Home::Home(QWidget *parent)
 	connect(seek, &Seek::errorOccured, this, alertNetworkError);
 	connect(sign, &Sign::errorOccured, this, alertNetworkError);
 
-	showprg = sliding = false;
+	showprg = sliding = seekdrag = false;
+	lastMove = 0;
+	wasMaximized = false;
 	connect(aplayer, &APlayer::timeChanged, [this](qint64 t) {
 		if (!sliding&&aplayer->getState() != APlayer::Stop) {
 			arender->setDisplayTime(showprg ? t / (double)aplayer->getDuration() : -1);
@@ -241,7 +267,55 @@ Home::Home(QWidget *parent)
 	fullA->setShortcut(Config::getValue("/Shortcut/Full", QString("F")));
 	addAction(fullA);
 	connect(fullA, &QAction::toggled, [this](bool b) {
-		b ? showFullScreen() : showNormal();
+		if (b) {
+			// 记下进全屏前的状态：从最大化进的全屏，退出后要回到最大化，
+			// 而不是被 showNormal() 打回最初的普通窗口尺寸。
+			wasMaximized = isMaximized();
+			showFullScreen();
+		}
+		else if (wasMaximized) {
+			// 退出全屏要回到最大化，但「全屏 → 最大化」会走 DWM 的窗口状态过渡动画
+			// （先扩张再最大化）。DWMWA_TRANSITIONS_FORCEDISABLED 可以只对这一个窗口
+			// 关掉过渡动画，切换完再放开，不影响系统其它程序。
+#ifdef Q_OS_WIN
+			BOOL transitions = TRUE;
+			DwmSetWindowAttribute((HWND)winId(), 3 /* DWMWA_TRANSITIONS_FORCEDISABLED */, &transitions, sizeof(transitions));
+#endif
+			hide();
+			showMaximized();
+			show();
+#ifdef Q_OS_WIN
+			QTimer::singleShot(700, this, [this]() {
+				BOOL transitions = FALSE;
+				DwmSetWindowAttribute((HWND)winId(), 3 /* DWMWA_TRANSITIONS_FORCEDISABLED */, &transitions, sizeof(transitions));
+			});
+#endif
+		}
+		else {
+			showNormal();
+		}
+		// Window 后端用 createWindowContainer 包住 QOpenGLWindow，全屏这种
+		// 「窗口被重新摆放」的切换偶尔会让渲染容器停在旧尺寸 —— 表现就是
+		// 只在左上角画了一小块、其余部分露出白底。这里补几次强制重排 + 重绘，
+		// 等原生窗口的尺寸同步真正完成。
+		for (int ms : { 0, 80, 240, 600 }) {
+			QTimer::singleShot(ms, this, [this]() {
+				if (arender == nullptr) {
+					return;
+				}
+				const QSize sz = size();
+				arender->resize(sz);
+				arender->draw(QRect(QPoint(0, 0), sz));
+				if (bar != nullptr) {
+					bar->setGeometry(0, 0, sz.width(), bar->height());
+					bar->raise();
+				}
+				if (info != nullptr) {
+					info->setGeometry(0, sz.height() - info->height(), sz.width(), info->height());
+					info->raise();
+				}
+			});
+		}
 	});
 
 	confA = new QAction(tr("Config"), this);
@@ -435,6 +509,69 @@ Home::Home(QWidget *parent)
 	});
 	setSingle(spd);
 
+	bar = new QWidget(this);
+	bar->setObjectName("BiliBar");
+	bar->setAttribute(Qt::WA_NativeWindow, true);
+	bar->setAttribute(Qt::WA_StyledBackground, true);
+	bar->setStyleSheet(QStringLiteral(
+		"QWidget#BiliBar{background:rgba(20,22,26,215);}"
+		"QWidget#BiliBar QPushButton{color:#e8e8ea;background:transparent;"
+		"border:1px solid rgba(255,255,255,45);border-radius:4px;padding:3px 12px;}"
+		"QWidget#BiliBar QPushButton:hover{background:rgba(255,255,255,35);}"
+		"QWidget#BiliBar QPushButton:pressed{background:rgba(255,255,255,60);}"));
+	{
+		QHBoxLayout *lay = new QHBoxLayout(bar);
+		lay->setContentsMargins(8, 4, 8, 4);
+		lay->setSpacing(6);
+		lay->addStretch(1);
+		auto addBtn = [&](QString text, QString tip, std::function<void()> slot) {
+			QPushButton *b = new QPushButton(text, bar);
+			b->setToolTip(tip);
+			b->setFocusPolicy(Qt::NoFocus);
+			b->setCursor(Qt::PointingHandCursor);
+			connect(b, &QPushButton::clicked, slot);
+			lay->addWidget(b);
+		};
+		addBtn(tr("打开"), tr("打开本地视频"), [this]() {
+			QString f = QFileDialog::getOpenFileName(this, tr("打开"), QString(),
+				tr("视频 (*.mp4 *.flv *.mkv *.ts *.mov *.wmv *.avi *.m4v *.webm);;所有文件 (*)"));
+			if (!f.isEmpty()) {
+				lApp->tryLocal(f);
+			}
+		});
+		addBtn(tr("弹幕"), tr("加载本地弹幕文件 (xml / json)"), [this]() {
+			QString f = QFileDialog::getOpenFileName(this, tr("加载弹幕"), QString(),
+				tr("弹幕 (*.xml *.json);;所有文件 (*)"));
+			if (!f.isEmpty()) {
+				load->loadDanmaku(f);
+			}
+		});
+		addBtn(tr("播放"), tr("播放 / 暂停 (Space)"), [this]() {
+			aplayer->play();
+		});
+		addBtn(tr("设置"), tr("首选项"), [this]() {
+			Prefer::exec(this, 0);
+		});
+		addBtn(tr("全屏"), tr("全屏 / 退出全屏 (F11)"), [this]() {
+			fullA->setChecked(!fullA->isChecked());
+		});
+	}
+	menu->setWindowFlags(Qt::Window);
+	menu->setWindowTitle(tr("文件与弹幕"));
+	menu->resize(320, 600);
+	connect(info->listB, &QPushButton::clicked, this, [this]() {
+		if (menu->isShown()) {
+			menu->push(true);
+		}
+		else {
+			if (!menu->property("placed").toBool()) {
+				menu->move(x() + width() - menu->width() - 24, y() + 48);
+				menu->setProperty("placed", true);
+			}
+			menu->pop();
+		}
+	});
+
 	setWindowFlags();
 	checkForUpdate();
 	setGeometry(QSize(), true);
@@ -510,55 +647,96 @@ void Home::mouseDoubleClickEvent(QMouseEvent * e)
 
 void Home::mouseMoveEvent(QMouseEvent * e)
 {
+	lastMove = QDateTime::currentMSecsSinceEpoch();
 	QPoint cur = e->pos();
-	int x = cur.x(), y = cur.y(), w = width(), h = height();
-	if (isActiveWindow()) {
-		if (x > 250) {
-			menu->push();
+	if (seekdrag) {
+		if (bar && !bar->isVisible()) {
+			bar->show();
+			bar->raise();
 		}
-		if (x < w - 250) {
-			info->push();
+		if (!info->isShown()) {
+			info->pop();
 		}
-		if (y <= h - 50) {
-			if (x >= 0 && x<50) {
-				menu->pop();
-			}
-			if (x>w - 50 && x <= w) {
-				info->pop();
-			}
-		}
+		timer->start(400);
+		seekTo(cur, false);
+		return;
 	}
+	int x = cur.x(), w = width();
 	if (!showprg&&aplayer->getState() != APlayer::Stop) {
 		arender->setDisplayTime(aplayer->getTime() / (double)aplayer->getDuration());
 	}
 	showprg = true;
+	if (bar && !bar->isVisible()) {
+		bar->show();
+		bar->raise();
+	}
+	if (!info->isShown()) {
+		info->pop();
+	}
+	timer->start(400);
 	if (cursor().shape() == Qt::BlankCursor) {
 		unsetCursor();
 	}
 	delay->start(4000);
-	if (sliding) {
-		arender->setDisplayTime(x / (double)w);
-	}
-	else if (!sta.isNull() && (windowFlags()&Qt::CustomizeWindowHint) != 0 && !isFullScreen()) {
+	if (!sta.isNull() && (windowFlags()&Qt::CustomizeWindowHint) != 0 && !isFullScreen()) {
 		move(wgd + e->globalPos() - sta);
 	}
 	QWidget::mouseMoveEvent(e);
 }
 
+int Home::infoHeight() const
+{
+	return int(4.2 * logicalDpiY() * font().pointSizeF() / 72);
+}
+
+// 底栏横带上的定位逻辑：按 x 比例算出时间点，commit 为真时才真正跳转
+void Home::seekTo(QPoint p, bool commit)
+{
+	qint64 d = aplayer->getDuration();
+	if (d <= 0) {
+		return;
+	}
+	const double ratio = qBound(0.0, p.x() / double(qMax(width() - 1, 1)), 1.0);
+	const qint64 t = qint64(d * ratio);
+	if (arender) {
+		arender->setDisplayTime(ratio);
+	}
+	if (info) {
+		info->previewTime(t);
+	}
+	if (commit) {
+		aplayer->setTime(t);
+	}
+}
+
 void Home::mousePressEvent(QMouseEvent * e)
 {
+	lastMove = QDateTime::currentMSecsSinceEpoch();
 	if (e->button() == Qt::LeftButton) {
+		QPoint p = e->pos();
+		// 底栏整条横带都能点：即使 Info 还没滑出来，按下也直接定位
+		if (p.y() >= height() - infoHeight()) {
+			seekdrag = true;
+			if (bar) {
+				bar->show();
+				bar->raise();
+			}
+			if (!info->isShown()) {
+				info->pop();
+			}
+			timer->start(400);
+			sliding = true;
+			seekTo(p, false);
+			return;
+		}
 		if (sta.isNull()) {
 			sta = e->globalPos();
 			wgd = pos();
 		}
-		QPoint p = e->pos();
-		if (!info->geometry().contains(p) && !menu->geometry().contains(p)) {
-			if (height() - p.y() <= 25 && height() >= p.y()) {
-				sliding = true;
-				arender->setDisplayTime(e->x() / (double)width());
-			}
-			else if (Config::getValue("/Interface/Sensitive", false)) {
+		bool inInfo = info->isShown() && info->geometry().contains(p);
+		bool inMenu = !menu->isWindow() && menu->isShown() && menu->geometry().contains(p);
+		if (!inInfo && !inMenu) {
+			if (Config::getValue("/Interface/Sensitive", false)) {
 				aplayer->play();
 			}
 		}
@@ -568,19 +746,20 @@ void Home::mousePressEvent(QMouseEvent * e)
 
 void Home::mouseReleaseEvent(QMouseEvent * e)
 {
-	if (!menu->geometry().contains(e->pos()) && !info->geometry().contains(e->pos())) {
-		menu->push(true);
-		info->push(true);
+	if (seekdrag) {
+		seekdrag = false;
+		sliding = false;
+		seekTo(e->pos(), true);
+		sta = wgd = QPoint();
+		return;
+	}
+	if (!info->geometry().contains(e->pos())) {
+		if (aplayer->getState() == APlayer::Play) {
+			info->push(true);
+		}
 		type->hide();
-		jump->hide();
 	}
 	sta = wgd = QPoint();
-	if (sliding&&e->button() == Qt::LeftButton) {
-		sliding = false;
-		if (aplayer->getState() != APlayer::Stop) {
-			aplayer->setTime(e->x()*aplayer->getDuration() / (width() - 1));
-		}
-	}
 	if (e->button() == Qt::RightButton) {
 		showContextMenu(e->pos());
 	}
@@ -594,11 +773,22 @@ void Home::resizeEvent(QResizeEvent * e)
 	int w = size.width(), h = size.height();
 	menu->terminate();
 	info->terminate();
-	int l = Config::getValue("/Interface/Popup/Width", 16 * font().pointSizeF())*logicalDpiX() / 72;
-	menu->setGeometry(menu->isShown() ? 0 : 0 - l, 0, l, h);
-	info->setGeometry(info->isShown() ? w - l : w, 0, l, h);
+	int l = Config::getValue("/Interface/Popup/Width", 24 * font().pointSizeF())*logicalDpiX() / 72;
+	if (bar) {
+		int bh = bar->sizeHint().height();
+		if (bh <= 0) {
+			bh = int(fontMetrics().height() * 2.2) + 8;
+		}
+		bar->setGeometry(0, 0, w, bh);
+		bar->raise();
+	}
+	if (!menu->isWindow()) {
+		menu->setGeometry(menu->isShown() ? 0 : 0 - l, 0, l, h);
+	}
+	int ih = int(4.2 * logicalDpiY() * font().pointSizeF() / 72);
+	info->setGeometry(0, h - ih, w, ih);
+	info->raise();
 	type->move(w / 2 - type->width() / 2, h - type->height() - 2);
-	jump->move(w / 2 - jump->width() / 2, 2);
 	for (QAction *action : sca->actions()) {
 		if (action->isSeparator() || !action->isEnabled()) {
 			continue;

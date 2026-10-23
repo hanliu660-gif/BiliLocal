@@ -474,6 +474,11 @@ Load::Load(QObject *parent)
 
 			Parse::ResultDelegate result;
 			QByteArray data(reply->readAll());
+			// 录播姬等工具写出的 xml 带 UTF-8 BOM，不剥掉的话下面的 startsWith("<?xml") 会失配，
+			// 整个文件会被当成 AcFun 的 JSON 去解析，结果是 0 条弹幕。
+			if (data.startsWith("\xEF\xBB\xBF")) {
+				data.remove(0, 3);
+			}
 			QByteArray head = data.left(512);
 			if (head.startsWith("[Script Info]")){
 				result = Parse::parseComment(data, Utils::ASS);

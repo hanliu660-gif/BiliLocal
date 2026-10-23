@@ -29,7 +29,7 @@
 #include "AccessPrivate.h"
 #include "../Utils.h"
 
-#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS)
+#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS) && !defined(NO_OPENSSL)
 extern "C"
 {
 #include <openssl/pem.h>
@@ -118,7 +118,7 @@ Sign::Sign(QObject *parent)
 		{
 			//RSA Encrypt
 			try{
-#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS)
+#if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS) && !defined(NO_OPENSSL)
 				QJsonObject key = QJsonDocument::fromJson(reply->readAll()).object();
 				QByteArray pub = key["key"].toString().toUtf8();
 				BIO *bio = BIO_new_mem_buf(pub.data(), pub.length());

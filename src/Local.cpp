@@ -26,6 +26,10 @@
 
 #include "Common.h"
 #include "Local.h"
+#ifdef Q_OS_WIN
+#	include <windows.h>
+#	include <shellapi.h>
+#endif
 #include "Bundle.h"
 #include "Config.h"
 #include "Plugin.h"
@@ -82,6 +86,9 @@ Local::Local(QObject *parent)
 Local::~Local()
 {
 	Config::save();
+	if (ins == this){
+		ins = nullptr;
+	}
 	delete findObject<APlayer>();
 	delete findObject<Running>();
 	delete findObject<ARender>();
@@ -156,10 +163,41 @@ namespace
 	}
 }
 
+namespace
+{
+	// Windows 下 QCoreApplication::arguments() 会把 UTF-8 的 argv 当成本地编码（GBK）解，
+	// 中文/全角文件名的路径会变成乱码（实测「！.flv」→「???flv」）。直接从宽字符命令行取。
+	QStringList commandLineArguments()
+	{
+#ifdef Q_OS_WIN
+		int count = 0;
+		LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &count);
+		QStringList res;
+		for (int i = 1; i < count; ++i) {
+			res.append(QString::fromWCharArray(argv[i]));
+		}
+		if (argv) {
+			LocalFree(argv);
+		}
+		return res;
+#else
+		return QCoreApplication::arguments().mid(1);
+#endif
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-	std::remove_pointer<decltype(qApp)>::type a(argc, argv);
+	std::remove_pointer<decltype(qApp)>::type a(argc, argv);	// 配置/缓存的位置依赖这两个名字，必须在 Config::load() 之前定好
+	QCoreApplication::setOrganizationName("BiliLocal");
+	QCoreApplication::setApplicationName("BiliLocal");
+	qInstallMessageHandler([](QtMsgType, const QMessageLogContext &, const QString &msg) {
+		QFile f(Utils::localPath(Utils::Cache) + "msg.log");
+		if (f.open(QIODevice::WriteOnly | QIODevice::Append)) {
+			f.write((msg + "\r\n").toUtf8());
+		}
+	});
 	Bundle::push();
 	Config::load();
 #if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS)
@@ -169,7 +207,7 @@ int main(int argc, char *argv[])
 		socket.connectToServer("BiliLocalInstance");
 		if (socket.waitForConnected()){
 			QDataStream s(&socket);
-			s << a.arguments().mid(1);
+			s << commandLineArguments();
 			socket.waitForBytesWritten();
 			return 0;
 		}
@@ -183,7 +221,7 @@ int main(int argc, char *argv[])
 	new Local(&a);
 	Plugin::load();
 	lApp->findObject<Interface>()->show();
-	for (const QString iter : a.arguments().mid(1)) {
+	for (const QString iter : commandLineArguments()) {
 		lApp->tryLocal(iter);
 	}
 #if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS)

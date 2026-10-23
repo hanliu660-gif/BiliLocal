@@ -10,6 +10,7 @@ TEMPLATE = app
 
 CONFIG += c++11
 
+
 SOURCES += \
     src/Access/Load.cpp \
     src/Access/NetworkConfiguration.cpp \
@@ -122,21 +123,45 @@ DEFINES += \
 DEFINES += \
     INTERFACE_WIDGET
 
-INCLUDEPATH += \
-    D:/App/Programming/include
+# 第三方库目录：默认还是作者当年那台机器的路径，
+# 换机器时用 qmake "THIRDPARTY=C:/libs" 覆盖，别再改源码。
+isEmpty(THIRDPARTY): THIRDPARTY = D:/App/Programming
 
-!contains(QMAKE_TARGET.arch, x86_64){
-DEPENDPATH += \
-    -LD:/App/Programming/lib
+INCLUDEPATH += \
+    $$THIRDPARTY/include
+
+# 目标位数：MSVC 填 QMAKE_TARGET.arch，MinGW 只填 QT_ARCH。
+# 原工程只看前者，于是 MinGW 64 位也被当成 32 位（错误编进 raster 后端、去链接 ffmpeg）。
+BILILOCAL_ARCH = $$QT_ARCH
+isEmpty(BILILOCAL_ARCH): BILILOCAL_ARCH = $${QMAKE_TARGET.arch}
+contains(BILILOCAL_ARCH, x86_64){
+BILILOCAL_64 = 1
+}
+
+# 原来这里写的是 "DEPENDPATH += -LD:/..."，-L 放错地方了，
+# 链接器根本看不到这个目录，换成 LIBS 才有用。
+isEmpty(BILILOCAL_64){
+LIBS += \
+    -L$$THIRDPARTY/lib
 }
 else{
-DEPENDPATH += \
-    -LD:/App/Programming/lib/amd64
+LIBS += \
+    -L$$THIRDPARTY/lib/amd64
 }
 
+# OpenSSL 只被 src/Access/Sign.cpp 用于登录 RSA（passport 接口 2016 年后就没了）。
+# 没有 OpenSSL 头文件时定义 NO_OPENSSL，让那段死代码走 "not supported" 分支，
+# 不要把整个工程卡在链接错误上。
+!exists($$THIRDPARTY/include/openssl/rsa.h){
+DEFINES += \
+    NO_OPENSSL
+}
+else{
 LIBS += \
     -llibeay32 \
     -lssleay32
+}
+LIBS += -ldwmapi
 }
 
 macx{
@@ -232,7 +257,7 @@ HEADERS += \
 message(enable quick2 interface)
 }
 
-win32 : contains(QT, widgets) : !contains(QMAKE_TARGET.arch, x86_64){
+win32 : contains(QT, widgets) : isEmpty(BILILOCAL_64){
 DEFINES += \
     RENDER_RASTER
 }

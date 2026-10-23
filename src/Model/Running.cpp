@@ -372,7 +372,8 @@ namespace
 					//自带弹幕系统未识别，通知插件处理
 					emit lApp->findObject<Running>()->unrecognizedComment(iter);
 				}
-				catch (Graphic::args_prasing_error) {}
+				catch (Graphic::args_prasing_error) {
+				}
 			}
 			for (auto iter = slot.begin(); iter != slot.end(); ++iter) {
 				qThreadPool->start(new Process(priv, iter.value(), iter.key()), Process::Priority);
@@ -389,27 +390,36 @@ namespace
 void Running::moveTime(qint64 time)
 {
 	Q_D(Running);
+	// 播放位置突然大幅跳动（起播就跳到 --start-time、拖动进度条、VLC 内部 seek）时，
+	// 直接重定位 + 清屏；否则跳过的整段里的弹幕会被一次性全吐到屏幕上。
+	if (time > d->time + 2000 || (d->time > 0 && time + 2000 < d->time)) {
+		jumpTime(time);
+		return;
+	}
 	d->time = time;
 	int screen = Config::getValue("/Shield/Amount/Screen", 0);
 	int repeat = Config::getValue("/Shield/Amount/Repeat", 5);
 	QMap<qint64, QList<const Comment *>> splited;
 	auto danm = lApp->findObject<Danmaku>();
-	for (; d->curr < danm->size() && danm->at(d->curr)->time < time; ++d->curr) {
-		const Comment *c = danm->at(d->curr);
-		if (c->blocked) {
-			continue;
-		}
+	//整批只加一次写锁：原来每条弹幕都 lockForWrite/unlock 一次，
+	//起播或密集段一次要进上千条，加解锁本身就吃掉可观的时间。
+	{
 		QWriteLocker locker(&d->lock);
-		if (screen > 0 && d->wait + d->draw.size() >= screen) {
-			continue;
+		for (; d->curr < danm->size() && danm->at(d->curr)->time < time; ++d->curr) {
+			const Comment *c = danm->at(d->curr);
+			if (c->blocked) {
+				continue;
+			}
+			if (screen > 0 && d->wait + d->draw.size() >= screen) {
+				continue;
+			}
+			if (repeat > 0 && d->text.value(c->string) >= repeat) {
+				continue;
+			}
+			d->wait++;
+			d->text.insert(c);
+			splited[c->time].append(c);
 		}
-		if (repeat > 0 && d->text.value(c->string) >= repeat) {
-			continue;
-		}
-		d->wait++;
-		d->text.insert(c);
-		locker.unlock();
-		splited[c->time].append(c);
 	}
 	for (const QList<const Comment *> &iter : splited) {
 		qThreadPool->start(new Prepare(d, iter), Prepare::Priority);

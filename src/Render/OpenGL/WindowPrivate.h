@@ -22,8 +22,11 @@ public:
 
 	virtual void resize(QSize size) override
 	{
-		middle->resize(size);
-		widget->resize(size);
+		// createWindowContainer 建出来的容器是原生子窗口，全屏切换时它的
+		// 尺寸同步会晚一拍；这里三层一起摆，避免只跟上外层、内层仍是旧尺寸。
+		middle->setGeometry(0, 0, size.width(), size.height());
+		widget->setGeometry(0, 0, size.width(), size.height());
+		window->resize(size);
 	}
 
 	virtual QSize getActualSize() override

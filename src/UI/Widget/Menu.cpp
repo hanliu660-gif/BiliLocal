@@ -466,7 +466,7 @@ QWidget(parent)
 	alphaS = new QSlider(this);
 	alphaS->setOrientation(Qt::Horizontal);
 	alphaS->setRange(0, 100);
-	alphaS->setValue(Config::getValue("/Danmaku/Alpha", 100));
+	alphaS->setValue(Config::getValue("/Danmaku/Alpha", 80));
 	connect(alphaS, &QSlider::valueChanged, [this](int _alpha){
 		Config::setValue("/Danmaku/Alpha", _alpha);
 		if (alphaS->isVisible()){
@@ -626,8 +626,18 @@ bool Menu::eventFilter(QObject *o, QEvent *e)
 
 void Menu::pop()
 {
+	if (isWindow()){
+		if (!isPoped){
+			show();
+			raise();
+			activateWindow();
+			isPoped = true;
+		}
+		return;
+	}
 	if (!isPoped&&animation->state() == QAbstractAnimation::Stopped){
 		show();
+		raise();
 		animation->setStartValue(pos());
 		animation->setEndValue(pos() + QPoint(width(), 0));
 		animation->start();
@@ -637,6 +647,14 @@ void Menu::pop()
 
 void Menu::push(bool force)
 {
+	if (isWindow()){
+		if (force&&isPoped){
+			isStay = false;
+			hide();
+			isPoped = false;
+		}
+		return;
+	}
 	if (isPoped&&animation->state() == QAbstractAnimation::Stopped && (!preferStay() || force)){
 		if (force){
 			isStay = false;
@@ -650,6 +668,9 @@ void Menu::push(bool force)
 
 void Menu::terminate()
 {
+	if (isWindow()){
+		return;
+	}
 	if (animation->state() != QAbstractAnimation::Stopped){
 		animation->setCurrentTime(animation->totalDuration());
 	}

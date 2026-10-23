@@ -40,7 +40,9 @@ namespace UI
 
 		bool isShown()
 		{
-			return isPoped;
+			// 以真实可见性为准：动画被打断时 isPoped 可能与实际状态不一致
+			// （以前会出现「以为已经弹出、其实已经隐藏」，之后再也弹不出来）
+			return isVisible();
 		}
 
 		bool preferStay()
@@ -48,19 +50,33 @@ namespace UI
 			return isStay;
 		}
 
+		QPushButton *listB;
+
+		// 外部（Home 的底栏拖动）预览时间时只更新显示，不触发 seek
+		void previewTime(qint64 _time)
+		{
+			updateTimeText(_time);
+			if (duration > 0) {
+				updating = 1;
+				timeS->setValue(int(qBound<qint64>(0, _time, duration)));
+				updating = 0;
+			}
+		}
+
 	private:
 		bool isStay;
 		bool isPoped;
 		bool updating;
+		bool dragging;
 		qint64 duration;
 
 		QLabel *duraT;
 		QLabel *timeT;
 		QLabel *volmT;
-		QLabel *plfmT;
+		QLabel *plfmT = nullptr;	// 原作者声明了但从未 new 过，保持空指针
 		QSlider *timeS;
 		QSlider *volmS;
-		QLineEdit *plfmL;
+		QLineEdit *plfmL = nullptr;
 		QTableView *danmV;
 		QPushButton *playB;
 		QPushButton *stopB;
@@ -69,8 +85,11 @@ namespace UI
 		QIcon playI, stopI, pausI;
 		QPropertyAnimation *animation;
 		void resizeEvent(QResizeEvent *e);
+		bool eventFilter(QObject *o, QEvent *e);
 		void setTime(qint64 _time);
 		void setDuration(qint64 _duration);
+		void updateTimeText(qint64 _time);
+		QPoint restPos() const;
 
 	public slots:
 		void pop();

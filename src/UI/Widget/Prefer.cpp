@@ -188,7 +188,7 @@ QDialog(parent)
 
 		auto s = new QHBoxLayout;
 		play[0] = new QLineEdit(widget[0]);
-		play[0]->setText(Config::getValue("/Danmaku/Speed", QString("125+%{width}/5")));
+		play[0]->setText(Config::getValue("/Danmaku/Speed", QString("150")));
 		connect(play[0], &QLineEdit::editingFinished, [=](){
 			Config::setValue("/Danmaku/Speed", play[0]->text());
 		});

@@ -787,7 +787,13 @@ void OpenGLRenderPrivate::initialize()
 	initializeOpenGLFunctions();
 	extensions = (const char *)glGetString(GL_EXTENSIONS);
 	resource.reset(new OpenGLRenderResource(this));
-	timer.setInterval(c->format().swapInterval() / (double)c->screen()->refreshRate());
+	//交换间隔为 0（关垂直同步）时原来的 interval 是 0，会退化成「每次 swap 都立刻重画」，
+	//等于不设上限地跑满 CPU；这里给一个 60fps 的地板，同时把 120Hz 屏上的重画频率压到 60。
+	double hz = c->screen() ? c->screen()->refreshRate() : 60.0;
+	if (hz <= 0) {
+		hz = 60.0;
+	}
+	timer.setInterval(qMax(c->format().swapInterval() / hz, 1.0 / 60.0));
 }
 
 void OpenGLRenderPrivate::drawDanm(QPainter *painter, QRect rect)
@@ -837,7 +843,7 @@ void OpenGLRenderPrivate::onSwapped()
 			lApp->findObject<ARender>()->draw();
 		}
 		else{
-			QTimer::singleShot(1, lApp->findObject<ARender>(), SLOT(draw()));
+			QTimer::singleShot(timer.remainingMs(), lApp->findObject<ARender>(), SLOT(draw()));
 		}
 	}
 }

@@ -274,13 +274,27 @@ QString Utils::defaultFont(bool monospace)
 
 QString Utils::localPath(Path path)
 {
-#ifdef Q_OS_WIN32
+	// 配置与缓存一律放到用户目录：程序装在 Program Files 或只读盘时，
+	// 写在 exe 旁边会静默失败，重启就回到出厂状态。
 	QString base = qApp->applicationDirPath() + '/';
+	auto standard = [](QStandardPaths::StandardLocation location, QString fallback, QString subdir = QString()){
+		QString path = QStandardPaths::writableLocation(location);
+		if (path.isEmpty()){
+			return fallback;
+		}
+		if (!subdir.isEmpty()){
+			path = path + QLatin1Char('/') + subdir;
+		}
+		QDir().mkpath(path);
+		return path + '/';
+	};
+#ifdef Q_OS_WIN32
 	switch (path){
 	case Cache:
-		return base + "cache/";
+		// GenericDataLocation 不带 组织名/程序名，避免出现 BiliLocal/BiliLocal/BiliLocal 这种套娃
+		return standard(QStandardPaths::GenericDataLocation, base + "cache/", "BiliLocal/cache");
 	case Config:
-		return base;
+		return standard(QStandardPaths::GenericDataLocation, base, "BiliLocal");
 	case Locale:
 		return base + "locale/";
 	case Plugin:
@@ -293,17 +307,17 @@ QString Utils::localPath(Path path)
 #else
 	switch (path){
 	case Cache:
-		return QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + '/';
+		return standard(QStandardPaths::GenericDataLocation, base + "cache/", "BiliLocal/cache");
 	case Config:
-		return QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + '/';
+		return standard(QStandardPaths::GenericDataLocation, base, "BiliLocal");
 	case Locale:
-		return QStandardPaths::writableLocation(QStandardPaths::DataLocation) + "/Locale/";
+		return standard(QStandardPaths::GenericDataLocation, base, "BiliLocal/Locale");
 	case Plugin:
-		return QStandardPaths::writableLocation(QStandardPaths::DataLocation) + "/Plugin/";
+		return standard(QStandardPaths::GenericDataLocation, base, "BiliLocal/Plugin");
 	case Script:
-		return QStandardPaths::writableLocation(QStandardPaths::DataLocation) + "/Script/";
+		return standard(QStandardPaths::GenericDataLocation, base, "BiliLocal/Script");
 	default:
-		return QStandardPaths::writableLocation(QStandardPaths::DataLocation) + '/';
+		return standard(QStandardPaths::GenericDataLocation, base, "BiliLocal");
 	}
 #endif
 }

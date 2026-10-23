@@ -10,7 +10,9 @@ Mode1::Mode1(const Comment &comment) :
 Plain(comment)
 {
 	Q_ASSERT(comment.mode == 1);
-	speed = evaluate(Config::getValue<QString>("/Danmaku/Speed", "125+%{width}/5"));
+	// 150 像素/秒：1080p 下大约 12 秒横穿整屏，接近 B 站实际观感；
+	// 原来的 "125+%{width}/5" 在 1920 宽时是 509 像素/秒，3.8 秒就飞过去了。
+	speed = evaluate(Config::getValue<QString>("/Danmaku/Speed", "150"));
 }
 
 QList<QRectF> Mode1::locate()

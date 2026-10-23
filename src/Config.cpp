@@ -31,6 +31,13 @@
 
 QReadWriteLock Config::lock;
 
+namespace
+{
+	// save() 内部会 emit aboutToSave()，而 List 等模块会在槽里继续 setValue()，
+	// 这里挡住重入，否则「保存 -> 又变脏 -> 再保存」会无限循环。
+	bool saving = false;
+}
+
 Config::Config(QObject *parent)
 	: QObject(parent)
 {
@@ -40,20 +47,101 @@ QJsonObject Config::config;
 
 void Config::load()
 {
-	QFile conf(Utils::localPath(Utils::Config) + "Config.txt");
+	QString path = Utils::localPath(Utils::Config) + "Config.txt";
+	QFile conf(path);
 	if (conf.open(QIODevice::ReadOnly | QIODevice::Text)){
 		config = QJsonDocument::fromJson(conf.readAll()).object();
 		conf.close();
 	}
+	else{
+		// 老版本把 Config.txt 写在 exe 旁边，搬到用户目录后顺手迁移一次，
+		// 免得升级之后所有设置看起来都丢了。
+		QFile legacy(qApp->applicationDirPath() + "/Config.txt");
+		if (legacy.exists() && legacy.open(QIODevice::ReadOnly | QIODevice::Text)){
+			QByteArray data = legacy.readAll();
+			legacy.close();
+			config = QJsonDocument::fromJson(data).object();
+			QDir().mkpath(QFileInfo(path).absolutePath());
+			QFile file(path);
+			if (file.open(QIODevice::WriteOnly | QIODevice::Text)){
+				file.write(data);
+				file.close();
+			}
+		}
+	}
+	migrate();
 }
 
 void Config::save()
 {
-	emit lApp->findObject<Config>()->aboutToSave();
-	QFile conf(Utils::localPath(Utils::Config) + "Config.txt");
-	conf.open(QIODevice::WriteOnly | QIODevice::Text);
+	if (saving){
+		return;
+	}
+	saving = true;
+	if (lApp){
+		if (Config *obj = lApp->findObject<Config>()){
+			emit obj->aboutToSave();
+		}
+	}
+	QString path = Utils::localPath(Utils::Config) + "Config.txt";
+	QDir().mkpath(QFileInfo(path).absolutePath());
+	QSaveFile conf(path);
+	if (!conf.open(QIODevice::WriteOnly | QIODevice::Text)){
+		qWarning("Config: %s", qPrintable(conf.errorString()));
+		saving = false;
+		return;
+	}
 	conf.write(QJsonDocument(config).toJson());
-	conf.close();
+	if (!conf.commit()){
+		qWarning("Config: %s", qPrintable(conf.errorString()));
+	}
+	saving = false;
+}
+
+void Config::touch()
+{
+	if (saving || !lApp){
+		return;
+	}
+	if (Config *obj = lApp->findObject<Config>()){
+		// 跨线程调用 setValue 时也能安全地回到对象所属线程再起定时器
+		QMetaObject::invokeMethod(obj, "autoSave", Qt::QueuedConnection);
+	}
+}
+
+void Config::autoSave()
+{
+	if (!autoSaveTimer){
+		autoSaveTimer = new QTimer(this);
+		autoSaveTimer->setSingleShot(true);
+		autoSaveTimer->setInterval(1000);
+		connect(autoSaveTimer, &QTimer::timeout, this, [](){ Config::save(); });
+	}
+	autoSaveTimer->start();
+}
+
+void Config::migrate()
+{
+	int version = config.value("Meta").toObject().value("ConfigVersion").toInt();
+	if (version >= 2){
+		return;
+	}
+	if (version < 1){
+		// 只改“用户从没动过”的键，自己调过参数的一律不碰
+		QJsonObject danmaku = config.value("Danmaku").toObject();
+		if (danmaku.value("Speed").toString() == "125+%{width}/5"){
+			setValue<QString>("/Danmaku/Speed", "150");
+		}
+		if (danmaku.value("Alpha").toInt() == 100){
+			setValue("/Danmaku/Alpha", 80);
+		}
+	}
+	// v2: 侧边栏宽度 144pt ≈ 192px，150% 缩放下内容被挤成一团，加宽
+	QJsonObject popup = config.value("Interface").toObject().value("Popup").toObject();
+	if (popup.value("Width").toInt() < 220){
+		setValue("/Interface/Popup/Width", 240);
+	}
+	setValue("/Meta/ConfigVersion", 2);
 }
 
 void     Config::setVariant(QString key, QVariant val)

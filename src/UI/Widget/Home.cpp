@@ -167,7 +167,10 @@ Home::Home(QWidget *parent)
 			}
 		}
 		if (!isFullScreen()) {
-			if (geo.isEmpty()) {
+			// Embed 直出：起播完全不动窗口，用户摆什么样就什么样
+			// （vmem 模式保持原行为：按视频尺寸开窗，超屏仍会被 setGeometry 拒绝）
+			const bool embed = Config::getValue("/Render/Option/OpenGL/Output", QString()) == "Embed";
+			if (geo.isEmpty() && !embed) {
 				geo = saveGeometry();
 				setGeometry(arender->getPreferSize(), false);
 			}
@@ -844,13 +847,11 @@ void Home::setGeometry(QSize size, bool center)
 		s.setTop(s.top() + style()->pixelMetric(QStyle::PM_TitleBarHeight));
 	}
 	if (r.width() >= s.width() || r.height() >= s.height()) {
-		if (isVisible()) {
-			fullA->setChecked(true);
-			return;
-		}
-		else {
-			r.setSize(parseSize("720,405"));
-		}
+		// 原来这里直接 fullA->setChecked(true) 把窗口拽进全屏：起播 1440p/4K 大视频
+		// 时用户会被强制全屏。改成等比缩到塞满可用屏幕为止，全屏留给用户自己
+		// （F / 双击 / 全屏按钮）。
+		const double k = qMin(double(s.width()) / double(r.width()), double(s.height()) / double(r.height()));
+		r.setSize(QSize(qMax(m.width(), int(r.width() * k)), qMax(m.height(), int(r.height() * k))));
 	}
 	r.moveCenter(t.center());
 	if (r.top() < s.top()) {

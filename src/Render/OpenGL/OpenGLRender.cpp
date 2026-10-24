@@ -3,14 +3,6 @@
 #include "OpenGLRenderPrivate.h"
 #include "SyncTextureSprite.h"
 #ifdef INTERFACE_WIDGET
-#include "WidgetPrivate.h"
-#include "WindowPrivate.h"
-#endif
-#ifdef INTERFACE_QUICK2
-#include "Quick2Private.h"
-#endif
-#include "DetachPrivate.h"
-#ifdef INTERFACE_WIDGET
 #include "EmbedPrivate.h"
 #endif
 #include "../../Config.h"
@@ -25,51 +17,8 @@ OpenGLRender::OpenGLRender(QObject *parent) :
 
 void OpenGLRender::setup()
 {
-	QStringList l;
-#ifdef INTERFACE_WIDGET
-	l << "Widget";
-	l << "Window";
-	l << "Embed";
-#endif
-#ifdef INTERFACE_QUICK2
-	l << "Quick2";
-#endif
-	l << "Detach";
-	QString name;
-	switch (l.size()) {
-	case 0:
-		return;
-	case 1:
-		name = l[0];
-		break;
-	default:
-		name = Config::getValue("/Render/Option/OpenGL/Output", l[0]);
-		name = l.contains(name) ? name : l[0];
-		break;
-	}
-	auto ui = lApp->findObject<Interface>();
-	if (name == "Detach") {
-		d_ptr = new OpenGLDetachRenderPrivate();
-	}
-#ifdef INTERFACE_WIDGET
-	else if (ui->widget() != nullptr && name == "Embed") {
-		d_ptr = new OpenGLEmbedRenderPrivate();
-	}
-	else if (ui->widget() != nullptr && name == "Window") {
-		d_ptr = new OpenGLWindowRenderPrivate();
-	}
-	else if (ui->widget() != nullptr) {
-		d_ptr = new OpenGLWidgetRenderPrivate();
-	}
-#endif
-#ifdef INTERFACE_QUICK2
-	else if (ui->widget() == nullptr) {
-		d_ptr = new OpenGLQuick2RenderPrivate();
-	}
-#endif
-	else {
-		return;
-	}
+	// 单平台化后唯一输出：libvlc 直出到原生子窗口，弹幕走透明覆盖层
+	d_ptr = new OpenGLEmbedRenderPrivate();
 
 	ARender::setup();
 
@@ -83,28 +32,10 @@ void OpenGLRender::setup()
 
 	connect(
 		lApp->findObject<APlayer>(),
-		SIGNAL(decode()),
-		this,
-		SLOT(draw()));
-
-	connect(
-		lApp->findObject<APlayer>(),
 		&APlayer::reach,
 		this,
 		[d]() { d->resource->manager.squeeze(0); },
 		Qt::QueuedConnection);
-}
-
-void OpenGLRender::setFormat(PFormat *format)
-{
-	Q_D(OpenGLRender);
-	d->setFormat(format);
-}
-
-void OpenGLRender::setBuffer(ABuffer *buffer)
-{
-	Q_D(OpenGLRender);
-	d->setBuffer(buffer);
 }
 
 ASprite *OpenGLRender::getSprite()
@@ -131,12 +62,6 @@ QSize OpenGLRender::getActualSize()
 	return d->getActualSize();
 }
 
-QSize OpenGLRender::getBufferSize()
-{
-	Q_D(OpenGLRender);
-	return d->getBufferSize();
-}
-
 void OpenGLRender::draw(QRect rect)
 {
 	Q_D(OpenGLRender);
@@ -145,109 +70,6 @@ void OpenGLRender::draw(QRect rect)
 
 namespace
 {
-	const char *vShaderData =
-		"attribute mediump vec4 a_VtxCoord;\n"
-		"attribute mediump vec2 a_TexCoord;\n"
-		"varying mediump vec2 v_vTexCoord;\n"
-		"void main(void)\n"
-		"{\n"
-		"    gl_Position = a_VtxCoord;\n"
-		"    v_vTexCoord = a_TexCoord;\n"
-		"}\n";
-
-	const char *fShaderI420 =
-		"precision lowp float;\n"
-		"varying mediump vec2 v_vTexCoord;\n"
-		"uniform sampler2D u_SamplerY;\n"
-		"uniform sampler2D u_SamplerU;\n"
-		"uniform sampler2D u_SamplerV;\n"
-		"uniform mediump vec2 u_ValidY;\n"
-		"uniform mediump vec2 u_ValidU;\n"
-		"uniform mediump vec2 u_ValidV;\n"
-		"void main(void)\n"
-		"{\n"
-		"    vec4 yuv;\n"
-		"    yuv.r = texture2D(u_SamplerY, v_vTexCoord * u_ValidY).r;\n"
-		"    yuv.g = texture2D(u_SamplerU, v_vTexCoord * u_ValidU).r;\n"
-		"    yuv.b = texture2D(u_SamplerV, v_vTexCoord * u_ValidV).r;\n"
-		"    yuv.a = 1.0;\n"
-		"    gl_FragColor = mat4(\n"
-		"         1.164,  1.164,  1.164, 0, \n"
-		"         0,     -0.391,  2.018, 0, \n"
-		"         1.596, -0.813,  0,     0, \n"
-		"        -0.871,  0.529, -1.082, 1) * yuv;\n"
-		"}\n";
-
-	const char *fShaderNV12 =
-		"precision lowp float;\n"
-		"varying mediump vec2 v_vTexCoord;\n"
-		"uniform sampler2D u_SamplerY;\n"
-		"uniform sampler2D u_SamplerC;\n"
-		"uniform mediump vec2 u_ValidY;\n"
-		"uniform mediump vec2 u_ValidC;\n"
-		"void main(void)\n"
-		"{\n"
-		"    vec4 yuv;\n"
-		"    yuv.r  = texture2D(u_SamplerY, v_vTexCoord * u_ValidY).r; \n"
-		"    yuv.gb = texture2D(u_SamplerC, v_vTexCoord * u_ValidC).ra;\n"
-		"    yuv.a  = 1.0;\n"
-		"    gl_FragColor = mat4(\n"
-		"         1.164,  1.164,  1.164, 0, \n"
-		"         0,     -0.391,  2.018, 0, \n"
-		"         1.596, -0.813,  0,     0, \n"
-		"        -0.871,  0.529, -1.082, 1) * yuv;\n"
-		"}\n";
-
-	const char *fShaderNV21 =
-		"precision lowp float;\n"
-		"varying mediump vec2 v_vTexCoord;\n"
-		"uniform sampler2D u_SamplerY;\n"
-		"uniform sampler2D u_SamplerC;\n"
-		"uniform mediump vec2 u_ValidY;\n"
-		"uniform mediump vec2 u_ValidC;\n"
-		"void main(void)\n"
-		"{\n"
-		"    vec4 yuv;\n"
-		"    yuv.r  = texture2D(u_SamplerY, v_vTexCoord * u_ValidY).r; \n"
-		"    yuv.gb = texture2D(u_SamplerC, v_vTexCoord * u_ValidC).ar;\n"
-		"    yuv.a  = 1.0;\n"
-		"    gl_FragColor = mat4(\n"
-		"         1.164,  1.164,  1.164, 0, \n"
-		"         0,     -0.391,  2.018, 0, \n"
-		"         1.596, -0.813,  0,     0, \n"
-		"        -0.871,  0.529, -1.082, 1) * yuv;\n"
-		"}\n";
-
-	const char *fShaderRGBA =
-		"precision lowp float;\n"
-		"varying mediump vec2 v_vTexCoord;\n"
-		"uniform sampler2D u_SamplerP;\n"
-		"uniform mediump vec2 u_ValidP;\n"
-		"void main(void)\n"
-		"{\n"
-		"    gl_FragColor.rgba = texture2D(u_SamplerP, v_vTexCoord * u_ValidP).rgba;\n"
-		"}\n";
-
-	const char *fShaderBGRA =
-		"precision lowp float;\n"
-		"varying mediump vec2 v_vTexCoord;\n"
-		"uniform sampler2D u_SamplerP;\n"
-		"uniform mediump vec2 u_ValidP;\n"
-		"void main(void)\n"
-		"{\n"
-		"    gl_FragColor.bgra = texture2D(u_SamplerP, v_vTexCoord * u_ValidP).rgba;\n"
-		"}\n";
-
-	const char *fShaderARGB =
-		"precision lowp float;\n"
-		"varying mediump vec2 v_vTexCoord;\n"
-		"uniform sampler2D u_SamplerP;\n"
-		"uniform mediump vec2 u_ValidP;\n"
-		"void main(void)\n"
-		"{\n"
-		"    gl_FragColor.argb = texture2D(u_SamplerP, v_vTexCoord * u_ValidP).rgba;\n"
-		"}\n";
-
 	const char *vShaderDanm =
 		"precision lowp float;\n"
 		"attribute mediump vec4 a_VtxCoord;\n"
@@ -368,31 +190,6 @@ OpenGLRenderPrivate::OpenGLRenderResource::OpenGLRenderResource(OpenGLRenderPriv
 		const char *vShaderCode = nullptr;
 		const char *fShaderCode = nullptr;
 		switch (i) {
-		case I420:
-		case YV12:
-			vShaderCode = vShaderData;
-			fShaderCode = fShaderI420;
-			break;
-		case NV12:
-			vShaderCode = vShaderData;
-			fShaderCode = fShaderNV12;
-			break;
-		case NV21:
-			vShaderCode = vShaderData;
-			fShaderCode = fShaderNV21;
-			break;
-		case RGBA:
-			vShaderCode = vShaderData;
-			fShaderCode = fShaderRGBA;
-			break;
-		case BGRA:
-			vShaderCode = vShaderData;
-			fShaderCode = fShaderBGRA;
-			break;
-		case ARGB:
-			vShaderCode = vShaderData;
-			fShaderCode = fShaderARGB;
-			break;
 		case Danm:
 			vShaderCode = vShaderDanm;
 			fShaderCode = fShaderDanm;
@@ -414,38 +211,6 @@ OpenGLRenderPrivate::OpenGLRenderResource::OpenGLRenderResource(OpenGLRenderPriv
 		p.addShaderFromSourceCode(QOpenGLShader::Vertex,   vShaderCode);
 		p.addShaderFromSourceCode(QOpenGLShader::Fragment, fShaderCode);
 		switch (i) {
-		case I420:
-			p.bindAttributeLocation("a_VtxCoord", 0);
-			p.bindAttributeLocation("a_TexCoord", 1);
-			p.bind();
-			p.setUniformValue("u_SamplerY", 0);
-			p.setUniformValue("u_SamplerU", 1);
-			p.setUniformValue("u_SamplerV", 2);
-			break;
-		case YV12:
-			p.bindAttributeLocation("a_VtxCoord", 0);
-			p.bindAttributeLocation("a_TexCoord", 1);
-			p.bind();
-			p.setUniformValue("u_SamplerY", 0);
-			p.setUniformValue("u_SamplerV", 1);
-			p.setUniformValue("u_SamplerU", 2);
-			break;
-		case NV12:
-		case NV21:
-			p.bindAttributeLocation("a_VtxCoord", 0);
-			p.bindAttributeLocation("a_TexCoord", 1);
-			p.bind();
-			p.setUniformValue("u_SamplerY", 0);
-			p.setUniformValue("u_SamplerC", 1);
-			break;
-		case RGBA:
-		case BGRA:
-		case ARGB:
-			p.bindAttributeLocation("a_VtxCoord", 0);
-			p.bindAttributeLocation("a_TexCoord", 1);
-			p.bind();
-			p.setUniformValue("u_SamplerP", 0);
-			break;
 		case Danm:
 			p.bindAttributeLocation("a_VtxCoord", 0);
 			p.bindAttributeLocation("a_TexCoord", 1);

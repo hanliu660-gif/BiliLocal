@@ -609,8 +609,8 @@ void List::save()
 		case Records:
 		{
 			QJsonArray danm;
-			for (int i = 0; i < item->rowCount(); ++i) {
-				QStandardItem *c = item->child(i);
+			for (int j = 0; j < item->rowCount(); ++j) {
+				QStandardItem *c = item->child(j);
 				QJsonObject d;
 				d["Code"] = c->data(CodeRole).toString();
 				d["Time"] = c->data(TimeRole).toDouble();

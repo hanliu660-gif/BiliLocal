@@ -30,27 +30,6 @@
 #include <algorithm>
 #include <exception>
 
-Utils::Site Utils::parseSite(QString url)
-{
-	url = url.toLower();
-	if (-1 != url.indexOf("letv")){
-		return Letv;
-	}
-	if (-1 != url.indexOf("tudou")){
-		return Tudou;
-	}
-	if (-1 != url.indexOf("bilibili")){
-		return Bilibili;
-	}
-	if (-1 != url.indexOf("acfun")){
-		return AcFun;
-	}
-	if (-1 != url.indexOf("tucao")){
-		return TuCao;
-	}
-	return Unknown;
-}
-
 namespace{
 	template<class T>
 	class SStack
@@ -320,39 +299,6 @@ QString Utils::localPath(Path path)
 		return standard(QStandardPaths::GenericDataLocation, base, "BiliLocal");
 	}
 #endif
-}
-
-QString Utils::customUrl(Site site)
-{
-	QString name;
-	switch (site){
-	case AcFun:
-		name = "acfun";
-		break;
-	case Bilibili:
-		name = "bili";
-		break;
-	case Tudou:
-		name = "tudou";
-		break;
-	case Niconico:
-		name = "nico";
-		break;
-	case TuCao:
-		name = "tucao";
-		break;
-	default:
-		return QString();
-	}
-	QStringList urls, defs;
-	defs << "acfun.tv" << "bilibili.com" << "tucao.tv";
-	urls = Config::getValue("/Network/Url", defs.join(';')).split(';', QString::SkipEmptyParts);
-	for (QString iter : urls + defs){
-		if (iter.toLower().indexOf(name) != -1){
-			return iter;
-		}
-	}
-	return QString();
 }
 
 namespace

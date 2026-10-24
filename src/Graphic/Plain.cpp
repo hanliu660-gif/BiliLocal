@@ -33,7 +33,7 @@ double Plain::evaluate(QString expression)
 	try{
 		return Utils::evaluate(expression);
 	}
-	catch (std::runtime_error){
+	catch (const std::runtime_error &){
 		throw args_prasing_error();
 	}
 }

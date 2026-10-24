@@ -124,10 +124,8 @@ namespace Utils
 		Script
 	};
 
-	Site parseSite(QString url);
 	QString defaultFont(bool monospace = false);
 	QString localPath(Path path);
-	QString customUrl(Site site);
 	QString decodeTxt(QString &&txt);
 	QString decodeXml(QString &&xml, bool fast = false);
 	QStringList getSuffix(int type, QString format = QString());

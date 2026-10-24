@@ -58,9 +58,7 @@ QHash<QString, QVariant> Prefer::getRestart()
 {
 	QStringList path;
 	path <<
-		"/Render" <<
 		"/Player/Arguments" <<
-		"/Player/Type" <<
 		"/Interface/Font" <<
 		"/Interface/Frameless" <<
 		"/Interface/Single" <<
@@ -84,30 +82,7 @@ QHash<QString, QVariant> Prefer::getReparse()
 	data["/Shield/Group"] = g;
 	data["/Shield/Regexp"] = rm->stringList();
 	data["/Shield/Sender"] = sm->stringList();
-	data["/Shield/Limit"] = Config::getValue("/Shield/Limit", QVariant());
 	return data;
-}
-
-void Prefer::fillPicture(QLabel *label, QString url, QString error, QSize limit)
-{
-	// 在线功能已移除：不再抓取渲染器 logo 图片，直接显示文字占位
-	Q_UNUSED(url);
-	Q_UNUSED(limit);
-	label->setText(error);
-}
-
-QString Prefer::getLogo(QString name)
-{
-	static QHash<QString, QString> l;
-	if (l.isEmpty()){
-		QFile file(":/Text/DATA");
-		file.open(QIODevice::ReadOnly | QIODevice::Text);
-		QJsonObject data = QJsonDocument::fromJson(file.readAll()).object()["Logo"].toObject();
-		for (auto iter = data.begin(); iter != data.end(); ++iter){
-			l[iter.key()] = iter.value().toString();
-		}
-	}
-	return l[name];
 }
 
 namespace
@@ -289,7 +264,7 @@ QDialog(parent)
 		ui[0]->setLayout(s);
 
 		auto j = new QHBoxLayout;
-		jump = new QLineEdit(widget[0]);
+		jump = new QLineEdit(widget[1]);
 		jump->setText(QString::number(Config::getValue("/Interface/Interval", 10), 'f', 2));
 		connect(jump, &QLineEdit::editingFinished, [=](){
 			Config::setValue("/Interface/Interval", jump->text().toDouble());
@@ -322,12 +297,6 @@ QDialog(parent)
 			Config::setValue("/Interface/Sensitive", state == Qt::Checked);
 		});
 		t->addWidget(sens, 1, 0);
-		upda = new QCheckBox(tr("check for update"), widget[1]);
-		upda->setChecked(Config::getValue("/Interface/Update", true));
-		connect(upda, &QCheckBox::stateChanged, [](int state){
-			Config::setValue("/Interface/Update", state == Qt::Checked);
-		});
-		t->addWidget(upda, 1, 1);
 		ui[2] = new QGroupBox(tr("window flag"), widget[1]);
 		ui[2]->setLayout(t);
 		list->addWidget(ui[2]);
@@ -362,7 +331,7 @@ QDialog(parent)
 		auto l = new QHBoxLayout;
 		loca = new QComboBox(widget[1]);
 		loca->addItem("English", QString());
-		for (const QFileInfo &info : QDir("./locale/").entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot)){
+		for (const QFileInfo &info : QDir(Utils::localPath(Utils::Locale)).entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot)){
 			QLocale l(info.baseName());
 			QString name = l.name();
 			QString text = l.nativeLanguageName();
@@ -395,237 +364,22 @@ QDialog(parent)
 		n->addWidget(ui[6]);
 		list->addLayout(n);
 
-		auto b = new QHBoxLayout;
-		back = new QLineEdit(widget[1]);
-		back->setText(Config::getValue("/Interface/Background", QString()));
-		connect(back, &QLineEdit::textChanged, [=](){
-			lApp->findObject<ARender>()->setBackground(back->text());
-		});
-		b->addWidget(back);
-		open = new QPushButton(tr("choose"), widget[1]);
-		open->setFixedWidth(50 * logicalDpiX() / 96);
-		open->setFocusPolicy(Qt::NoFocus);
-		connect(open, &QPushButton::clicked, [this](){
-			QString path = back->text().isEmpty() ? QDir::currentPath() : QFileInfo(back->text()).absolutePath();
-			QString file = QFileDialog::getOpenFileName(this, tr("Open File"), path);
-			if (!file.isEmpty()){
-				back->setText(file.startsWith(QDir::currentPath()) ? QDir::current().relativeFilePath(file) : file);
-			}
-		});
-		b->addWidget(open);
-		ui[7] = new QGroupBox(tr("background"), widget[1]);
-		ui[7]->setLayout(b);
-		list->addWidget(ui[7]);
-
-
 		list->addStretch(10);
 		tab->addTab(widget[1], tr("Interface"));
 	}
-	//Performance
-	{
-		widget[2] = new QWidget(this);
-		auto out = new QHBoxLayout(widget[2]);
-		opt[0] = new QGroupBox(tr("Render"), widget[2]);
-		opt[1] = new QGroupBox(tr("Decode"), widget[2]);
-		auto r = new QVBoxLayout;
-		auto e = new QVBoxLayout;
-		opt[0]->setLayout(r);
-		opt[1]->setLayout(e);
-		render = new QComboBox(widget[2]);
-		decode = new QComboBox(widget[2]);
-		auto reopti = new QGridLayout;
-		auto deopti = new QGridLayout;
-
-		QStringList relist = ARender::getModules();
-		QStringList delist = APlayer::getModules();
-		render->addItems(relist);
-		decode->addItems(delist);
-		if (relist.size() >= 2){
-			QString r = Config::getValue("/Render/Type", relist[0]);
-			render->setCurrentText(r);
-		}
-		else{
-			render->setEnabled(false);
-		}
-		if (delist.size() >= 2){
-			QString r = Config::getValue("/Player/Type", delist[0]);
-			decode->setCurrentText(r);
-		}
-		else{
-			decode->setEnabled(false);
-		}
-
-		auto updateLogo = [this](QVBoxLayout *layout, QList<QLabel *> &pool, QStringList urls){
-			qDeleteAll(pool);
-			pool.clear();
-			for (QString url : urls){
-				QLabel *l = new QLabel(widget[2]);
-				l->setFixedHeight(100);
-				l->setAlignment(Qt::AlignCenter);
-				fillPicture(l, url, QString(), QSize(200, 80));
-				layout->insertWidget(1, l);
-				pool.append(l);
-			}
-		};
-		auto lineNumFix = [this](QString text)
-		{
-			int c = text.count('\n');
-			c = qMax(0, 4 - c);
-			text.append(QString(c, '\n'));
-			return text;
-		};
-		connect(render, &QComboBox::currentTextChanged, [=](QString text){
-			QString desc;
-			if (text == "Raster"){
-				desc = tr("software render\n"
-					"libswscale for size and chroma transform\n"
-					"libqtgui for alpha blending and output\n"
-					"high compatibility but a little bit slower");
-				updateLogo(r, relogo, { getLogo("FFmpeg") });
-			}
-			if (text == "OpenGL"){
-				desc = tr("opengl es2 render\n"
-					"texture unit for size transform\n"
-					"glsl code for chroma transform\n"
-					"accept few pixfmt but significantly faster");
-				updateLogo(r, relogo, { getLogo("OpenGL") });
-			}
-			for (QString r : relist){
-				for (QWidget *w : option.values(r)){
-					w->setVisible(text == r);
-				}
-			}
-			retext->setText(lineNumFix(desc));
-			if (relist.size() >= 2){
-				Config::setValue("/Render/Type", text);
-			}
-		});
-		connect(decode, &QComboBox::currentTextChanged, [=](QString text){
-			QString desc;
-			if (text == "VLC"){
-				desc = tr("libvlc backend\n"
-					"all platform supported\n"
-					"no additional codecs required");
-				updateLogo(e, delogo, { getLogo("VLC") });
-			}
-			if (text == "QMM"){
-				desc = tr("libqtmultimedia backend\n"
-					"support directshow on windows\n"
-					"k-lite/win7codecs recommended");
-				updateLogo(e, delogo, { getLogo("DirectX") });
-			}
-			if (text == "NIL"){
-				desc = tr("dummy backend\n"
-					"no need for actual media file\n"
-					"for danmaku only playback");
-				updateLogo(e, delogo, { QString() });
-			}
-			for (QString d : delist){
-				for (QWidget *w : option.values(d)){
-					w->setVisible(text == d);
-				}
-			}
-			detext->setText(lineNumFix(desc));
-			if (delist.size() >= 2){
-				Config::setValue("/Player/Type", text);
-			}
-		});
-		r->addWidget(render);
-		e->addWidget(decode);
-
-		if (relist.contains("OpenGL")){
-			QString type = Config::getValue<QString>("/Render/Option/OpenGL/Output", "Widget");
-			QRadioButton *buffer = new QRadioButton(tr("render to buffer"), widget[2]);
-			buffer->setChecked(type == "Widget");
-			connect(buffer, &QRadioButton::toggled, [](bool t){
-				if (t) {
-					Config::setValue("/Render/Option/OpenGL/Output", QString("Widget"));
-				}
-			});
-			QRadioButton *direct = new QRadioButton(tr("embedded window"), widget[2]);
-			direct->setChecked(type == "Window");
-			connect(direct, &QRadioButton::toggled, [](bool t) {
-				if (t) {
-					Config::setValue("/Render/Option/OpenGL/Output", QString("Window"));
-				}
-			});
-			QRadioButton *detach = new QRadioButton(tr("detached window"), widget[2]);
-			detach->setChecked(type == "Detach");
-			connect(detach, &QRadioButton::toggled, [](bool t){
-				if (t) {
-					Config::setValue("/Render/Option/OpenGL/Output", QString("Detach"));
-				}
-			});
-			option.insert("OpenGL", detach);
-			option.insert("OpenGL", direct);
-			option.insert("OpenGL", buffer);
-		}
-
-		if (relist.contains("Raster")){
-			QGroupBox *update = new QGroupBox(tr("refresh rate"), widget[2]);
-			auto layout = new QGridLayout;
-			auto slider = new QSlider(widget[2]);
-			slider->setRange(30, 200);
-			slider->setValue(Config::getValue("/Render/Option/Raster/Update", 100));
-			slider->setOrientation(Qt::Horizontal);
-			connect(slider, &QSlider::valueChanged, [=](int v){
-				QPoint p;
-				p.setX(QCursor::pos().x());
-				p.setY(slider->mapToGlobal(slider->rect().center()).y());
-				QToolTip::showText(p, QString::number(v));
-				Config::setValue("/Render/Option/Raster/Update", v);
-			});
-			layout->addWidget(slider);
-			update->setLayout(layout);
-			option.insert("Raster", update);
-		}
-
-		for (QString r : relist){
-			for (QWidget *w : option.values(r)){
-				reopti->addWidget(w);
-			}
-		}
-		for (QString d : delist){
-			for (QWidget *w : option.values(d)){
-				deopti->addWidget(w);
-			}
-		}
-		r->addLayout(reopti);
-		r->addLayout(deopti);
-
-		r->addStretch(5);
-		e->addStretch(5);
-
-		retext = new QLabel(widget[2]);
-		detext = new QLabel(widget[2]);
-		retext->setWordWrap(true);
-		detext->setWordWrap(true);
-		retext->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-		detext->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-		r->addWidget(retext);
-		e->addWidget(detext);
-
-		out->addWidget(opt[0], 5);
-		out->addWidget(opt[1], 5);
-
-		render->currentTextChanged(render->currentText());
-		decode->currentTextChanged(decode->currentText());
-
-		tab->addTab(widget[2], tr("Performance"));
-	}
 	//Shield
 	{
-		widget[3] = new QWidget(this);
+		widget[2] = new QWidget(this);
 		QStringList list;
 		list << tr("Top") << tr("Bottom") <<
 			tr("Slide") << tr("Reverse") <<
 			tr("Guest") << tr("Advanced") <<
 			tr("Color") << tr("Whole");
-		auto grid = new QGridLayout(widget[3]);
+		auto grid = new QGridLayout(widget[2]);
 
 		auto g = new QHBoxLayout;
 		for (int i = 0; i < 8; ++i){
-			check[i] = new QCheckBox(list[i], widget[3]);
+			check[i] = new QCheckBox(list[i], widget[2]);
 			check[i]->setFixedHeight(40);
 			check[i]->setChecked(false);
 			g->addWidget(check[i]);
@@ -659,20 +413,20 @@ QDialog(parent)
 			}
 		}
 
-		type = new QComboBox(widget[3]);
+		type = new QComboBox(widget[2]);
 		type->addItem(tr("Text"));
 		type->addItem(tr("User"));
-		edit = new QLineEdit(widget[3]);
-		regexp = new List(widget[3]);
-		sender = new List(widget[3]);
+		edit = new QLineEdit(widget[2]);
+		regexp = new List(widget[2]);
+		sender = new List(widget[2]);
 		regexp->setSelectionMode(QListView::ExtendedSelection);
 		sender->setSelectionMode(QListView::ExtendedSelection);
 		regexp->setModel(rm = new QStringListModel(rl, regexp));
 		sender->setModel(sm = new QStringListModel(sl, sender));
-		action[0] = new QAction(tr("Add"), widget[3]);
-		action[1] = new QAction(tr("Del"), widget[3]);
-		action[2] = new QAction(tr("Import"), widget[3]);
-		action[3] = new QAction(tr("Export"), widget[3]);
+		action[0] = new QAction(tr("Add"), widget[2]);
+		action[1] = new QAction(tr("Del"), widget[2]);
+		action[2] = new QAction(tr("Import"), widget[2]);
+		action[3] = new QAction(tr("Export"), widget[2]);
 		action[1]->setShortcut(QKeySequence("Del"));
 		action[2]->setShortcut(QKeySequence("Ctrl+I"));
 		action[3]->setShortcut(QKeySequence("Ctrl+E"));
@@ -815,18 +569,18 @@ QDialog(parent)
 			}
 		});
 		for (QAction *iter : action){
-			widget[3]->addAction(iter);
+			widget[2]->addAction(iter);
 		}
-		button[0] = new QPushButton(tr("Add"), widget[3]);
-		button[1] = new QPushButton(tr("Del"), widget[3]);
+		button[0] = new QPushButton(tr("Add"), widget[2]);
+		button[1] = new QPushButton(tr("Del"), widget[2]);
 		button[0]->setFixedWidth(60 * logicalDpiX() / 96);
 		button[1]->setFixedWidth(60 * logicalDpiX() / 96);
 		button[0]->setFocusPolicy(Qt::NoFocus);
 		button[1]->setFocusPolicy(Qt::NoFocus);
 		connect(button[0], &QPushButton::clicked, action[0], &QAction::trigger);
 		connect(button[1], &QPushButton::clicked, action[1], &QAction::trigger);
-		regexp->addActions(widget[3]->actions());
-		sender->addActions(widget[3]->actions());
+		regexp->addActions(widget[2]->actions());
+		sender->addActions(widget[2]->actions());
 		regexp->setContextMenuPolicy(Qt::ActionsContextMenu);
 		sender->setContextMenuPolicy(Qt::ActionsContextMenu);
 
@@ -837,7 +591,7 @@ QDialog(parent)
 		grid->addWidget(regexp, 2, 0, 1, 2);
 		grid->addWidget(sender, 2, 2, 1, 2);
 
-		same = new QSlider(Qt::Horizontal, widget[3]);
+		same = new QSlider(Qt::Horizontal, widget[2]);
 		same->setRange(0, 40);
 		same->setValue(Config::getValue("/Shield/Amount/Repeat", 5));
 		connect(same, &QSlider::valueChanged, [=](int value){
@@ -849,82 +603,30 @@ QDialog(parent)
 		});
 		auto a = new QHBoxLayout;
 		a->addWidget(same);
-		label[0] = new QGroupBox(tr("limit of the same"), widget[3]);
+		label[0] = new QGroupBox(tr("limit of the same"), widget[2]);
 		label[0]->setToolTip(tr("0 means disabled"));
 		label[0]->setLayout(a);
 		grid->addWidget(label[0], 3, 0, 1, 2);
 
-		limit = new QLineEdit(widget[3]);
+		limit = new QLineEdit(widget[2]);
 		limit->setText(QString::number(Config::getValue("/Shield/Amount/Screen", 0)));
 		connect(limit, &QLineEdit::editingFinished, [=](){
 			Config::setValue("/Shield/Amount/Screen", limit->text().toInt());
 		});
 		auto m = new QHBoxLayout;
 		m->addWidget(limit);
-		label[1] = new QGroupBox(tr("limit of density"), widget[3]);
+		label[1] = new QGroupBox(tr("limit of density"), widget[2]);
 		label[1]->setToolTip(tr("0 means disabled"));
 		label[1]->setLayout(m);
 		grid->addWidget(label[1], 3, 2, 1, 2);
 
-		tab->addTab(widget[3], tr("Shield"));
-	}
-	//Plugin
-	{
-		widget[5] = new QWidget(this);
-		auto w = new QGridLayout(widget[5]);
-		plugin = new QTreeWidget(widget[5]);
-		plugin->setSelectionMode(QAbstractItemView::NoSelection);
-		QStringList header;
-		header << tr("Enable") << tr("Name") << tr("Version") << tr("Description") << tr("Author") << "";
-		plugin->setHeaderLabels(header);
-		double s = logicalDpiX() / 72.0;
-		plugin->header()->setStretchLastSection(false);
-		plugin->header()->setSectionResizeMode(3, QHeaderView::Stretch);
-		plugin->setColumnWidth(0, 50);
-		plugin->setColumnWidth(1, 60 * s);
-		plugin->setColumnWidth(2, 35 * s);
-		plugin->setColumnWidth(4, 50 * s);
-		plugin->setColumnWidth(5, 30 * s);
-		plugin->setIndentation(15);
-		w->addWidget(plugin);
-		for (Plugin &iter : Plugin::plugins){
-			QStringList content;
-			content += "";
-			content += iter.string("Name");
-			content += iter.string("Version");
-			content += iter.string("Description");
-			content += iter.string("Author");
-			content += tr("options");
-			QTreeWidgetItem *row = new QTreeWidgetItem(plugin, content);
-			row->setCheckState(0, Config::getValue("/Plugin/" + iter.string("Name"), true) ? Qt::Checked : Qt::Unchecked);
-			row->setData(0, Qt::UserRole, (quintptr)&iter);
-			QFont f;
-			f.setUnderline(true);
-			row->setData(5, Qt::FontRole, f);
-			row->setData(5, Qt::ForegroundRole, qApp->palette().color(QPalette::Highlight));
-			row->setTextAlignment(5, Qt::AlignCenter);
-			row->setSizeHint(0, QSize(60, 30 * logicalDpiY() / 72));
-		}
-		connect(plugin, &QTreeWidget::itemChanged, [=](QTreeWidgetItem *item){
-			Plugin *p = (Plugin *)item->data(0, Qt::UserRole).value<quintptr>();
-			Config::setValue("/Plugin/" + p->string("Name"), item->checkState(0) == Qt::Checked);
-		});
-		connect(plugin, &QTreeWidget::itemClicked, [=](QTreeWidgetItem *item, int column){
-			Plugin *p = (Plugin *)item->data(0, Qt::UserRole).value<quintptr>();
-			if (column == 5){
-				p->config();
-			}
-		});
-		connect(plugin, &QTreeWidget::currentItemChanged, [this](){
-			plugin->setCurrentItem(nullptr);
-		});
-		tab->addTab(widget[5], tr("Plugin"));
+		tab->addTab(widget[2], tr("Shield"));
 	}
 	//Shortcut
 		{
-			widget[6] = new QWidget(this);
-			auto w = new QGridLayout(widget[6]);
-			hotkey = new QTreeWidget(widget[6]);
+			widget[3] = new QWidget(this);
+			auto w = new QGridLayout(widget[3]);
+			hotkey = new QTreeWidget(widget[3]);
 			hotkey->setSelectionMode(QAbstractItemView::NoSelection);
 			hotkey->setColumnCount(2);
 			hotkey->header()->hide();
@@ -961,31 +663,31 @@ QDialog(parent)
 					}
 				}
 			});
-			tab->addTab(widget[6], tr("Shortcut"));
+			tab->addTab(widget[3], tr("Shortcut"));
 		}
 		//Thanks
 		{
-			widget[7] = new QWidget(this);
-			auto w = new QGridLayout(widget[7]);
+			widget[4] = new QWidget(this);
+			auto w = new QGridLayout(widget[4]);
 			QFile t(":/Text/THANKS");
 			t.open(QIODevice::ReadOnly | QIODevice::Text);
-			thanks = new QTextEdit(widget[7]);
+			thanks = new QTextEdit(widget[4]);
 			thanks->setReadOnly(true);
 			thanks->setText(t.readAll());
 			w->addWidget(thanks);
-			tab->addTab(widget[7], tr("Thanks"));
+			tab->addTab(widget[4], tr("Thanks"));
 		}
 		//License
 		{
-			widget[8] = new QWidget(this);
-			auto w = new QGridLayout(widget[8]);
+			widget[5] = new QWidget(this);
+			auto w = new QGridLayout(widget[5]);
 			QFile l(":/Text/COPYING");
 			l.open(QIODevice::ReadOnly | QIODevice::Text);
-			license = new QTextEdit(widget[8]);
+			license = new QTextEdit(widget[5]);
 			license->setReadOnly(true);
 			license->setText(l.readAll());
 			w->addWidget(license);
-			tab->addTab(widget[8], tr("License"));
+			tab->addTab(widget[5], tr("License"));
 		}
 		connect(this, &QDialog::finished, [this](){
 			Danmaku *d = lApp->findObject<Danmaku>();

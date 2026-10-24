@@ -27,29 +27,19 @@
 #include "Common.h"
 #include "ARender.h"
 #include "ARenderPrivate.h"
-#include "../Config.h"
 #include "../Local.h"
-#include "../Utils.h"
 #include "../Model/Running.h"
 #include "../Player/APlayer.h"
 
-#ifdef RENDER_OPENGL
 #include "OpenGL/OpenGLRender.h"
-#endif
-#ifdef RENDER_RASTER
-#include "Raster/RasterRender.h"
-#endif
+
+// 2026-10-24 单平台化：视频由 libvlc 经 Embed 输出直出（d3d11），
+// ARender 只负责弹幕渲染调度；vmem 视频绘制路径（drawPlay/drawStop/
+// setFormat/setBuffer/宽高比/首选尺寸）已随之移除。
 
 QStringList ARender::getModules()
 {
-	QStringList modules;
-#ifdef RENDER_OPENGL
-	modules << "OpenGL";
-#endif
-#ifdef RENDER_RASTER
-	modules << "Raster";
-#endif
-	return modules;
+	return{ "OpenGL" };
 }
 
 ARender::ARender(QObject *parent)
@@ -60,124 +50,21 @@ ARender::ARender(QObject *parent)
 
 ARender *ARender::create(QObject *parent, QString name)
 {
-	if (name.isEmpty()) {
-		QStringList l = getModules();
-		switch (l.size()) {
-		case 0:
-			break;
-		case 1:
-			name = l[0];
-			break;
-		default:
-			name = Config::getValue("/Render/Type", l[0]);
-			name = l.contains(name) ? name : l[0];
-			break;
-		}
-	}
-#ifdef RENDER_OPENGL
-	if (name == "OpenGL") {
-		return new OpenGLRender(parent);
-	}
-#endif
-#ifdef RENDER_RASTER
-	if (name == "Raster") {
-		return new RasterRender(parent);
-	}
-#endif
-	return nullptr;
+	Q_UNUSED(name);
+	return new OpenGLRender(parent);
 }
 
 void ARender::setup()
 {
-	Q_D(ARender);
-	d->time = 0;
-	if (Config::getValue("/Interface/Version", true)){
-		d->tv.setFileName(":/Picture/tv.gif");
-		d->tv.setCacheMode(QMovie::CacheAll);
-		d->tv.start();
-		d->me = QImage(":/Picture/version.png");
-		connect(lApp->findObject<APlayer>(), &APlayer::begin, &d->tv, &QMovie::stop);
-		connect(lApp->findObject<APlayer>(), &APlayer::reach, &d->tv, &QMovie::start);
-		connect(&d->tv, &QMovie::updated, [=](){
-			QImage cf = d->tv.currentImage();
-			QPoint ps = QRect(QPoint(0, 0), getActualSize()).center() - cf.rect().center();
-			ps.ry() -= 40;
-			draw(QRect(ps, cf.size()));
-		});
-	}
-	QString path = Config::getValue("/Interface/Background", QString());
-	if (!path.isEmpty()){
-		d->background = QImage(path);
-	}
-	d->sound = QImage(":/Picture/sound.png");
-	d->music = 1;
-	d->dirty = 0;
-	d->videoAspectRatio = 0;
-	d->pixelAspectRatio = 1;
-	auto reset = [this]() { setDisplayTime(0); };
-	connect(lApp->findObject<APlayer>(), &APlayer::begin, this, reset);
-	connect(lApp->findObject<APlayer>(), &APlayer::reach, this, reset);
-	connect(lApp->findObject<APlayer>(), &APlayer::stateChanged, this, [d](){
-		d->timer.invalidate();
+	// 播放状态切换时让弹幕动画计时失效，暂停后恢复不追帧
+	connect(lApp->findObject<APlayer>(), &APlayer::stateChanged, this, [this](){
+		d_ptr->timer.invalidate();
 	});
 }
 
 ARender::~ARender()
 {
 	delete d_ptr;
-}
-
-void ARender::setBackground(QString path)
-{
-	Q_D(ARender);
-	d->background = QImage(path);
-	Config::setValue("/Interface/Background", path);
-}
-
-void ARender::setMusic(bool music)
-{
-	Q_D(ARender);
-	d->music = music;
-}
-
-void ARender::setDisplayTime(double t)
-{
-	Q_D(ARender);
-	d->time = t;
-	QSize s = getActualSize();
-	draw(QRect(0, s.height() - 2, s.width()*d->time, 2));
-}
-
-void ARender::setVideoAspectRatio(double ratio)
-{
-	Q_D(ARender);
-	d->videoAspectRatio = ratio;
-}
-
-void ARender::setPixelAspectRatio(double ratio)
-{
-	Q_D(ARender);
-	d->pixelAspectRatio = ratio;
-}
-
-QSize ARender::getPreferSize()
-{
-	Q_D(ARender);
-	if (d->music){
-		return QSize();
-	}
-	if (d->pref.isValid()){
-		return d->pref;
-	}
-	QSize s = getBufferSize();
-	d->pixelAspectRatio > 1 ? (s.rwidth() *= d->pixelAspectRatio) : (s.rheight() /= d->pixelAspectRatio);
-	return s;
-}
-
-void ARender::setPreferSize(QSize size)
-{
-	Q_D(ARender);
-	d->pref = size;
 }
 
 void ARender::draw()
@@ -190,88 +77,6 @@ void ARender::draw()
 void ARender::draw(QRect rect)
 {
 	draw(rect.isValid() ? rect : QRect(QPoint(0, 0), getActualSize()));
-}
-
-QRect ARenderPrivate::fitRect(QSize size, QRect rect)
-{
-	QRect dest;
-	QSizeF s = videoAspectRatio > 0 ? QSizeF(videoAspectRatio, 1) : QSizeF(size);
-	dest.setSize(s.scaled(rect.size(), Qt::KeepAspectRatio).toSize() / 4 * 4);
-	dest.moveCenter(rect.center());
-	return dest;
-}
-
-void ARenderPrivate::drawPlay(QPainter *painter, QRect rect)
-{
-	if (music){
-		painter->fillRect(rect, Qt::black);
-		painter->drawImage(rect.center() - QRect(QPoint(0, 0), sound.size()).center(), sound);
-	}
-	else{
-		drawData(painter, rect);
-	}
-	drawDanm(painter, rect);
-	drawTime(painter, rect);
-#ifdef GRAPHIC_DEBUG
-	auto time = QTime::currentTime();
-	static QTime last = time;
-	static int count = 0;
-	static int speed = 0;
-	static int frame = 0;
-	if (last.second() != time.second()) {
-		last = time;
-		count = lApp->findObject<Running>()->size();
-		speed = frame;
-		frame = 0;
-	}
-	++frame;
-	QFont font;
-	font.setPixelSize(20);
-	painter->setFont(font);
-	painter->setPen(Qt::yellow);
-	QRect info(0, 0, 150, 60);
-	painter->drawText(info, QString("Count: %1\nFrame: %2").arg(count).arg(speed));
-#endif
-}
-
-void ARenderPrivate::drawStop(QPainter *painter, QRect rect)
-{
-	if (background.isNull()){
-		painter->fillRect(rect, qApp->palette().color(QPalette::Window));
-	}
-	else{
-		QRect dest = rect;
-		dest.setSize(background.size().scaled(dest.size(), Qt::KeepAspectRatioByExpanding));
-		dest.moveCenter(rect.center());
-		painter->drawImage(dest, background);
-	}
-	int w = rect.width(), h = rect.height();
-	QImage cf = tv.currentImage();
-	painter->drawImage((w - cf.width()) / 2, (h - cf.height()) / 2 - 40, cf);
-	painter->drawImage((w - me.width()) / 2, (h - me.height()) / 2 + 40, me);
-}
-
-
-void ARenderPrivate::drawTime(QPainter *painter, QRect rect)
-{
-	if (time <= 0){
-		return;
-	}
-	rect = QRect(0, rect.height() - 2, rect.width()*time, 2);
-	QLinearGradient gradient;
-	gradient.setStart(rect.center().x(), rect.top());
-	gradient.setFinalStop(rect.center().x(), rect.bottom());
-	QColor outline = qApp->palette().background().color().darker(140);
-	QColor highlight = qApp->palette().color(QPalette::Highlight);
-	QColor highlightedoutline = highlight.darker(140);
-	if (qGray(outline.rgb()) > qGray(highlightedoutline.rgb())){
-		outline = highlightedoutline;
-	}
-	painter->setPen(QPen(outline));
-	gradient.setColorAt(0, highlight);
-	gradient.setColorAt(1, highlight.lighter(130));
-	painter->setBrush(gradient);
-	painter->drawRect(rect);
 }
 
 void ARenderPrivate::drawDanm(QPainter *painter, QRect)

@@ -26,7 +26,6 @@ namespace UI
 	public:
 		explicit Home(QWidget *parent = nullptr);
 
-		void percent(double degree);
 		void warning(QString title, QString text);
 
 	private:
@@ -42,8 +41,6 @@ namespace UI
 		QAction *confA;
 		QAction *toggA;
 		QAction *listA;
-		QMenu *rat;
-		QMenu *sca;
 		QMenu *spd;
 		QPointer<QDialog> msg;
 
@@ -58,13 +55,10 @@ namespace UI
 
 		QPoint sta;
 		QPoint wgd;
-		QByteArray geo;
 
-		bool showprg;
-		bool sliding;
 		bool seekdrag;
-	qint64 lastMove;
-	bool wasMaximized;
+		qint64 lastMove;
+		bool wasMaximized;
 
 		int  infoHeight() const;
 		void seekTo(QPoint p, bool commit);
@@ -81,7 +75,11 @@ namespace UI
 
 		QSize parseSize(QString string);
 		void setGeometry(QSize size, bool center);
-		void setWindowFlags();
 		void showContextMenu(QPoint p);
+
+	private slots:
+		// 私有非槽时 Prefer 里 QMetaObject::invokeMethod(widget,"setWindowFlags")
+		// 找不到方法会静默失败——置顶设置改完不生效，要等播放状态变化才应用
+		void setWindowFlags();
 	};
 }

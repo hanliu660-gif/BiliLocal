@@ -39,7 +39,7 @@ namespace UI
 
 	private:
 		QTabWidget *tab;
-		QWidget *widget[9];
+		QWidget *widget[6];
 
 		//Playing
 		QGroupBox *box[7];
@@ -52,31 +52,18 @@ namespace UI
 		QLineEdit *play[2];
 
 		//Interface
-		QGroupBox *ui[8];
+		QGroupBox *ui[7];
 		QComboBox *font;
 		QComboBox *reop;
 		QCheckBox *vers;
 		QCheckBox *sens;
 		QCheckBox *less;
-		QCheckBox *upda;
 		QComboBox *loca;
 		QComboBox *stay;
 		QLineEdit *jump;
 		QLineEdit *size;
-		QLineEdit *back;
-		QPushButton *open;
 
-		//Performance
-		QGroupBox *opt[2];
-		QComboBox *render;
-		QComboBox *decode;
-		QMultiMap<QString, QWidget *> option;
-		QLabel *retext;
-		QLabel *detext;
-		QList<QLabel *> relogo;
-		QList<QLabel *> delogo;
-
-		//Shiled
+		//Shield
 		QLineEdit *edit;
 		QCheckBox *check[8];
 		QComboBox *type;
@@ -90,12 +77,8 @@ namespace UI
 		QLineEdit *limit;
 		QGroupBox *label[2];
 
-
 		//Shortcut
 		QTreeWidget *hotkey;
-
-		//Plugin
-		QTreeWidget *plugin;
 
 		//Thanks
 		QTextEdit *thanks;
@@ -110,7 +93,5 @@ namespace UI
 		explicit Prefer(QWidget *parent = 0);
 		QHash<QString, QVariant> getRestart();
 		QHash<QString, QVariant> getReparse();
-		void fillPicture(QLabel *label, QString url, QString error, QSize limit);
-		QString getLogo(QString name);
 	};
 }

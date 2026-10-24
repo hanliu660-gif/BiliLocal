@@ -37,6 +37,7 @@ private:
 	};
 
 	int state;
+	int volume;
 	libvlc_instance_t *vlc;
 	libvlc_media_player_t *mp;
 	TrackSlot tracks[3];
@@ -74,8 +75,6 @@ public slots:
 
 
 	void    addSubtitle(QString file);
-
-	void    snapshot();
 
 	void    event(int type);
 };

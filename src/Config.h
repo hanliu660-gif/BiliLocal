@@ -91,7 +91,7 @@ public:
 	template<class T>
 	static T getValue(QString key, T def = T())
 	{
-		QStringList tree = key.split('/', QString::SkipEmptyParts);
+		QStringList tree = key.split('/', Qt::SkipEmptyParts);
 		QString last = tree.takeLast();
 		lock.lockForRead();
 		QJsonObject cur = config;
@@ -125,7 +125,7 @@ public:
 	template<class T>
 	static void setValue(QString key, T set)
 	{
-		QStringList tree = key.split('/', QString::SkipEmptyParts);
+		QStringList tree = key.split('/', Qt::SkipEmptyParts);
 		QString last = tree.takeLast();
 		QJsonObject cur = config;
 		QList<QJsonObject> path;

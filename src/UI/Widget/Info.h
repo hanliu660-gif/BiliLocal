@@ -45,11 +45,6 @@ namespace UI
 			return isVisible();
 		}
 
-		bool preferStay()
-		{
-			return isStay;
-		}
-
 		QPushButton *listB;
 
 		// 外部（Home 的底栏拖动）预览时间时只更新显示，不触发 seek
@@ -64,20 +59,14 @@ namespace UI
 		}
 
 	private:
-		bool isStay;
 		bool isPoped;
 		bool updating;
 		bool dragging;
 		qint64 duration;
 
-		QLabel *duraT;
 		QLabel *timeT;
-		QLabel *volmT;
-		QLabel *plfmT = nullptr;	// 原作者声明了但从未 new 过，保持空指针
 		QSlider *timeS;
 		QSlider *volmS;
-		QLineEdit *plfmL = nullptr;
-		QTableView *danmV;
 		QPushButton *playB;
 		QPushButton *openB;
 		QPushButton *danmB;
@@ -98,6 +87,5 @@ namespace UI
 		void pop();
 		void push(bool force = false);
 		void terminate();
-		void resizeHeader();
 	};
 }

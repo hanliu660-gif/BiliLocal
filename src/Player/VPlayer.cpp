@@ -4,8 +4,6 @@
 #include "../Local.h"
 #include "../Utils.h"
 #include "../Render/ARender.h"
-#include "../Render/ABuffer.h"
-#include "../Render/PFormat.h"
 #include <functional>
 
 namespace
@@ -13,7 +11,9 @@ namespace
 	// 原名是 time。它位于匿名命名空间里，而下面四处都用 "::time." 做限定查找，
 	// 限定查找看不到匿名命名空间的名字 → GCC 把它解析成 C 库的 time() 函数。
 	// MSVC 容忍这种写法，MinGW 不容忍，改个名。
-	QMutex timeMutex;
+	// 递归锁：setTime 持锁期间会跑 processEvents，事件里若同步重入 setTime，
+	// 非递归 QMutex 会当场死锁（实际调用图没踩到过，但属于地雷）。
+	QRecursiveMutex timeMutex;
 
 	// fmt/dsp 等回调跑在 VLC 解码线程上，原来每次都 lApp->findObject<T>()
 	// （内部 qobject_cast），与 GUI 线程竞争，曾崩在 Qt5Core 的 QMetaObject::cast。
@@ -25,177 +25,6 @@ namespace
 		return p;
 	}
 
-	ARender *cbARender()
-	{
-		static ARender *r = Local::instance()->findObject<ARender>();
-		return r;
-	}
-
-	class PixelBuffer : public ABuffer
-	{
-	public:
-		typedef std::function<void(PixelBuffer *)> Reuser;
-
-		explicit PixelBuffer(const QList<QSize> &alloc, const QSharedPointer<Reuser> &reuse)
-			: alloc(alloc)
-			, reuse(reuse)
-		{
-			int length = 0;
-			for (const QSize &iter : alloc) {
-				length += iter.width() * iter.height();
-			}
-			data.resize(length);
-		}
-
-		virtual void release() override
-		{
-			QSharedPointer<Reuser> f = reuse.toStrongRef();
-			if (f.isNull()) {
-				delete this;
-			}
-			else {
-				(*f)(this);
-			}
-		}
-
-		virtual bool map() override
-		{
-			return true;
-		}
-
-		uchar *bits()
-		{
-			return data.data();
-		}
-
-		virtual const uchar *bits() const override
-		{
-			return data.constData();
-		}
-
-		virtual QList<QSize> size() const override
-		{
-			return alloc;
-		}
-
-		virtual void unmap() override
-		{
-		}
-
-		virtual HandleType handleType() const override
-		{
-			return NoHandle;
-		}
-
-		virtual QVariant handle() const override
-		{
-			return QVariant();
-		}
-
-	private:
-		QVector<uchar> data;
-		QList<QSize> alloc;
-		QWeakPointer<Reuser> reuse;
-	};
-
-	class PixelBufferMgr
-	{
-	public:
-		QList<QSize> alloc;
-		int planes;
-		int offset[4];
-
-		explicit PixelBufferMgr(const QList<QSize> &alloc)
-			: alloc(alloc), planes(0)
-		{
-			int length = 0;
-			for (const QSize &iter : alloc) {
-				offset[planes++] = length;
-				length += iter.width() * iter.height();
-			}
-			auto f = std::bind(&PixelBufferMgr::reuse, this, std::placeholders::_1);
-			func = QSharedPointer<PixelBuffer::Reuser>::create(f);
-		}
-
-		~PixelBufferMgr()
-		{
-			qDeleteAll(data);
-		}
-
-		PixelBuffer *fetch()
-		{
-			QMutexLocker locker(&lock);
-			if (data.isEmpty()) {
-				return new PixelBuffer(alloc, func);
-			}
-			else {
-				return data.dequeue();
-			}
-		}
-
-		void reuse(PixelBuffer *buffer)
-		{
-			QMutexLocker locker(&lock);
-			data.enqueue(buffer);
-		}
-
-	private:
-		QMutex lock;
-		QQueue<PixelBuffer *> data;
-		QSharedPointer<PixelBuffer::Reuser> func;
-	};
-
-	void align(int &size, int alignment)
-	{
-		--alignment;
-		size = (size + alignment) & (~alignment);
-	}
-
-	unsigned fmt(void **opaque, char *chroma,
-		unsigned *width, unsigned *height,
-		unsigned *pitches, unsigned *lines)
-	{
-		PFormat f;
-		f.chroma = chroma;
-		f.size = QSize(*width, *height);
-		cbARender()->setFormat(&f);
-		if (f.chroma == "NONE" || f.plane.isEmpty()){
-			return 0;
-		}
-		memcpy(chroma, f.chroma.toUtf8(), 4);
-		*width = f.size.width(); *height = f.size.height();
-		for (int i = 0; i < f.plane.size() && i < 4; ++i){
-			QSize &size = f.plane[i];
-			align(size.rwidth(), 16); align(size.rheight(), 16);
-			pitches[i] = size.width(); lines[i] = size.height();
-		}
-		*opaque = new PixelBufferMgr(f.plane);
-		return 2;
-	}
-
-	void *lck(void *opaque, void **planes)
-	{
-		PixelBufferMgr *m = (PixelBufferMgr *)opaque;
-		auto buffer = m->fetch();
-		for (int i = 0; i < m->planes; ++i) {
-			planes[i] = buffer->bits() + m->offset[i];
-		}
-		return buffer;
-	}
-
-	void dsp(void *opaque, void *picture)
-	{
-		Q_UNUSED(opaque);
-		cbARender()->setBuffer((ABuffer *)picture);
-		emit cbAPlayer()->decode();
-	}
-
-	void clr(void *opaque)
-	{
-		PixelBufferMgr *m = (PixelBufferMgr *)opaque;
-		delete m;
-	}
-
 	void sta(const libvlc_event_t *, void *)
 	{
 		QMetaObject::invokeMethod(cbAPlayer(), "event", Q_ARG(int, VPlayer::Init));
@@ -203,9 +32,6 @@ namespace
 
 	void mid(const libvlc_event_t *, void *)
 	{
-		static qint64 n = 0;
-		if ((++n % 10) == 0) {
-		}
 		if (timeMutex.tryLock()) {
 			QMetaObject::invokeMethod(cbAPlayer(),
 				"timeChanged",
@@ -239,39 +65,14 @@ VPlayer::VPlayer(QObject *parent)
 	for (QJsonValue arg : Config::getValue<QJsonArray>("/Player/Arguments")){
 		args.append(arg.toString().toUtf8());
 	}
-	// Embed 输出例外：视频由 VLC 自己直出到原生子窗口，此时应当开 Direct3D11 硬解
-	const bool embed = (Config::getValue("/Render/Option/OpenGL/Output", QString()) == "Embed");
-	if (embed){
-		if (!args.contains("--avcodec-hw=d3d11va")){
-			args.append("--avcodec-hw=d3d11va");
-		}
-		if (!args.contains("--vout=direct3d11")){
-			args.append("--vout=direct3d11");
-		}
+	// Embed 直出：视频由 VLC 自己画到原生子窗口，固定开 Direct3D11 硬解；
+	// Arguments 里已写 --avcodec-hw= / --vout= 的以配置为准（只有最后一个生效，
+	// 自动追加会把手写参数顶掉）。
+	if (!args.contains("--avcodec-hw=d3d11va")){
+		args.append("--avcodec-hw=d3d11va");
 	}
-	else {
-		// Arguments 里已经写了 --avcodec-hw= 时以配置为准，不再自动追加：
-		// libvlc 收到两个 hw 选项只有最后一个生效，自动追加会把手动指定的参数顶掉。
-		bool hwGiven = false;
-		for (const QByteArray &a : args){
-			if (a.startsWith("--avcodec-hw=")){
-				hwGiven = true;
-				break;
-			}
-		}
-	// 自定义内存渲染（vmem）不能用 GPU 硬解直出（get_buffer 会失败），默认 --avcodec-hw=none；
-	// "GPU 解码拷回内存"的模式（dxva2-copy 等）在 Arguments 里手动指定。
-	if (!hwGiven){
-		if (Config::getValue("/Player/HardwareDecode", false)){
-			if (!args.contains("--avcodec-hw=any")){
-				args.append("--avcodec-hw=any");
-			}
-		}
-		else if (!args.contains("--avcodec-hw=none")){
-			args.append("--avcodec-hw=none");
-		}
-	}
-	// F10 截图走 libvlc_video_take_snapshot 的显式路径参数，实例创建时无需预配置
+	if (!args.contains("--vout=direct3d11")){
+		args.append("--vout=direct3d11");
 	}
 	QVector<const char *> argv(args.size());
 	for (int i = 0; i < args.size(); ++i){
@@ -280,6 +81,9 @@ VPlayer::VPlayer(QObject *parent)
 	vlc = libvlc_new(argv.size(), argv.data());
 	mp = nullptr;
 	state = Stop;
+	// 音量常驻成员：未加载媒体（mp 为空）时 getVolume 不能依赖 libvlc，
+	// 否则滚轮调音量永远从 0 起步、向上只能到 +5
+	volume = Config::getValue("/Player/Volume", 50);
 }
 
 VPlayer::~VPlayer()
@@ -305,7 +109,6 @@ void VPlayer::init()
 			switch (last){
 			case Stop:
 			{
-				cbARender()->setMusic(libvlc_video_get_track_count(mp) <= 0);
 				if (!Config::getValue("/Player/Subtitle", true)){
 					libvlc_video_set_spu(mp, -1);
 				}
@@ -386,7 +189,6 @@ void VPlayer::parseTracks(Utils::Type type)
 				libvlc_video_set_track(mp, real);
 				slot->current = fake;
 				emit trackChanged(type, fake);
-				cbARender()->setMusic(real == -1);
 			};
 			break;
 		case Utils::Audio:
@@ -418,16 +220,13 @@ void VPlayer::play()
 {
 	if (mp){
 		if (state == Stop){
+			// Embed 直出：视频画进原生子窗口，没有内存帧回调这条路
 			QWidget *surface = qobject_cast<QWidget *>(lApp->findObject<ARender>()->getHandle());
 			if (surface){
 				surface->setAttribute(Qt::WA_NativeWindow, true);
 				libvlc_media_player_set_hwnd(mp, (void *)surface->winId());
 			}
-			else{
-				libvlc_video_set_format_callbacks(mp, fmt, clr);
-				libvlc_video_set_callbacks(mp, lck, nullptr, dsp, nullptr);
-			}
-			int r = libvlc_media_player_play(mp);
+			libvlc_media_player_play(mp);
 		}
 		else{
 			libvlc_media_player_pause(mp);
@@ -529,6 +328,7 @@ qint64 VPlayer::getDuration()
 void VPlayer::setVolume(int volume)
 {
 	volume = qBound(0, volume, 100);
+	this->volume = volume;
 	Config::setValue("/Player/Volume", volume);
 	if (mp){
 		libvlc_audio_set_volume(mp, volume);
@@ -538,7 +338,7 @@ void VPlayer::setVolume(int volume)
 
 int VPlayer::getVolume()
 {
-	return mp ? libvlc_audio_get_volume(mp) : 0;
+	return volume;
 }
 
 void VPlayer::setRate(double rate)
@@ -662,22 +462,6 @@ void VPlayer::addSubtitle(QString file)
 		};
 		list.append({ n, s });
 		s();
-	}
-}
-
-void VPlayer::snapshot()
-{
-	// d3d11 直出下画面由 VLC 拥有，截图必须走 libvlc 自己的快照；
-	// 宽高传 0 = 保持原始尺寸
-	if (mp){
-		const QString dir = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation) + "/BiliLocal";
-		if (QDir().mkpath(dir)){
-			const QString file = QString("%1/snap-%2.png")
-				.arg(QDir::toNativeSeparators(dir), QDateTime::currentDateTime().toString("yyyyMMdd-hhmmss-zzz"));
-			if (libvlc_video_take_snapshot(mp, 0, file.toUtf8().constData(), 0, 0) != 0){
-				qWarning("snapshot failed: %s", qPrintable(file));
-			}
-		}
 	}
 }
 

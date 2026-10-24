@@ -1,5 +1,6 @@
 #include "Common.h"
 #include "EmbedPrivate.h"
+#include "../ARender.h"
 #include "../../UI/Interface.h"
 #include "../../Player/APlayer.h"
 #include <functional>
@@ -33,10 +34,6 @@ namespace
 				QObject::connect(wiggle, &QTimer::timeout, [this](){
 					// 计数器必须是静态的：ctor 的局部变量按引用捕获会悬空
 					static int n = 0;
-					// 第 20 拍（约 6 秒，必定已在播放）触发一次截图，验证 F10 快照链路
-					if (n == 20){
-						lApp->findObject<APlayer>()->snapshot();
-					}
 					// 第 30/50 拍在画面中央注入双击，验证全屏进出闭环
 					if (n == 30 || n == 50){
 						const QPointF local(600.0, 300.0);
@@ -164,7 +161,6 @@ namespace
 
 OpenGLEmbedRenderPrivate::OpenGLEmbedRenderPrivate()
 {
-	tv.disconnect();
 	host = lApp->findObject<Interface>()->widget();
 	surface = new ESurface(host);
 	overlay = new EWindow(this);

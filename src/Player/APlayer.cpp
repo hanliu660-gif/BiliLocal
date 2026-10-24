@@ -29,64 +29,17 @@
 #include "../Config.h"
 #include "../Utils.h"
 
-#ifdef BACKEND_VLC
 #include "VPlayer.h"
-#endif
-#ifdef BACKEND_QMM
-#include "QPlayer.h"
-#endif
-#ifdef BACKEND_NIL
-#include "NPlayer.h"
-#endif
 
 QStringList APlayer::getModules()
 {
-	QStringList modules;
-#ifdef BACKEND_VLC
-	modules << "VLC";
-#endif
-#ifdef BACKEND_QMM
-	modules << "QMM";
-#endif
-#ifdef BACKEND_NIL
-	modules << "NIL";
-#endif
-	return modules;
+	return{ "VLC" };
 }
 
 APlayer * APlayer::create(QObject *parent, QString name)
 {
-	if (name.isEmpty()) {
-		QStringList l = getModules();
-		switch (l.size()) {
-		case 0:
-			break;
-		case 1:
-			name = l[0];
-			break;
-		default:
-			name = Config::getValue("/Player/Type", l[0]);
-			name = l.contains(name) ? name : l[0];
-			break;
-		}
-	}
-	
-#ifdef BACKEND_VLC
-	if (name == "VLC") {
-		return new VPlayer(parent);
-	}
-#endif
-#ifdef BACKEND_QMM
-	if (name == "QMM") {
-		return new QPlayer(parent);
-	}
-#endif
-#ifdef BACKEND_NIL
-	if (name == "NIL") {
-		return new NPlayer(parent);
-	}
-#endif
-	return nullptr;
+	Q_UNUSED(name);
+	return new VPlayer(parent);
 }
 
 APlayer::APlayer(QObject *parent)

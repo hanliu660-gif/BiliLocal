@@ -9,8 +9,3 @@
 #ifdef INTERFACE_WIDGET
 #include <QtWidgets>
 #endif
-
-#ifdef INTERFACE_QUICK2
-#include <QtQml>
-#include <QtQuick>
-#endif

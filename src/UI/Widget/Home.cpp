@@ -22,21 +22,6 @@ namespace
 		}
 	}
 
-	QAction *addScale(QMenu *menu, double src, double dst)
-	{
-		QAction *s = menu->addAction(QString("%1:%2").arg(src).arg(dst));
-		s->setEnabled(false);
-		s->setData(dst / src);
-		return s;
-	}
-
-	QAction *addRatio(QMenu *menu, double num, double den)
-	{
-		QAction *r = menu->addAction(QString("%1:%2").arg(num).arg(den));
-		r->setData(num / den);
-		return r;
-	}
-
 	void addTrack(QMenu *menu, int type)
 	{
 		QMenu *sub = new QMenu(Home::tr("Track"), menu);
@@ -108,7 +93,7 @@ Home::Home(QWidget *parent)
 	connect(timer, &QTimer::timeout, [this]() {
 		// 轮询判据：光标在窗口里、并且最近 2 秒内动过，才保持显形。
 		// 之前的版本只看「光标在不在窗口内」，光标停在画面中间不动时两条会一直挂着。
-		if (seekdrag || sliding) {
+		if (seekdrag) {
 			lastMove = QDateTime::currentMSecsSinceEpoch();
 			timer->start(400);
 			return;
@@ -134,10 +119,6 @@ Home::Home(QWidget *parent)
 		if (aplayer->getState() == APlayer::Play && !menu->isVisible() && !info->isVisible()) {
 			setCursor(QCursor(Qt::BlankCursor));
 		}
-		if (!sliding) {
-			showprg = false;
-			arender->setDisplayTime(0);
-		}
 	});
 
 	connect(danmaku, &Danmaku::modelAppend, this, [this]() {
@@ -147,41 +128,14 @@ Home::Home(QWidget *parent)
 	}, Qt::QueuedConnection);
 
 	connect(aplayer, &APlayer::begin, this, [this]() {
-		rat->defaultAction()->setChecked(true);
 		spd->defaultAction()->setChecked(true);
-		for (auto iter : sca->actions()) {
-			if (iter->data().type() == QVariant::Double) {
-				iter->setEnabled(true);
-			}
-		}
-		if (!isFullScreen()) {
-			// Embed 直出：起播完全不动窗口，用户摆什么样就什么样
-			// （vmem 模式保持原行为：按视频尺寸开窗，超屏仍会被 setGeometry 拒绝）
-			const bool embed = Config::getValue("/Render/Option/OpenGL/Output", QString()) == "Embed";
-			if (geo.isEmpty() && !embed) {
-				geo = saveGeometry();
-				setGeometry(arender->getPreferSize(), false);
-			}
-		}
-		rat->setEnabled(true);
 		spd->setEnabled(true);
 		setWindowFilePath(aplayer->getMedia());
 	});
 
 	connect(aplayer, &APlayer::reach, this, [this](bool m) {
-		rat->setEnabled(false);
+		Q_UNUSED(m);
 		spd->setEnabled(false);
-		for (auto iter : sca->actions()) {
-			if (iter->data().type() == QVariant::Double) {
-				iter->setEnabled(false);
-			}
-		}
-		arender->setVideoAspectRatio(0);
-		if (!geo.isEmpty() && (list->finished() || m)) {
-			fullA->setChecked(false);
-			restoreGeometry(geo);
-			geo.clear();
-		}
 		setWindowFilePath(QString());
 	});
 
@@ -235,7 +189,7 @@ Home::Home(QWidget *parent)
 	};
 	connect(load, &Load::errorOccured, this, alertNetworkError);
 
-	showprg = sliding = seekdrag = false;
+	seekdrag = false;
 	lastMove = 0;
 	wasMaximized = false;
 	prevRate = 1.0;
@@ -255,11 +209,6 @@ Home::Home(QWidget *parent)
 			prevRate = 1.0;
 		}
 		aplayer->setRate(3.0);
-	});
-	connect(aplayer, &APlayer::timeChanged, [this](qint64 t) {
-		if (!sliding&&aplayer->getState() != APlayer::Stop) {
-			arender->setDisplayTime(showprg ? t / (double)aplayer->getDuration() : -1);
-		}
 	});
 
 	addActions(menu->actions());
@@ -432,8 +381,6 @@ Home::Home(QWidget *parent)
 	rstA->setShortcut(Config::getValue("/Shortcut/Rest", QString("Home")));
 	connect(rstA, &QAction::triggered, [this]() {
 		aplayer->setRate(1.0);
-		rat->defaultAction()->trigger();
-		sca->defaultAction()->trigger();
 		spd->defaultAction()->trigger();
 	});
 	addAction(rstA);
@@ -495,59 +442,7 @@ Home::Home(QWidget *parent)
 		setWindowFlags();
 	});
 
-	// F10：截图，存到 图片\BiliLocal（libvlc 快照，直出模式下同样可用）
-	QAction *snapA = new QAction(tr("Snapshot"), this);
-	snapA->setObjectName("Snap");
-	snapA->setShortcut(Config::getValue("/Shortcut/Snap", QString("F10")));
-	snapA->setToolTip(tr("Snapshot to Pictures\\BiliLocal"));
-	addAction(snapA);
-	connect(snapA, &QAction::triggered, [this]() {
-		aplayer->snapshot();
-	});
-
-	rat = new QMenu(tr("Ratio"), this);
-	rat->setEnabled(false);
-	rat->setDefaultAction(rat->addAction(tr("Default")));
-	addRatio(rat, 4, 3);
-	addRatio(rat, 16, 10);
-	addRatio(rat, 16, 9);
-	addRatio(rat, 1.85, 1);
-	addRatio(rat, 2.35, 1);
-	connect(rat, &QMenu::triggered, [this](QAction *action) {
-		arender->setVideoAspectRatio(action->data().toDouble());
-		if (aplayer->getState() == APlayer::Pause) {
-			arender->draw();
-		}
-	});
-	setSingle(rat);
-
-	sca = new QMenu(tr("Scale"), this);
-	connect(sca->addAction(fullA->text()), &QAction::toggled, fullA, &QAction::setChecked);
-	sca->addAction(tr("Init Size"))->setData(QSize());
-	sca->addAction(QStringLiteral("541×384"))->setData(QSize(540, 383));
-	sca->addAction(QStringLiteral("672×438"))->setData(QSize(671, 437));
-	sca->addSeparator();
-	addScale(sca, 1, 4);
-	addScale(sca, 1, 2);
-	sca->setDefaultAction(addScale(sca, 1, 1));
-	addScale(sca, 2, 1);
-	addScale(sca, 4, 1);
-	connect(sca, &QMenu::triggered, [this](QAction *action) {
-		QVariant d = action->data();
-		switch (d.type()) {
-		case QVariant::Double:
-			setGeometry(arender->getPreferSize() * d.toDouble(), false);
-			break;
-		case QVariant::Size:
-			setGeometry(d.toSize(), false);
-			break;
-		default:
-			break;
-		}
-	});
-	setSingle(sca);
-
-	spd = new QMenu(tr("Speed"), this);
+		spd = new QMenu(tr("Speed"), this);
 	spd->setEnabled(false);
 	spd->addAction(QStringLiteral("×5.0"))->setData(5.0);
 	spd->addAction(QStringLiteral("×2.0"))->setData(2.0);
@@ -565,7 +460,7 @@ Home::Home(QWidget *parent)
 	// 不激活式悬浮窗：弹出时不抢主窗口键盘焦点，快捷键全程可用
 	menu->setWindowFlags(Qt::Window | Qt::WindowDoesNotAcceptFocus);
 	menu->setAttribute(Qt::WA_ShowWithoutActivating);
-	menu->setWindowTitle(tr("文件与弹幕"));
+	menu->setWindowTitle(tr("Files and Danmaku"));
 	menu->resize(320, 420);
 	connect(info->listB, &QPushButton::clicked, this, [this]() {
 		if (menu->isShown()) {
@@ -582,23 +477,6 @@ Home::Home(QWidget *parent)
 
 	setWindowFlags();
 	setGeometry(QSize(), true);
-}
-
-void Home::percent(double degree)
-{
-	auto p = msg ? qobject_cast<QProgressDialog *>(msg) : nullptr;
-	QWidget *c = qApp->activeWindow();
-	if (!p || (p != c && p->parent() != c && c)) {
-		delete msg;
-		p = new QProgressDialog(c);
-		p->setMaximum(1000);
-		p->setWindowTitle(tr("Loading"));
-		p->setFixedSize(p->sizeHint());
-		p->show();
-		connect(p, &QProgressDialog::canceled, lApp->findObject<Load>(), &Load::dequeue);
-		msg = p;
-	}
-	p->setValue(1000 * degree);
 }
 
 void Home::warning(QString title, QString text)
@@ -638,7 +516,7 @@ void Home::dragEnterEvent(QDragEnterEvent * e)
 void Home::dropEvent(QDropEvent * e)
 {
 	if (e->mimeData()->hasFormat("text/uri-list")) {
-		for (const QString &item : QString(e->mimeData()->data("text/uri-list")).split('\n', QString::SkipEmptyParts)) {
+		for (const QString &item : QString(e->mimeData()->data("text/uri-list")).split('\n', Qt::SkipEmptyParts)) {
 			lApp->tryLocal(QUrl(item).toLocalFile().trimmed());
 		}
 	}
@@ -669,11 +547,6 @@ void Home::mouseMoveEvent(QMouseEvent * e)
 		seekTo(cur, false);
 		return;
 	}
-	int x = cur.x(), w = width();
-	if (!showprg&&aplayer->getState() != APlayer::Stop) {
-		arender->setDisplayTime(aplayer->getTime() / (double)aplayer->getDuration());
-	}
-	showprg = true;
 	if (!info->isShown()) {
 		info->pop();
 	}
@@ -702,9 +575,6 @@ void Home::seekTo(QPoint p, bool commit)
 	}
 	const double ratio = qBound(0.0, p.x() / double(qMax(width() - 1, 1)), 1.0);
 	const qint64 t = qint64(d * ratio);
-	if (arender) {
-		arender->setDisplayTime(ratio);
-	}
 	if (info) {
 		info->previewTime(t);
 	}
@@ -729,7 +599,6 @@ void Home::mousePressEvent(QMouseEvent * e)
 				info->pop();
 			}
 			timer->start(400);
-			sliding = true;
 			seekTo(p, false);
 			return;
 		}
@@ -752,7 +621,6 @@ void Home::mouseReleaseEvent(QMouseEvent * e)
 {
 	if (seekdrag) {
 		seekdrag = false;
-		sliding = false;
 		seekTo(e->pos(), true);
 		sta = wgd = QPoint();
 		return;
@@ -803,38 +671,12 @@ void Home::resizeEvent(QResizeEvent * e)
 	int ih = int(4.2 * logicalDpiY() * font().pointSizeF() / 72);
 	info->setGeometry(0, h - ih, w, ih);
 	info->raise();
-	for (QAction *action : sca->actions()) {
-		if (action->isSeparator() || !action->isEnabled()) {
-			continue;
-		}
-		QVariant d = action->data();
-		switch (d.type()) {
-		case QVariant::Double:
-		{
-			QSize will = arender->getPreferSize() * d.toDouble();
-			action->setChecked(will == size && !fullA->isChecked());
-			break;
-		}
-		case QVariant::Size:
-		{
-			QSize will = d.toSize();
-			if (will.isEmpty()) {
-				will = parseSize(Config::getValue("/Interface/Size", QString("720,405")));
-			}
-			action->setChecked(will == size && !fullA->isChecked());
-			break;
-		}
-		default:
-			action->setChecked(fullA->isChecked());
-			break;
-		}
-	}
 	QWidget::resizeEvent(e);
 }
 
 QSize Home::parseSize(QString string)
 {
-	QStringList l = string.trimmed().split(',', QString::SkipEmptyParts);
+	QStringList l = string.trimmed().split(',', Qt::SkipEmptyParts);
 	double x = logicalDpiX() / 72.0, y = logicalDpiY() / 72.0;
 	return l.size() >= 2 ? QSize(l[0].toInt() * x, l[1].toInt() * y) : QSize(720 * x, 405 * y);
 }
@@ -928,8 +770,6 @@ void Home::showContextMenu(QPoint p)
 		QMenu vid(tr("Video"), this);
 		vid.setFixedWidth(top.sizeHint().width());
 		addTrack(&vid, Utils::Video);
-		vid.addMenu(sca);
-		vid.addMenu(rat);
 		vid.addMenu(spd);
 		vid.addAction(findChild<QAction *>("Rest"));
 		top.addMenu(&vid);

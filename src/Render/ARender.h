@@ -30,9 +30,7 @@
 #include <QtGui>
 
 class ARenderPrivate;
-class ABuffer;
 class ASprite;
-class PFormat;
 
 class ARender :public QObject
 {
@@ -51,24 +49,11 @@ protected:
 	explicit ARender(QObject *parent);
 
 public slots:
-	void setBackground(QString path);
-	void setMusic(bool music);
-	void setDisplayTime(double t);
-
-	void setVideoAspectRatio(double ratio);
-	void setPixelAspectRatio(double ratio);
-
-	virtual void setFormat(PFormat *format) = 0;
-	virtual void setBuffer(ABuffer *buffer) = 0;
-
 	virtual ASprite *getSprite() = 0;
 	virtual QObject *getHandle() = 0;
 
 	virtual void resize(QSize size) = 0;
-	virtual QSize getBufferSize() = 0;
 	virtual QSize getActualSize() = 0;
-	virtual	QSize getPreferSize();
-	virtual void setPreferSize(QSize size);
 
 	void draw();
 	virtual void draw(QRect rect) = 0;

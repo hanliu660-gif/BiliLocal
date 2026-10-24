@@ -15,12 +15,9 @@ private:
 	Q_DECLARE_PRIVATE(OpenGLRender);
 
 public slots:
-	virtual void setFormat(PFormat *format) override;
-	virtual void setBuffer(ABuffer *buffer) override;
 	virtual ASprite *getSprite() override;
 	virtual QObject *getHandle() override;
 	virtual void resize(QSize size) override;
 	virtual QSize getActualSize() override;
-	virtual QSize getBufferSize() override;
 	virtual void draw(QRect rect = QRect()) override;
 };

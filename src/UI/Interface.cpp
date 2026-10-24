@@ -30,25 +30,13 @@
 #include "../Config.h"
 #include <QtCore>
 
-#ifdef INTERFACE_WIDGET
 #include "Widget/WidgetInterfacePrivate.h"
-#endif
 
-#ifdef INTERFACE_QUICK2
-#include "Quick2/Quick2InterfacePrivate.h"
-#endif
+// 单平台化后唯一界面后端：Widget（2026-10-24，Quick2 已删除）
 
 QStringList Interface::getModules()
 {
-	QStringList modules;
-#ifdef INTERFACE_WIDGET
-	modules << "Widget";
-#endif
-#ifdef INTERFACE_QUICK2
-	modules << "Quick2";
-#endif
-
-	return modules;
+	return{ "Widget" };
 }
 
 Interface::Interface(QObject *parent)
@@ -64,55 +52,13 @@ Interface::~Interface()
 
 void Interface::setup()
 {
-	QString name;
-	QStringList l = getModules();
-	switch (l.size()) {
-	case 0:
-		break;
-	case 1:
-		name = l[0];
-		break;
-	default:
-		name = Config::getValue("/Interface/Type", l[0]);
-		name = l.contains(name) ? name : l[0];
-		break;
-	}
-#ifdef INTERFACE_WIDGET
-	if (name == "Widget") {
-		d_ptr = new WidgetInterfacePrivate();
-		return;
-	}
-#endif
-#ifdef INTERFACE_QUICK2
-	if (name == "Quick2") {
-		d_ptr = new Quick2InterfacePrivate();
-		return;
-	}
-#endif
-}
-
-void Interface::warning(QString title, QString text)
-{
-	Q_D(Interface);
-	d->warning(title, text);
-}
-
-void Interface::percent(double degree)
-{
-	Q_D(Interface);
-	d->percent(degree);
+	d_ptr = new WidgetInterfacePrivate();
 }
 
 void Interface::show()
 {
 	Q_D(Interface);
 	d->show();
-}
-
-void Interface::hide()
-{
-	Q_D(Interface);
-	d->hide();
 }
 
 QWidget *Interface::widget()

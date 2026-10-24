@@ -43,13 +43,7 @@ namespace UI
 			return isPoped;
 		}
 
-		bool preferStay()
-		{
-			return isStay;
-		}
-
 	private:
-		bool isStay;
 		bool isPoped;
 		QLineEdit *fileL;
 		QCompleter *fileC;

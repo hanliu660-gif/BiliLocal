@@ -23,12 +23,7 @@ public:
 	WidgetInterfacePrivate();
 	virtual ~WidgetInterfacePrivate();
 
-	virtual void percent(double degree) override;
-	virtual void warning(QString title, QString text) override;
-
 	virtual void show() override;
-	virtual void hide() override;
-
 	virtual QWidget *widget() override;
 	virtual QWindow *window() override;
 

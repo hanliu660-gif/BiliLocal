@@ -27,39 +27,13 @@
 
 #include "Common.h"
 #include "Info.h"
-#include "Editor.h"
-#include "Prefer.h"
-#include "WidgetInterfacePrivate.h"
 #include "../Interface.h"
 #include "../../Config.h"
 #include "../../Local.h"
-#include "../../Utils.h"
-#include "../../Access/Load.h"
 #include "../../Player/APlayer.h"
-#include "../../Model/Danmaku.h"
-#include "../../Model/List.h"
 #include "../../Model/Shield.h"
 
 using namespace UI;
-
-namespace
-{
-	class MTableView :public QTableView
-	{
-	public:
-		MTableView(QWidget *parent = 0) :
-			QTableView(parent)
-		{
-		}
-
-		void currentChanged(const QModelIndex &c,
-			const QModelIndex &p)
-		{
-			QTableView::currentChanged(c, p);
-			selectionModel()->setCurrentIndex(QModelIndex(), QItemSelectionModel::NoUpdate);
-		}
-	};
-}
 
 Info::Info(QWidget *parent) :
 QWidget(parent)
@@ -68,19 +42,14 @@ QWidget(parent)
 	// Embed 输出时视频是原生子窗口，非原生控件会被它盖住；底栏必须自己成为原生窗口
 	setAttribute(Qt::WA_NativeWindow, true);
 	setAttribute(Qt::WA_StyledBackground, true);
-	isStay = isPoped = updating = dragging = false;
+	isPoped = updating = dragging = false;
 	setStyleSheet("QWidget#Info{background:rgba(20,22,26,215);}"
 		"QWidget#Info QPushButton{color:#e8e8ea;background:transparent;"
 		"border:1px solid rgba(255,255,255,45);border-radius:4px;padding:2px 10px;}"
 		"QWidget#Info QPushButton:hover{background:rgba(255,255,255,35);}"
 		"QWidget#Info QPushButton:pressed{background:rgba(255,255,255,60);}");
-	setAttribute(Qt::WA_StyledBackground, true);
 	duration = -1;
-	animation = new QPropertyAnimation(this, "pos", this);
-	animation->setDuration(200);
-	animation->setEasingCurve(QEasingCurve::OutCubic);
 	timeT = new QLabel(tr("Time"), this);
-	volmT = new QLabel(tr("Volume"), this);
 	timeS = new QSlider(this);
 	volmS = new QSlider(this);
 	timeS->setOrientation(Qt::Horizontal);
@@ -122,18 +91,18 @@ QWidget(parent)
 		}
 	});
 	playB = new QPushButton(this);
-	listB = new QPushButton(tr("列表"), this);
-	openB = new QPushButton(tr("打开"), this);
-	danmB = new QPushButton(tr("弹幕·开"), this);
+	listB = new QPushButton(tr("Playlist"), this);
+	openB = new QPushButton(tr("Open"), this);
+	danmB = new QPushButton(tr("Danmaku On"), this);
 	rateB = new QPushButton(QStringLiteral("1.0x"), this);
-	prefB = new QPushButton(tr("设置"), this);
-	fullB = new QPushButton(tr("全屏"), this);
+	prefB = new QPushButton(tr("Settings"), this);
+	fullB = new QPushButton(tr("Fullscreen"), this);
 	for (QPushButton *b : { openB, danmB, rateB, prefB, fullB, listB }){
 		b->setFocusPolicy(Qt::NoFocus);
 		b->setCursor(Qt::PointingHandCursor);
 	}
-	listB->setToolTip(tr("播放列表"));
-	fullB->setToolTip(tr("全屏 / 退出全屏 (F / F11 / 双击画面)"));
+	listB->setToolTip(tr("Playlist"));
+	fullB->setToolTip(tr("Fullscreen toggle (F / F11 / double-click)"));
 	playI = QIcon::fromTheme("media-playback-start", QIcon(":/Picture/play.png"));
 	pausI = QIcon::fromTheme("media-playback-pause", QIcon(":/Picture/pause.png"));
 	playB->setIcon(playI);
@@ -150,8 +119,8 @@ QWidget(parent)
 	connect(playB, &QPushButton::clicked, playA, &QAction::trigger);
 	// 打开视频
 	connect(openB, &QPushButton::clicked, [this](){
-		QString f = QFileDialog::getOpenFileName(this, tr("打开"), QString(),
-			tr("视频 (*.mp4 *.flv *.mkv *.ts *.mov *.wmv *.avi *.m4v *.webm);;所有文件 (*)"));
+		QString f = QFileDialog::getOpenFileName(this, tr("Open File"), QString(),
+			tr("Video (*.mp4 *.flv *.mkv *.ts *.mov *.wmv *.avi *.m4v *.webm);;All files (*)"));
 		if (!f.isEmpty()){
 			lApp->tryLocal(f);
 		}
@@ -177,7 +146,7 @@ QWidget(parent)
 		if (QAction *a = parentWidget()->findChild<QAction *>("Togg")){
 			blocked = a->isChecked();
 		}
-		danmB->setText(blocked ? tr("弹幕·关") : tr("弹幕·开"));
+		danmB->setText(blocked ? tr("Danmaku Off") : tr("Danmaku On"));
 	};
 	connect(lApp->findObject<Shield>(), &Shield::shieldChanged, this, syncDanm);
 	syncDanm();
@@ -197,125 +166,6 @@ QWidget(parent)
 			lApp->findObject<APlayer>()->setRate(picked->data().toDouble());
 		}
 	});
-	duraT = new QLabel(this);
-	duraT->setAlignment(Qt::AlignRight | Qt::AlignBottom);
-	duraT->setText("00:00/00:00");
-	danmV = new MTableView(this);
-	danmV->setWordWrap(false);
-	danmV->setSelectionBehavior(QAbstractItemView::SelectRows);
-	danmV->setSelectionMode(QAbstractItemView::ExtendedSelection);
-	danmV->verticalHeader()->hide();
-	danmV->setAlternatingRowColors(true);
-	danmV->setContextMenuPolicy(Qt::CustomContextMenu);
-	danmV->setModel(lApp->findObject<Danmaku>());
-	QHeaderView *header;
-	header = danmV->horizontalHeader();
-	header->setSectionResizeMode(0, QHeaderView::Fixed);
-	header->setSectionResizeMode(1, QHeaderView::Stretch);
-	header->setHighlightSections(false);
-	resizeHeader();
-	header = danmV->verticalHeader();
-	header->setDefaultSectionSize(22.5*logicalDpiY() / 72);
-	connect(lApp->findObject<Danmaku>(), &Danmaku::layoutChanged, this, &Info::resizeHeader);
-	connect(danmV, &QTableView::doubleClicked, [this](QModelIndex index){
-		lApp->findObject<APlayer>()->setTime(index.data(Danmaku::TimeRole).value<qint64>());
-	});
-
-	QAction *saveA = new QAction(tr("Save Danmaku to File"), this);
-	saveA->setObjectName("Save");
-	saveA->setShortcut(Config::getValue("/Shortcut/Save", QString()));
-	saveA->setEnabled(false);
-	connect(saveA, &QAction::triggered, [](){
-		QFileDialog save(lApp->findObject<Interface>()->widget(), tr("Save File"));
-		save.setAcceptMode(QFileDialog::AcceptSave);
-		QFileInfo info(lApp->findObject<APlayer>()->getMedia());
-		if (info.isFile()){
-			save.setDirectory(info.absolutePath());
-			save.selectFile(info.completeBaseName());
-		}
-		else{
-			save.setDirectory(lApp->findObject<List>()->defaultPath(Utils::Danmaku));
-		}
-		save.setDefaultSuffix("json");
-		QStringList type;
-		type << tr("Bilibili Danmaku Format (*.xml)") << tr("AcFun Danmaku Format (*.json)");
-		save.setNameFilters(type);
-		save.connect(&save, &QFileDialog::filterSelected, [&](QString filter){
-			save.setDefaultSuffix(filter.indexOf("xml") == -1 ? "json" : "xml");
-		});
-		if (save.exec() == QDialog::Accepted){
-			QStringList file = save.selectedFiles();
-			if (file.size() == 1){
-				lApp->findObject<Danmaku>()->saveToFile(file.first());
-			}
-		}
-	});
-	danmV->addAction(saveA);
-
-	connect(lApp->findObject<Danmaku>(), &Danmaku::modelReset, [=](){
-		saveA->setEnabled(!lApp->findObject<Danmaku>()->getPool().isEmpty());
-	});
-
-	connect(danmV, &QTableView::customContextMenuRequested, [=](QPoint p){
-		QMenu menu(this);
-		auto selected = danmV->selectionModel()->selectedRows();
-		if (!selected.isEmpty()){
-			connect(menu.addAction(tr("Copy Danmaku")), &QAction::triggered, [=](){
-				QStringList list;
-				for (const QModelIndex &iter : selected) {
-					QString string = iter.data(Danmaku::StringRole).toString();
-					list.append(string);
-				}
-				qApp->clipboard()->setText(list.join('\n'));
-			});
-			
-			QStringList ruleList;
-			for (const QModelIndex &iter : selected) {
-				QString sender = iter.data(Danmaku::SenderRole).toString();
-				if (sender.isEmpty()) {
-					continue;
-				}
-				ruleList.append("u=" + sender);
-			}
-			auto shield = lApp->findObject<Shield>();
-			if (!ruleList.isEmpty()){
-				connect(menu.addAction(tr("Eliminate The Sender")), &QAction::triggered, [=]() {
-					for (const QString &iter : ruleList) {
-						shield->insert(iter);
-					}
-					lApp->findObject<Danmaku>()->parse(Danmaku::Block);
-				});
-			}
-			bool inList = false;
-			for (const QString &iter : ruleList) {
-				if (shield->contains(iter)) {
-					inList = true;
-					break;
-				}
-			}
-			if (inList) {
-				connect(menu.addAction(tr("Recover The Sender")), &QAction::triggered, [=]() {
-					for (const QString &iter : ruleList) {
-						shield->remove(iter);
-					}
-					lApp->findObject<Danmaku>()->parse(Danmaku::Block);
-				});
-			}
-			menu.addSeparator();
-		}
-		connect(menu.addAction(tr("Edit Blocking List")), &QAction::triggered, [this](){
-			Prefer::exec(lApp->findObject<Interface>()->widget(), 3);
-		});
-		connect(menu.addAction(tr("Edit Danmaku Pool")), &QAction::triggered, [this](){
-			Editor::exec(lApp->findObject<Interface>()->widget(), 2);
-		});
-		connect(menu.addAction(tr("Clear Danmaku Pool")), &QAction::triggered, lApp->findObject<Danmaku>(), &Danmaku::clear);
-		menu.addAction(saveA);
-		isStay = 1;
-		menu.exec(danmV->viewport()->mapToGlobal(p));
-		isStay = 0;
-	});
-
 	animation = new QPropertyAnimation(this, "pos", this);
 	animation->setDuration(200);
 	animation->setEasingCurve(QEasingCurve::OutCubic);
@@ -377,20 +227,16 @@ void Info::pop()
 
 void Info::push(bool force)
 {
+	Q_UNUSED(force);
 	if (!isVisible()) {
 		isPoped = false;
 		return;
 	}
-	if (!preferStay() || force) {
-		if (force) {
-			isStay = false;
-		}
-		animation->stop();
-		animation->setStartValue(pos());
-		animation->setEndValue(restPos() + QPoint(0, height()));
-		animation->start();
-		isPoped = false;
-	}
+	animation->stop();
+	animation->setStartValue(pos());
+	animation->setEndValue(restPos() + QPoint(0, height()));
+	animation->start();
+	isPoped = false;
 }
 void Info::terminate()
 {
@@ -434,7 +280,7 @@ bool Info::eventFilter(QObject *o, QEvent *e)
 }
 
 void Info::resizeEvent(QResizeEvent *e)
-{	if (!playB || !timeT || !timeS || !volmS || !listB || !duraT || !volmT || !danmV){
+{	if (!playB || !timeT || !timeS || !volmS || !listB){
 		QWidget::resizeEvent(e);
 		return;
 	}
@@ -468,35 +314,7 @@ void Info::resizeEvent(QResizeEvent *e)
 	int slw = xr - int(0.5*x) - slx;
 	// 进度条铺满整条底栏的高度，鼠标在整条横带上任意位置都能拖动
 	timeS->setGeometry(QRect(slx, int(0.4*y), qMax(slw, int(8*x)), h - int(0.8*y)));
-	duraT->setGeometry(QRect(0, 0, 0, 0));
-	volmT->setGeometry(QRect(0, 0, 0, 0));
-	danmV->setGeometry(QRect(0, 0, 0, 0));
 	QWidget::resizeEvent(e);
-}
-
-void Info::resizeHeader()
-{
-	Danmaku *d = lApp->findObject<Danmaku>();
-	QStringList list;
-	list.append(d->headerData(0, Qt::Horizontal, Qt::DisplayRole).toString());
-	int c = d->rowCount() - 1, i;
-	for (i = 0; i <= c; ++i){
-		if (d->data(d->index(i, 0), Qt::ForegroundRole).value<QColor>() != Qt::red){
-			list.append(d->data(d->index(i, 0), Qt::DisplayRole).toString());
-			break;
-		}
-	}
-	for (i = c; i >= 0; --i){
-		if (d->data(d->index(i, 0), Qt::ForegroundRole).value<QColor>() != Qt::red){
-			list.append(d->data(d->index(i, 0), Qt::DisplayRole).toString());
-			break;
-		}
-	}
-	int m = 0;
-	for (QString item : list){
-		m = qMax(m, danmV->fontMetrics().width(item) + 8);
-	}
-	danmV->horizontalHeader()->resizeSection(0, m);
 }
 
 void Info::updateTimeText(qint64 _time)

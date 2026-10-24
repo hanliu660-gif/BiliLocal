@@ -71,7 +71,6 @@ signals:
 	void errorOccurred(int error);
 	void begin();
 	void reach(bool manually);
-	void decode();
 	void jumped(qint64 time);
 	void stateChanged(int state);
 	void mediaChanged(QString media);
@@ -108,9 +107,6 @@ public slots:
 	virtual QStringList getTracks(int type);
 
 	virtual void    addSubtitle(QString file);
-
-	// 截当前帧到快照目录（Pictures\BiliLocal），不支持的后端为空操作
-	virtual void    snapshot() { }
 
 	virtual void    event(int type);
 };

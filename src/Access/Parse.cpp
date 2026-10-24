@@ -59,35 +59,6 @@ namespace
 	typedef ResultDelegate::Record Record;
 	typedef ResultDelegate::Result Result;
 
-	class FutureRecord : public Record
-	{
-	public:
-		explicit FutureRecord(const QFuture<Result> &data)
-			: data(data)
-		{
-		}
-
-		virtual void onFinish(Finish cb) override
-		{
-			typedef QFutureWatcher<Result> Watcher;
-			auto watcher = new Watcher(qApp);
-			QObject::connect(watcher, &Watcher::finished, [=]() {
-				Result r = watcher->future();
-				delete watcher;
-				cb(std::move(r));
-			});
-			watcher->setFuture(data);
-		}
-
-		virtual Result get() override
-		{
-			return data.result();
-		}
-
-	private:
-		QFuture<Result> data;
-	};
-
 	class VectorRecord : public Record
 	{
 	public:
@@ -198,7 +169,7 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 			QVector<QJsonValue> raws;
 			while (!wait.isEmpty()) {
 				const QJsonArray &head = wait.takeFirst();
-				raws.reserve(raws.size() + raws.size());
+				raws.reserve(raws.size() + head.size());
 				for (const QJsonValue &item : head) {
 					if (item.isArray()) {
 						wait.append(item.toArray());
@@ -331,7 +302,7 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 			}
 			comment.time = args["vpos"].toLongLong() * 10;
 			comment.date = args["date"].toLongLong();
-			QStringList ctrl = args["mail"].split(' ', QString::SkipEmptyParts);
+			QStringList ctrl = args["mail"].split(' ', Qt::SkipEmptyParts);
 			comment.mode = ctrl.contains("shita") ? 4 : (ctrl.contains("ue") ? 5 : 1);
 			comment.font = ctrl.contains("small") ? 15 : (ctrl.contains("big") ? 36 : 25);
 			comment.color = 0xFFFFFF;
@@ -373,7 +344,7 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 		}
 		pos += len;
 		len = xml.indexOf("Format:", pos) - pos;
-		ref = xml.midRef(pos, len).split("Style:", QString::SkipEmptyParts);
+		ref = xml.midRef(pos, len).split("Style:", Qt::SkipEmptyParts);
 		QMap<QString, int> style;
 		for (const QStringRef &item : ref){
 			const auto &args = item.split(',');
@@ -399,9 +370,9 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 		if (text < 0 || font < 0 || time < 0){
 			return ResultDelegate();
 		}
-		qint64 dat = QDateTime::currentDateTime().toTime_t();
+		qint64 dat = QDateTime::currentDateTime().toSecsSinceEpoch();
 		pos += len;
-		ref = xml.midRef(pos).split("Dialogue:",QString::SkipEmptyParts);
+		ref = xml.midRef(pos).split("Dialogue:",Qt::SkipEmptyParts);
 		QVector<Comment> list;
 		list.reserve(ref.size());
 		for (const QStringRef &item : ref){
@@ -416,7 +387,7 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 			t = item.mid(args[text].position()-item.position()).trimmed().toString();
 			int split = t.indexOf("}") + 1;
 			comment.string = t.midRef(split).trimmed().toString();
-			const auto &m = t.midRef(1, split - 2).split('\\', QString::SkipEmptyParts);
+			const auto &m = t.midRef(1, split - 2).split('\\', Qt::SkipEmptyParts);
 			for (const QStringRef &i : m){
 				if (i.startsWith("fs")){
 					comment.font = i.mid(2).toInt();

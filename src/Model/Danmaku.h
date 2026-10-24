@@ -93,7 +93,6 @@ public slots:
 	void remove(QString source);
 	void parse(int flag = None);
 	void delayAll(qint64 time);
-	void saveToFile(QString file) const;
 	qint64 getDuration() const;
 	int size() const;
 };

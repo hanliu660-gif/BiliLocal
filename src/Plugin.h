@@ -32,7 +32,6 @@ class Plugin
 {
 public:
 	typedef void(*RegistPtr)(QObject *);
-	typedef void(*ConfigPtr)();
 	typedef void(*StringPtr)(QString *, QString *);
 
 	static QList<Plugin> plugins;
@@ -41,11 +40,9 @@ public:
 	Plugin(QString path);
 	bool loaded();
 	void regist(QObject *);
-	void config();
 	QString string(QString query);
 
 private:
 	RegistPtr m_regist;
-	ConfigPtr m_config;
 	StringPtr m_string;
 };

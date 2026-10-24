@@ -30,7 +30,6 @@
 #	include <windows.h>
 #	include <shellapi.h>
 #endif
-#include "Bundle.h"
 #include "Config.h"
 #include "Plugin.h"
 #include "Utils.h"
@@ -104,13 +103,12 @@ void Local::tryLocal(QString path)
 	}
 	else {
 		switch (Config::getValue("/Interface/Single", 1)) {
-		case 0:
-		case 1:
-			findObject<APlayer>()->stop();
-			findObject<APlayer>()->setMedia(path);
-			break;
 		case 2:
 			findObject<List>()->appendMedia(path);
+			break;
+		default:
+			findObject<APlayer>()->stop();
+			findObject<APlayer>()->setMedia(path);
 			break;
 		}
 	}
@@ -187,12 +185,17 @@ int main(int argc, char *argv[])
 	QCoreApplication::setOrganizationName("BiliLocal");
 	QCoreApplication::setApplicationName("BiliLocal");
 	qInstallMessageHandler([](QtMsgType, const QMessageLogContext &, const QString &msg) {
-		QFile f(Utils::localPath(Utils::Cache) + "msg.log");
+		const QString path = Utils::localPath(Utils::Cache) + "msg.log";
+		// 无轮转的日志会一直变大：超过 10MB 时把旧的挪成 .old（覆盖上一份）
+		QFile f(path);
+		if (f.size() > 10 * 1024 * 1024) {
+			QFile::remove(path + ".old");
+			QFile::rename(path, path + ".old");
+		}
 		if (f.open(QIODevice::WriteOnly | QIODevice::Append)) {
 			f.write((msg + "\r\n").toUtf8());
 		}
 	});
-	Bundle::push();
 	Config::load();
 #if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS)
 	int single = Config::getValue("/Interface/Single", 1);
@@ -209,7 +212,6 @@ int main(int argc, char *argv[])
 	a.setAttribute(Qt::AA_UseOpenGLES);
 #endif
 	qThreadPool->setMaxThreadCount(Config::getValue("/Danmaku/Thread", QThread::idealThreadCount()));
-	qsrand(QTime::currentTime().msec());
 	loadTranslator();
 	setDefaultFont();
 	new Local(&a);
@@ -222,7 +224,12 @@ int main(int argc, char *argv[])
 	QLocalServer *server = nullptr;
 	if (single){
 		server = new QLocalServer(&a);
-		server->listen("BiliLocalInstance");
+		// 程序崩溃后残留的 socket 文件会让 listen 静默失败，单实例从此失效；
+		// 失败时清掉残留再试一次
+		if (!server->listen("BiliLocalInstance")){
+			QLocalServer::removeServer("BiliLocalInstance");
+			server->listen("BiliLocalInstance");
+		}
 		QObject::connect(server, &QLocalServer::newConnection, [=](){
 			QLocalSocket *r = server->nextPendingConnection();
 			r->waitForReadyRead();

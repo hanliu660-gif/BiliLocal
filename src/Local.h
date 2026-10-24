@@ -62,15 +62,5 @@ public slots:
 		return objects.value(name);
 	}
 
-	void synchronize(void *func) const
-	{
-		((void(*)())func)();
-	}
-
-	void synchronize(void *func, void *args) const
-	{
-		((void(*)(void *))func)(args);
-	}
-
 	void tryLocal(QString path);
 };

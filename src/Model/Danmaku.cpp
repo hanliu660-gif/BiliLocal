@@ -273,13 +273,13 @@ void Danmaku::append(Record &&record)
 		}
 		QSet<CommentPointer> s;
 		auto &l = append->danmaku;
-		int c = l.size() + a;
-		s.reserve(c);
+		int total = l.size() + a;
+		s.reserve(total);
 		for (const Comment &c : l) {
 			s.insert(&c);
 		}
 		beginResetModel();
-		l.reserve(c);
+		l.reserve(total);
 		for (const Comment &i : record.danmaku) {
 			l.append(i);
 			Comment &c = l.last();
@@ -443,70 +443,6 @@ void Danmaku::delayAll(qint64 time)
 		}
 	}
 	emit endResetModel();
-}
-
-void Danmaku::saveToFile(QString file) const
-{
-	Q_D(const Danmaku);
-	QFile f(file);
-	f.open(QIODevice::WriteOnly | QIODevice::Text);
-	bool skip = Config::getValue("/Interface/Save/Skip", false);
-	if (file.endsWith("xml", Qt::CaseInsensitive)){
-		QXmlStreamWriter w(&f);
-		w.setAutoFormatting(true);
-		w.writeStartDocument();
-		w.writeStartElement("i");
-		w.writeStartElement("chatserver");
-		w.writeCharacters("chat." + Utils::customUrl(Utils::Bilibili));
-		w.writeEndElement();
-		w.writeStartElement("mission");
-		w.writeCharacters("0");
-		w.writeEndElement();
-		w.writeStartElement("source");
-		w.writeCharacters("k-v");
-		w.writeEndElement();
-		for (const Comment *c : d->danm){
-			if (c->blocked&&skip){
-				continue;
-			}
-			w.writeStartElement("d");
-			QStringList l;
-			l << QString::number(c->time / 1000.0) <<
-				QString::number(c->mode) <<
-				QString::number(c->font) <<
-				QString::number(c->color) <<
-				QString::number(c->date) <<
-				"0" <<
-				c->sender <<
-				"0";
-			w.writeAttribute("p", l.join(','));
-			w.writeCharacters(c->string);
-			w.writeEndElement();
-		}
-		w.writeEndElement();
-		w.writeEndDocument();
-	}
-	else{
-		QJsonArray a;
-		for (const Comment *c : d->danm){
-			if (c->blocked&&skip){
-				continue;
-			}
-			QJsonObject o;
-			QStringList l;
-			l << QString::number(c->time / 1000.0) <<
-				QString::number(c->color) <<
-				QString::number(c->mode) <<
-				QString::number(c->font) <<
-				c->sender <<
-				QString::number(c->date);
-			o["c"] = l.join(',');
-			o["m"] = c->string;
-			a.append(o);
-		}
-		f.write(QJsonDocument(a).toJson());
-	}
-	f.close();
 }
 
 qint64 Danmaku::getDuration() const

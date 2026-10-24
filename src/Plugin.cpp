@@ -35,25 +35,18 @@ QList<Plugin> Plugin::plugins;
 Plugin::Plugin(QString path)
 {
 	m_regist = (RegistPtr)QLibrary::resolve(path, "regist");
-	m_config = (ConfigPtr)QLibrary::resolve(path, "config");
 	m_string = (StringPtr)QLibrary::resolve(path, "string");
 }
 
 bool Plugin::loaded()
 {
-	return m_regist && m_config && m_string;
+	return m_regist && m_string;
 }
 
 void Plugin::regist(QObject *app)
 {
 	if (m_regist)
 		m_regist(app);
-}
-
-void Plugin::config()
-{
-	if (m_config)
-		m_config();
 }
 
 QString Plugin::string(QString query)
@@ -82,7 +75,6 @@ void Plugin::load()
 				}
 				if (success == false) {
 					lib.m_regist = nullptr;
-					lib.m_config = nullptr;
 				}
 				plugins.append(lib);
 			}

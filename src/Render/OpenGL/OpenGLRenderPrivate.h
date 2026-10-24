@@ -12,13 +12,6 @@ public:
 
 	enum Format
 	{
-		I420,
-		YV12,
-		NV12,
-		NV21,
-		RGBA,
-		BGRA,
-		ARGB,
 		Danm,
 		Stro,
 		Proj,
@@ -93,13 +86,10 @@ public:
 
 	virtual void initialize();
 	virtual void drawDanm(QPainter *painter, QRect rect) override;
-	virtual void setFormat(PFormat *format) = 0;
-	virtual void setBuffer(ABuffer *buffer) = 0;
 	virtual void onSwapped();
 	virtual bool isVisible() = 0;
 	virtual QObject *getHandle() = 0;
 	virtual void resize(QSize size) = 0;
 	virtual QSize getActualSize() = 0;
-	virtual QSize getBufferSize() = 0;
 	virtual void draw(QRect rect) = 0;
 };

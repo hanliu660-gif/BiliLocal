@@ -120,7 +120,7 @@ Menu::Menu(QWidget *parent) :
 QWidget(parent)
 {
 	setObjectName("Menu");
-	isStay = isPoped = false;
+	isPoped = false;
 	Utils::setGround(this, Qt::white);
 	ListProxyModel *fileM = new ListProxyModel(this);
 	fileC = new QCompleter(fileM, this);
@@ -254,19 +254,11 @@ bool Menu::eventFilter(QObject *o, QEvent *e)
 		if (!l){
 			return 1;
 		}
-		isStay = 1;
 		QMenu *m = l->createStandardContextMenu();
 		m->exec(((QContextMenuEvent *)e)->globalPos());
 		delete m;
-		isStay = 0;
 		return 1;
 	}
-	case QEvent::FocusIn:
-		isStay = 1;
-		return 0;
-	case QEvent::FocusOut:
-		isStay = 0;
-		return 0;
 	default:
 		return 0;
 	}
@@ -286,7 +278,6 @@ void Menu::pop()
 void Menu::push(bool force)
 {
 	if (force&&isPoped){
-		isStay = false;
 		hide();
 		isPoped = false;
 	}

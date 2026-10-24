@@ -50,10 +50,7 @@ signals:
 	void flagsChanged(Qt::WindowFlags flags);
 
 public slots:
-	void percent(double degree);
-	void warning(QString title, QString text);
 	void show();
-	void hide();
 	QWidget *widget();
 	QWindow *window();
 };

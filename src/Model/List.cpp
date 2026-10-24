@@ -81,6 +81,31 @@ namespace
 		}
 	}
 
+	// 同目录同名弹幕（录播姬默认就是这么放的），xml 优先于其它格式。
+	// Z: 是 WebDAV，每次目录列举都有可感延迟——mediaChanged 与 itemFromFile
+	// 共用这一个实现，调用方尽量把多次需求合并成一次扫描。
+	QString danmakuNearby(const QFileInfo &video)
+	{
+		QString fallback;
+		QStringList accept = Utils::getSuffix(Utils::Danmaku);
+		for (const QFileInfo &iter : video.dir().entryInfoList(QDir::Files, QDir::Name)){
+			if (iter.completeBaseName() != video.completeBaseName()){
+				continue;
+			}
+			QString suffix = iter.suffix().toLower();
+			if (!accept.contains(suffix)){
+				continue;
+			}
+			if (suffix == "xml"){
+				return iter.absoluteFilePath();
+			}
+			if (fallback.isEmpty()){
+				fallback = iter.absoluteFilePath();
+			}
+		}
+		return fallback;
+	}
+
 	QModelIndex getGroupTail(QModelIndex i)
 	{
 		for (;;){
@@ -217,16 +242,10 @@ List::List(QObject *parent)
 		// 又不会被清掉 —— 表现就是串台。改成无条件查找，找不到就清空，宁可没弹幕。
 		if (!success){
 			QFileInfo info(cur->data(FileRole).toString());
-			QStringList accept = Utils::getSuffix(Utils::Danmaku);
-			for (const QFileInfo &iter : info.dir().entryInfoList(QDir::Files, QDir::Name)){
-				QString file = iter.absoluteFilePath();
-				if (!accept.contains(iter.suffix().toLower()) ||
-					info.completeBaseName() != iter.completeBaseName()){
-					continue;
-				}
-				lApp->findObject<Load>()->loadDanmaku(file);
+			QString nearby = danmakuNearby(info);
+			if (!nearby.isEmpty()){
+				lApp->findObject<Load>()->loadDanmaku(nearby);
 				success = true;
-				break;
 			}
 			if (!success){
 				lApp->findObject<Danmaku>()->clear();
@@ -415,29 +434,6 @@ namespace
 		}
 		return 0;
 	}
-
-	// 同目录同名弹幕（录播姬默认就是这么放的），xml 优先于 json
-	QString danmakuNearby(const QFileInfo &video)
-	{
-		QString fallback;
-		QStringList accept = Utils::getSuffix(Utils::Danmaku);
-		for (const QFileInfo &iter : video.dir().entryInfoList(QDir::Files, QDir::Name)){
-			if (iter.completeBaseName() != video.completeBaseName()){
-				continue;
-			}
-			QString suffix = iter.suffix().toLower();
-			if (!accept.contains(suffix)){
-				continue;
-			}
-			if (suffix == "xml"){
-				return iter.absoluteFilePath();
-			}
-			if (fallback.isEmpty()){
-				fallback = iter.absoluteFilePath();
-			}
-		}
-		return fallback;
-	}
 }
 
 QStandardItem *List::itemFromFile(QString file, bool create)
@@ -460,25 +456,32 @@ QStandardItem *List::itemFromFile(QString file, bool create)
 		item->setData(path, FileRole);
 		item->setEditable(false); item->setDropEnabled(false);
 		appendRow(item);
-		// 把同名的 xml/json 直接挂成子项：进列表时就绑定好，
-		// 播放时（mediaChanged -> case Records）会随视频一起加载，
-		// 不用再手动拖一次弹幕。
-		// 存成 %{Path}/%{File}.<后缀> 模板（与 updateCurrent()/save() 的写法一致），
-		// 这样整个录制目录搬家后不会失效。
-		QString danmaku = danmakuNearby(info);
-		if (!danmaku.isEmpty()){
-			QStandardItem *c = new QStandardItem;
-			c->setData(QString("%{Path}/%{File}.%1").arg(QFileInfo(danmaku).suffix().toLower()), CodeRole);
-			c->setData(0, TimeRole);
-			item->appendRow(c);
-		}
+		// 单次目录列举同时收集两样东西（Z: 是 WebDAV，每次列举都有可感延迟）：
+		// 1) 同名 xml/json → 挂成子项：进列表时就绑定好，播放时
+		//    （mediaChanged -> case Records）会随视频一起加载，不用再手动拖一次。
+		//    存成 %{Path}/%{File}.<后缀> 模板（与 updateCurrent()/save() 的写法一致），
+		//    这样整个录制目录搬家后不会失效。
+		// 2) 同后缀、同系列编号的视频 → 直接建项并分组。
+		QStringList accept = Utils::getSuffix(Utils::Danmaku);
+		QString danmaku, fallback;
 		QModelIndexList indexes;
 		indexes.append(item->index());
 		for (const QFileInfo &iter : info.dir().entryInfoList(QDir::Files, QDir::Name)){
-			QString p = iter.absoluteFilePath();
-			QString c = info.completeBaseName();
-			QString o = iter.completeBaseName();
-			if (!itemFromFile(p) && info.suffix() == iter.suffix() && diffAtNum(c, o) > 0){
+			const QString o = iter.completeBaseName();
+			if (o == name){
+				const QString suffix = iter.suffix().toLower();
+				if (accept.contains(suffix)){
+					if (suffix == "xml"){
+						danmaku = iter.absoluteFilePath();
+					}
+					else if (fallback.isEmpty()){
+						fallback = iter.absoluteFilePath();
+					}
+				}
+				continue;
+			}
+			const QString p = iter.absoluteFilePath();
+			if (!itemFromFile(p) && info.suffix() == iter.suffix() && diffAtNum(name, o) > 0){
 				QStandardItem *i = new QStandardItem;
 				i->setText(o);
 				i->setData(p, FileRole);
@@ -486,6 +489,15 @@ QStandardItem *List::itemFromFile(QString file, bool create)
 				appendRow(i);
 				indexes.append(i->index());
 			}
+		}
+		if (danmaku.isEmpty()){
+			danmaku = fallback;
+		}
+		if (!danmaku.isEmpty()){
+			QStandardItem *c = new QStandardItem;
+			c->setData(QString("%{Path}/%{File}.%1").arg(QFileInfo(danmaku).suffix().toLower()), CodeRole);
+			c->setData(0, TimeRole);
+			item->appendRow(c);
 		}
 		group(indexes);
 		return item;

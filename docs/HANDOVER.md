@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> 更新时间：2026-10-24 深夜（**第六版：全量清理+现代化+已发布 GitHub，收工态**）——`master` = `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 字节。
+> 更新时间：2026-10-24 深夜（**第七版：Win11 设计语言轮**）——`master` = 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 字节。
 > 写给新会话：先读这份，再看 `src\` 的 git 历史——**每个提交都有根因和证据**。
 > 一句话：把开源播放器 BiliLocal 0.4.2（GPL-3.0，2016 年停更）改造成 64 位私人 Windows 播放器：**VLC 3 + d3d11 硬解直出（Embed 唯一输出）+ 单底栏 UI**，日常播服务器录播 + 弹幕，CPU 从 ~210% 降到 ~11%。
 >
@@ -65,6 +65,13 @@
 - 测试：`src\test\tst_parse.pro`（qmake+QtTest，7 用例全绿）——构建：`qmake ..\src\test\tst_parse.pro && mingw32-make` 后跑 `build-test
 elease\tst_parse.exe`；**顺手修了上游 ASS 颜色 bug**（\c&H…& 的尾 & 使 toInt 得 0 → 带色 ASS 弹幕全丢；现为 chop+字节序转换）
 - 跳过：CMake 迁移（本机无 cmake，不交付未验证的构建系统）
+### 2.4 Win11 设计语言轮（32c6597…473ba62，2026-10-25 凌晨）
+- **全局 QSS 重写（双主题）**：Win11 分层表面（深：窗 #202020/卡 #2b2b2b/输入 #2f2f2f；浅：#f3f3f3/#ffffff）、8px 卡片圆角、强调色 #4cc2ff(深)/#0067c0(浅)+黑字选中态、Segoe UI Variable→YaHei UI 字体栈；新增对象名钩子 `Card/CardTitle/CardNote/SepLine/NavList` 供设置页使用；palette 同步对齐（**业务绘制一律走 palette 取色，别写死颜色**）
+- **Prefer 重排**：顶部页签 → 左导航列表+右 QStackedWidget；6 页并 5 页（Thanks+License 合并进关于）；GroupBox 单输入行 → 卡片内"说明左/控件右"行式布局；裸输入框类型化（倍率/跳转秒/密度上限=SpinBox 带后缀，密度 0 显示"不限"；**速度/存活时间保留可编辑下拉预设——值是含 %{width} 的表达式字符串，键没变**）；`/Interface/Size` 的"尾随空格=锁定"暗约定显式化为「锁定」复选框（Home::closeEvent 判定逻辑未动）；Shield 导入/导出从纯右键升级为常规按钮。所有配置键、信号、重启/重解析逻辑零改动
+- **Editor**：Track 绘制调色板化（原硬编码灰底白条在深色下刺眼）；空池提示/滚动条描边交给主题；列表下加 合并/归类/分离/删除 按钮排（右键和快捷键保留）
+- **测试基建**：`BILILOCAL_UI_TEST=prefer/editor/both`（与 EWindow 钩子同一编译开关）进程内自动开对话框巡览，Prefer 巡览时窗口标题带页码「设置 - N」；**外部投递点击对模态弹窗无效（Qt 按真实光标路由）——验证对话框必须走进程内钩子**；Win32 GetWindowTextW 读 Qt 标题会是乱码，用 UIA Name 读（验证脚本样例在 %TEMP%\verify_ui3.ps1）
+- **i18n**：新增 13 串全译（zh_CN/zh_TW 各 164/164），qm 已部署 dist
+- 验证：深/浅两主题 × Prefer 五页 + Editor 共 12 张截图逐张人验（渲染、译名、控件状态全对，六图六哈希证明巡览真实切换）；exe 948,224 → 964,608 字节
 
 ## 3. 怎么用（用户视角）
 

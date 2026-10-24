@@ -854,52 +854,55 @@ void Home::showContextMenu(QPoint p)
 			});
 			top.addSeparator();
 		}
-		top.addActions(info->actions());
-		top.addAction(menu->findChild<QAction *>("File"));
-		top.addAction(listA);
-		QMenu vid(tr("Video"), this);
-		vid.setFixedWidth(top.sizeHint().width());
-		addTrack(&vid, Utils::Video);
-		vid.addMenu(spd);
-		vid.addAction(findChild<QAction *>("Rest"));
-		top.addMenu(&vid);
-		QMenu aud(tr("Audio"), this);
-		aud.setFixedWidth(top.sizeHint().width());
-		addTrack(&aud, Utils::Audio);
-		addDelay(&aud, Utils::Audio, 100);
-		aud.addAction(findChild<QAction *>("VoUp"));
-		aud.addAction(findChild<QAction *>("VoDn"));
-		top.addMenu(&aud);
-		QMenu sub(tr("Subtitle"), this);
-		sub.setFixedWidth(top.sizeHint().width());
-		addTrack(&sub, Utils::Subtitle);
-		addDelay(&sub, Utils::Subtitle, 500);
-		connect(sub.addAction(tr("Load Subtitle")), &QAction::triggered, [this]() {
-			QFileInfo info(aplayer->getMedia());
-			QString file = QFileDialog::getOpenFileName(this,
-				tr("Open File"),
-				info.absolutePath(),
-				tr("Subtitle files (%1);;All files (*.*)").arg(Utils::getSuffix(Utils::Subtitle, "*.%1").join(' ')));
-			if (!file.isEmpty()) {
-				aplayer->addSubtitle(file);
+	// 点在弹幕上:这是弹幕专属菜单,只保留信息/复制/屏蔽;通用功能只在空白处右键出现
+	if (cur == nullptr) {
+			top.addActions(info->actions());
+			top.addAction(menu->findChild<QAction *>("File"));
+			top.addAction(listA);
+			QMenu vid(tr("Video"), this);
+			vid.setFixedWidth(top.sizeHint().width());
+			addTrack(&vid, Utils::Video);
+			vid.addMenu(spd);
+			vid.addAction(findChild<QAction *>("Rest"));
+			top.addMenu(&vid);
+			QMenu aud(tr("Audio"), this);
+			aud.setFixedWidth(top.sizeHint().width());
+			addTrack(&aud, Utils::Audio);
+			addDelay(&aud, Utils::Audio, 100);
+			aud.addAction(findChild<QAction *>("VoUp"));
+			aud.addAction(findChild<QAction *>("VoDn"));
+			top.addMenu(&aud);
+			QMenu sub(tr("Subtitle"), this);
+			sub.setFixedWidth(top.sizeHint().width());
+			addTrack(&sub, Utils::Subtitle);
+			addDelay(&sub, Utils::Subtitle, 500);
+			connect(sub.addAction(tr("Load Subtitle")), &QAction::triggered, [this]() {
+				QFileInfo info(aplayer->getMedia());
+				QString file = QFileDialog::getOpenFileName(this,
+					tr("Open File"),
+					info.absolutePath(),
+					tr("Subtitle files (%1);;All files (*.*)").arg(Utils::getSuffix(Utils::Subtitle, "*.%1").join(' ')));
+				if (!file.isEmpty()) {
+					aplayer->addSubtitle(file);
+				}
+			});
+			top.addMenu(&sub);
+			QMenu dmk(tr("Danmaku"), this);
+			dmk.setFixedWidth(top.sizeHint().width());
+			QMenu dts(tr("Track"), &dmk);
+			for (const Record r : danmaku->getPool()) {
+				dts.addAction(r.string);
 			}
-		});
-		top.addMenu(&sub);
-		QMenu dmk(tr("Danmaku"), this);
-		dmk.setFixedWidth(top.sizeHint().width());
-		QMenu dts(tr("Track"), &dmk);
-		for (const Record r : danmaku->getPool()) {
-			dts.addAction(r.string);
-		}
-		dts.setEnabled(!dts.isEmpty());
-		dmk.addMenu(&dts);
-		connect(dmk.addAction(tr("Sync")), &QAction::triggered, [this]() {
-			Editor::exec(this, 2);
-		});
-		QAction *loadA = menu->findChild<QAction *>("Danm");
-		dmk.addAction(toggA);
-		dmk.addAction(tr("Load"), loadA, SLOT(trigger()), loadA->shortcut())->setEnabled(loadA->isEnabled());
-		top.addMenu(&dmk);
+			dts.setEnabled(!dts.isEmpty());
+			dmk.addMenu(&dts);
+			connect(dmk.addAction(tr("Sync")), &QAction::triggered, [this]() {
+				Editor::exec(this, 2);
+			});
+			QAction *loadA = menu->findChild<QAction *>("Danm");
+			dmk.addAction(toggA);
+			dmk.addAction(tr("Load"), loadA, SLOT(trigger()), loadA->shortcut())->setEnabled(loadA->isEnabled());
+			top.addMenu(&dmk);
+	}
 		top.addAction(confA);
 		top.addAction(quitA);
 		// 菜单开着时钉住冻结：嵌套事件循环里过期定时器还会跑，

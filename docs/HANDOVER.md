@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> 更新时间：2026-10-25（**第十二版：交互打磨+设置审计轮（归档版）**；同日校正版次哈希、目录表与工具数）——`master` = 最新提交（`git log -1 --oneline`，2026-10-25 05:30 之后全是纯文档提交）；**最后一个代码提交 = `a5f95fe`**（警告清理 42→4）← `a9fbcb3`（悬停冻结持久化）← `63f9a4b`（设置审计）← 8d9c8ec（悬停冻结+发送者数据）← 44fbb3e（底栏目录记忆补修）← 7f8685a（瘦身）← 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 → 925,696 → 943,616 字节；dist 358M → 176M（2026-10-25 裁定不再瘦身，`lua\` 与 `opengl32sw.dll` 保留）。
+> 更新时间：2026-10-25（**第十二版：交互打磨+设置审计轮（归档版）**；同日校正版次哈希、目录表与工具数）——`master` = 最新提交（`git log -1 --oneline`，2026-10-25 05:30 之后全是纯文档提交）；**最后一个代码提交 = `81aab8f`**（Danmaku 背景角色穿透修复）← `a9fbcb3`（悬停冻结持久化）← `63f9a4b`（设置审计）← 8d9c8ec（悬停冻结+发送者数据）← 44fbb3e（底栏目录记忆补修）← 7f8685a（瘦身）← 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 → 925,696 → 943,616 字节；dist 358M → 176M（2026-10-25 裁定不再瘦身，`lua\` 与 `opengl32sw.dll` 保留）。
 > 写给新会话：先读这份，再看 `src\` 的 git 历史——**每个提交都有根因和证据**。
 > 一句话：把开源播放器 BiliLocal 0.4.2（GPL-3.0，2016 年停更）改造成 64 位私人 Windows 播放器：**VLC 3 + d3d11 硬解直出（Embed 唯一输出）+ 单底栏 UI**，日常播服务器录播 + 弹幕，CPU 从 ~210% 降到 ~11%。
 >
@@ -43,8 +43,8 @@
 
 ## 2. 当前状态
 
-- **exe**：`dist\BiliLocal.exe`，943,616 字节，SHA256 `F970F1F1…`（构建自 `a5f95fe`，2026-10-25 06:05 部署；**构建确定性已两证**：①与 `build\release\BiliLocal.exe` 逐字节相同；②同一份源码在空目录重编，产物只差 4 个字节——PE 头的时间戳/校验和，代码段完全一致 ⇒ dist 与源码一一对应，没有"改了忘重编"的死角）
-- **源码**：`master` = 最新提交（**从 2026-10-25 05:30 起改为不写死文档哈希**——写死的那个值在提交的瞬间就过期了，当前值请用 `git log -1 --oneline` 取）；**最后一个代码提交 = `a5f95fe`**（警告清理 42→4）← `a9fbcb3`（悬停冻结持久化）← `63f9a4b`（设置审计）← `8d9c8ec`（悬停冻结+发送者数据）← `44fbb3e`（底栏目录记忆补修）← `7f8685a`（瘦身轮）← `473ba62`（Win11 UI 轮）← `3f86f74`（VLC 3.0.24）← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`；上游 = `9d1cb05`；回滚点 tag `v0.5.0-vmem` = `46b68b9`
+- **exe**：`dist\BiliLocal.exe`，943,616 字节，SHA256 `E9A9967D…`（构建自 `81aab8f`，2026-10-25 06:14 部署；**构建确定性已两证**：①与 `build\release\BiliLocal.exe` 逐字节相同；②同一份源码在空目录重编，产物只差 4 个字节——PE 头的时间戳/校验和，代码段完全一致 ⇒ dist 与源码一一对应，没有"改了忘重编"的死角）
+- **源码**：`master` = 最新提交（**从 2026-10-25 05:30 起改为不写死文档哈希**——写死的那个值在提交的瞬间就过期了，当前值请用 `git log -1 --oneline` 取）；**最后一个代码提交 = `81aab8f`**（Danmaku 背景角色穿透修复）← `a9fbcb3`（悬停冻结持久化）← `63f9a4b`（设置审计）← `8d9c8ec`（悬停冻结+发送者数据）← `44fbb3e`（底栏目录记忆补修）← `7f8685a`（瘦身轮）← `473ba62`（Win11 UI 轮）← `3f86f74`（VLC 3.0.24）← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`；上游 = `9d1cb05`；回滚点 tag `v0.5.0-vmem` = `46b68b9`
 - **运行库**：VLC **3.0.24**（FFmpeg 8.1.2，d3d11 直出；升级缘由见提交 3f86f74）；**dist\plugins 混住着 Qt 平台插件（platforms/imageformats/mediaservice/styles），整目录替换 VLC 时必须把这四个目录合并到顶层，否则 Qt 起不来**（升级/裁剪流程见第 9 节）；dist 只带 exe 实际导入的 5 个 Qt DLL（Concurrent/Core/Gui/Network/Widgets）
 - **配置**：`Output=Embed` 已成唯一输出（键保留但代码不再读取）；`Immediate=True`；`HardwareDecode` 已无消费者（d3d11 固定开启，Arguments 手写 `--avcodec-hw=`/`--vout=` 仍可覆盖）
 - **i18n**：源码全英文串，中文走 `dist\locale\zh_CN\bililocal.qm`（187/187 全译，含繁体）；改 UI 文案后记得 lupdate→补译→lrelease→部署 qm
@@ -52,12 +52,12 @@
 
 ### 2.0 上一会话纪要（2026-10-25 归档,写给接棒的会话）
 
-- **已交付并推送（全部在 github/master 上，最后一个代码提交是 `a5f95fe`）**：悬停冻结单条弹幕(静止持久)/右键弹幕数据块(全文/用户名+哈希/时间/位置/真实同源计数)/屏蔽发送者按 hash 真实生效/屏蔽页双列重构/弹幕专属右键菜单/菜单对齐与文案翻转/设置审计轮(见 §2.1 沿革)/文件面板「清空」
+- **已交付并推送（全部在 github/master 上，最后一个代码提交是 `81aab8f`）**：悬停冻结单条弹幕(静止持久)/右键弹幕数据块(全文/用户名+哈希/时间/位置/真实同源计数)/屏蔽发送者按 hash 真实生效/屏蔽页双列重构/弹幕专属右键菜单/菜单对齐与文案翻转/设置审计轮(见 §2.1 沿革)/文件面板「清空」
 - **明确放弃,勿重做**：底栏「弹幕·开」按钮的右键菜单(a4b5acf)——三层窗口结构盲区,详见 §2.1 与 §6 23-25
 - **未决**：无（2026-10-25 裁定：dist 不再瘦身、Z: 长时段观察结案，见 §10 末尾）
 - **验证分工（用户明确要求）**：功能/交互的验收测试交给用户本人做,自动化只负责日志与时序取证;最后两轮(菜单对齐+设置审计)为自测通过,未经用户逐项验收
 - 单测 9/9（2026-10-25 复跑 `build-test\release\tst_parse.exe` 确认：7 用例 + init/cleanup = 9 passed）；i18n 187/187（`zh_CN.ts` 194 条 message − 7 条 vanished，0 unfinished）
-- **编译警告：42 → 4**（2026-10-25 清理轮 `a5f95fe`；空目录全量重建实测 42 条、去重 10 个位置）：已清 6 个位置——`Config.h:44` 的 `fromJsonValue<QVariant>` defined-but-unused **29 条**（匿名命名空间里的头文件模板，每个 TU 各得一份；同文件 QJsonArray/QJsonObject 两个特化早有 `[[maybe_unused]]`，QVariant 那个漏了，补一行全清）、`endl` 3 处（Prefer.cpp:668/670/673，`QTextStreamFunctions::endl`→`Qt::endl`）、`QWheelEvent::globalPos` 3 处（Home.cpp:695/700 → `globalPosition().toPoint()`；EmbedPrivate.cpp:166 → `globalPosition()`）。**剩下 4 条是刻意留的**：`-Wimplicit-fallthrough` 2 条（`Danmaku.cpp:115` 内层 switch 的 default 落到 ModeRole——本身无害，但它正是「模式 1-6 设背景色无效」的成因，改它就是改行为，留给后续专门处理；`Running.cpp:276` 的 `case 1` 落到 `case 0` 属有意为之）、`libvlc_video_set_subtitle_file` 2 条（VPlayer.cpp:462，VLC 3 标弃用但照常可用，换 VLC 4 才必须改）
+- **编译警告：42 → 3**（2026-10-25 连清两轮：`a5f95fe` 清 6 个位置、`81aab8f` 清最后 1 个）：已清 7 个位置——`Config.h:44` 的 `fromJsonValue<QVariant>` defined-but-unused **29 条**（匿名命名空间里的头文件模板，每个 TU 各得一份；同文件 QJsonArray/QJsonObject 两个特化早有 `[[maybe_unused]]`，QVariant 那个漏了，补一行全清）、`endl` 3 处（Prefer.cpp:668/670/673，`QTextStreamFunctions::endl`→`Qt::endl`）、`QWheelEvent::globalPos` 3 处（Home.cpp:695/700 → `globalPosition().toPoint()`；EmbedPrivate.cpp:166 → `globalPosition()`）、`Danmaku.cpp:114` 的 fall-through 1 条（内层 switch 只认模式 7/8 就穿透到 `case ModeRole`，普通弹幕取 `BackgroundRole` 拿到的是 mode 整数——**实测这不是你能看见的 bug**：`QVariant(int).canConvert<QBrush>()==false`、`QColor→QBrush==true`，视图把整数当「无背景」直接忽略；但它确实违反角色契约，现在显式 `return QVariant()`）。**剩下 3 条是刻意留的**：`-Wimplicit-fallthrough` 1 条（`Running.cpp:276` 的 `case 1` 落到 `case 0`，入队本来就该两模式同路）、`libvlc_video_set_subtitle_file` 2 条（VPlayer.cpp:462，VLC 3 标弃用但照常可用，换 VLC 4 才必须改）
 
 ### 2.1 版本沿革
 
@@ -80,6 +80,7 @@
 | a4b5acf | **放弃底栏弹幕右键菜单**(用户决定,勿重做):进程内事件合成+菜单弹出全通,但真实点击始终不出现——覆盖层/原生窗/弹层三层焦点与显示盲区;相关坑见 §6 23-25 |
 | （设置审计轮） | 全库配置键交叉审计:删死项(版本信息复选框/无框窗口+Home 拖窗残留)、补漏(播放页「播放行为」卡=断点续播/自动连播/循环/跳转间隔挪入;弹幕外观加轨道间距 /Danmaku/Grating)、Shield 类型加 tooltip、关于页加构建信息卡(日期/Qt/libVLC)、文件面板加「清空」(只清播放日期,文件/断点/绑定保留)。注意:「防挡字幕」就是 /Danmaku/Protect,面板已有入口故未重复 |
 | `a5f95fe` | 警告清理 42→4：`Config.h` 的 `QVariant` 特化补 `[[maybe_unused]]`(清掉 29 条 defined-but-unused)、`endl`→`Qt::endl`(3 处)、`globalPos()`→`globalPosition()`(3 处)；余 4 条(fallthrough ×2、VLC 3 弃用 API ×2)刻意保留，理由写在 §2.0 |
+| `81aab8f` | Danmaku 的 `BackgroundRole` 不再穿透到 `ModeRole`（普通弹幕曾把 mode 整数当背景刷返回；Qt 不认 int→QBrush，所以没有可见变化，属契约修复），警告 4→3 |
 
 ## 3. 怎么用（用户视角）
 
@@ -146,6 +147,7 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 27. **录播姬 raw 属性里的 JSON 是字符串套字符串**：内层引号写作 \\&quot; 带反斜杠——按 &quot; 字面量搜索永不命中;且合成单测样本若手写漏了反斜杠会**假绿**。用正则容忍可选反斜杠,并拿真实弹幕字节做单测
 28. **MSYS2 的 `sed -i` 会把 CRLF 悄悄变成 LF**（Windows 文本模式写回）：改这份文档这类 CRLF 文件时，要么用编辑工具，要么 `sed -i` 之后立刻 `file` 检查换行符再补 CR。源码走 `core.autocrlf=true` 会被归一，无所谓；但工程根的 `.md` **不在 git 里**（仓库是 `src\`），被改成 LF 没人替你归一。
 
+29. **编辑工具会吃掉 UTF-8 BOM**：`Danmaku.cpp` 只改一行，文件头的 BOM 就没了，而 `tools\fix-bom.ps1` 在当前 ExecutionPolicy 下跑不起来。手补：`printf '\xef\xbb\xbf' > t && cat t f > f2 && mv f2 f`；补完用 `git ls-files` 全量比对每个文件的前三个字节与 HEAD blob（本次审计只发现 `.gitignore` 的 CRLF/LF 差异，无 BOM 失配）。
 
 ## 7. 已知限制（不是待办，是设计取舍）
 

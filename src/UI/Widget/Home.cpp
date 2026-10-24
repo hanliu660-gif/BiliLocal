@@ -483,6 +483,25 @@ Home::Home(QWidget *parent)
 
 	setWindowFlags();
 	setGeometry(QSize(), true);
+
+#ifdef BILILOCAL_EMBED_TEST
+	// 自动化验证钩子（与 EWindow 注入钩子同一编译开关、独立环境变量）：
+	// BILILOCAL_UI_TEST=prefer/editor/both 时定时自动打开对应对话框，供外部脚本
+	// 截图验证（外部对 Qt 弹窗投递消息/UIA 动作均不可靠，只能进程内触发）。
+	// 正常使用不设此变量，零影响。
+	if (const QString uiTest = qEnvironmentVariable("BILILOCAL_UI_TEST"); !uiTest.isEmpty()){
+		QTimer::singleShot(1500, this, [this, uiTest]() {
+			if (uiTest == QLatin1String("editor")){
+				Editor::exec(this);
+				return;
+			}
+			Prefer::exec(this);
+			if (uiTest == QLatin1String("both")){
+				Editor::exec(this);
+			}
+		});
+	}
+#endif
 }
 
 void Home::warning(QString title, QString text)

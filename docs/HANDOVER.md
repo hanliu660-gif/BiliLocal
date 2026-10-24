@@ -68,6 +68,7 @@
 | （悬停轮补修） | 菜单弹幕全文换行可选中；uid 脱敏显示「匿名」；匿名时禁用「屏蔽发送者」（防 u=0 清空全池） |
 | `ee8f8b2` | 录播姬 2.x 身份提取:user 属性脱敏名→Comment.nick,raw 里 user_hash→sender（录制内稳定标识）
 | （弹幕专属菜单补修） | 专属化把四个子菜单的栈对象关进了 if 作用域,exec 在作用域外——子菜单析构后菜单项凭空消失;声明提到函数作用域、dts 改堆分配。教训:**包 if 时检查作用域内栈对象的寿命是否覆盖 exec** |
+| a4b5acf | **放弃底栏弹幕右键**(用户决定):进程内事件合成+菜单弹出全通,但真实点击场景始终不出现——覆盖层/原生窗口/菜单弹层三者之间的焦点与显示链路存在无法从外部诊断的盲区。功能整体回滚,只留坑记录 |
 | （底栏弹幕右键补修二） | 「还是没变化」的另一半根因:childAt 不保证递归到叶子——右键事件被投给 Info 容器本体而非内部按钮;路由下沉到最深子控件。另:测试钩子按"文本首字"找按钮命中了 Menu 面板的同名前缀按钮,改按 policy==CustomContextMenu 定位(全树唯一) |
 | （底栏弹幕右键补修） | WM_CONTEXTMENU 落在覆盖层自己头上,按钮的 customContextMenuRequested 不触发——QWindow 系的 Leave/ContextMenu 都要走 event() 虚函数(leaveEvent/contextMenuEvent 这些 QWidget 名字在 QOpenGLWindow 上不存在,override 编译报错) |
 | （底栏弹幕右键） | 底栏「弹幕·开」按钮右键直达弹幕功能(开关/轨道/同步/加载),不必绕视频右键;复用 Togg/Danm 动作与池,零新串 |
@@ -161,7 +162,7 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 **进程内自动化验证钩子**（比外部投递消息可靠——后者会被 Qt 按真实光标位置路由而失准）：
 - `BILILOCAL_EMBED_TEST=1`：EWindow 每 300ms 注入鼠标事件（第 30/50 拍双击验证全屏闭环、第 35 拍单击验证暂停），配 `msg.log` 判读
 - `BILILOCAL_UI_TEST=prefer/editor/both`：自动打开 Prefer（逐页巡览，标题带页码「设置 - N」）与 Editor——**验证对话框用这个**，配 `tools\verify_ui3.ps1`
-- `BILILOCAL_UI_TEST` 同源的悬停验证：钩子每 50 拍循环「扫掠→(600,320) 压 4 拍→右键」，起播后自动跳 10%（片头弹幕密）；旧闭环拍(双击全屏/单击暂停)需另加 `BILILOCAL_EMBED_CLICK=1` 才启用——**不加的话它们会把视频反复切暂停，干扰悬停测试**；`msg.log` 找 `hover: freeze/release` 判读
+- 悬停验证：钩子每 60 拍循环「扫掠→(600,320) 压 14 拍(验证静止不解冻)→第 56 拍右键」，起播后自动跳 10%（片头弹幕密）；旧闭环拍(双击全屏/单击暂停)需另加 `BILILOCAL_EMBED_CLICK=1` 才启用；`msg.log` 找 `hover: freeze/release` 判读
 
 **PS 5.1 铁律**：一律 `-NoProfile -ExecutionPolicy Bypass -File` 调用；脚本存 UTF-8 带 BOM、**不写中文字面量**；`$Pid` 只读、`Move/Cli/lp` 是别名；`Start-Process -RedirectStandardError` 别配 `-Wait`；子进程会继承 stdout 管道（给 `UseShellExecute=$false` 的启动加 stdio 重定向，否则调用方假死）。
 

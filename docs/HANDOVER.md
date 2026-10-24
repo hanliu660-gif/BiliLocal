@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> 更新时间：2026-10-24 深夜（**第七版：Win11 设计语言轮**）——`master` = 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 字节。
+> 更新时间：2026-10-24 深夜（**第八版：体检瘦身轮**）——`master` = 7f8685a（瘦身）← 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 → 925,696 字节；dist 358M → 176M。
 > 写给新会话：先读这份，再看 `src\` 的 git 历史——**每个提交都有根因和证据**。
 > 一句话：把开源播放器 BiliLocal 0.4.2（GPL-3.0，2016 年停更）改造成 64 位私人 Windows 播放器：**VLC 3 + d3d11 硬解直出（Embed 唯一输出）+ 单底栏 UI**，日常播服务器录播 + 弹幕，CPU 从 ~210% 降到 ~11%。
 >
@@ -72,6 +72,13 @@ elease\tst_parse.exe`；**顺手修了上游 ASS 颜色 bug**（\c&H…& 的尾 
 - **测试基建**：`BILILOCAL_UI_TEST=prefer/editor/both`（与 EWindow 钩子同一编译开关）进程内自动开对话框巡览，Prefer 巡览时窗口标题带页码「设置 - N」；**外部投递点击对模态弹窗无效（Qt 按真实光标路由）——验证对话框必须走进程内钩子**；Win32 GetWindowTextW 读 Qt 标题会是乱码，用 UIA Name 读（验证脚本样例在 %TEMP%\verify_ui3.ps1）
 - **i18n**：新增 13 串全译（zh_CN/zh_TW 各 164/164），qm 已部署 dist
 - 验证：深/浅两主题 × Prefer 五页 + Editor 共 12 张截图逐张人验（渲染、译名、控件状态全对，六图六哈希证明巡览真实切换）；exe 948,224 → 964,608 字节
+### 2.5 体检+瘦身轮（0c4f7b7…7f8685a，2026-10-25 凌晨）
+- **dist 358M → 176M**：升级 3.0.24 时旧 3.0.21 插件树残留在 `dist\plugins\` 顶层、新树被放进了嵌套的 `plugins\plugins\`——改名验证确认嵌套树是死重（142M 已删）；再裁掉 gui/stream_out/access_output/services_discovery/visualization/mux/keystore/control/stream_filter/stream_extractor/video_filter（BiliLocal 只用 libvlc 核心，VLC 自带 GUI 等全无用），裁后实测播放正常（截图 24 万独立色）。**整目录替换 VLC 时记得沿用「先验证再删」流程，Qt 四目录(platforms/imageformats/mediaservice/styles)必须保留在顶层**
+- **插件机制+网络栈整体移除**：Plugin::load 每次启动对 dist\plugins 的 758 个 DLL 逐个 LoadLibrary 探测（纯浪费）；联网功能死后 Load 的网络队列(AccessPrivate 167 行)、Running::unrecognizedComment（零接收者）全部不可达。已删 Plugin.*、AccessPrivate.h；**Load 重写为纯本地加载器**（读文件→剥BOM→嗅探→同步解析→入池，文件间用排队槽让步不冻结界面），`getHead()` 改 `busy()`；QtNetwork 保留（QLocalSocket 单实例在 Qt5 属于该模块，已在 .pro 注明）。exe 964,608 → 925,696 字节
+- **List 目录扫描合并**：打开一个视频原来最多 3 次全目录列举（itemFromFile 的 danmakuNearby+分组扫描、mediaChanged 兜底再扫）——Z: 是 WebDAV，每次列举都有可感延迟。现合并为 1 次（danmakuNearby 上移复用；itemFromFile 单次列举同时收集同名弹幕与同系列分组）
+- **小项**：QFontDatabase 字体枚举进程内缓存（Utils::fontFamilies）；Config.h 未用模板特化加 [[maybe_unused]]（MinGW 8.1 要求放 template<> 之后）；单实例 waitForReadyRead 加 500ms 显式超时
+- **踩坑记录**：①invokeMethod 按名调用要求目标是槽——`private slots:` 而非普通私有方法；②Danmaku::append 按 source 路径去重，「同一 xml 传两遍」造不出 pool=2，测 Editor 自动弹出要用两个不同路径的文件；③dequeue 时机：任务在 processNext 开头取出，尾部残留 dequeue 会吞掉下一任务（已修+加了 Load: processed 日志）
+- 验证：双不同源 xml → 两条 Load: processed 日志 + pool=2 + Editor 自动弹出；单实例二次启动进程数保持 1 且文件转发加载；tst_parse 7/7；UI 巡览 6 图 6 哈希；Z: 续播截图正常
 
 ## 3. 怎么用（用户视角）
 

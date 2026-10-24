@@ -217,8 +217,16 @@ int main(int argc, char *argv[])
 	new Local(&a);
 	Plugin::load();
 	lApp->findObject<Interface>()->show();
-	for (const QString iter : commandLineArguments()) {
+	const QStringList &args = commandLineArguments();
+	for (const QString iter : args) {
 		lApp->tryLocal(iter);
+	}
+	// 无参数启动 + 开启自动续播：直接接着最近一条没看完的播，免去每次找目录
+	if (args.isEmpty() && Config::getValue("/Player/AutoResume", true)){
+		QString target = lApp->findObject<List>()->resumeCandidate();
+		if (!target.isEmpty()){
+			lApp->tryLocal(target);
+		}
 	}
 #if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS)
 	QLocalServer *server = nullptr;

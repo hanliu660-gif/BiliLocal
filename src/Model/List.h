@@ -64,6 +64,9 @@ private:
 
 public slots:
 	QString defaultPath(int type);
+	// 启动自动续播的候选：按播放日期倒序找第一条「文件还在且有断点」的记录；
+	// 都没有断点则回落到最新一条。用于免去找目录的开箱即播
+	QString resumeCandidate();
 	QStandardItem *getCurrent(){ return cur; }
 	QStandardItem *itemFromFile(QString file, bool create = false);
 	bool finished();

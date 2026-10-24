@@ -132,12 +132,16 @@ QWidget(parent)
 	danmA->setObjectName("Danm");
 	danmA->setShortcut(Config::getValue("/Shortcut/Danm", QString()));
 	connect(fileA, &QAction::triggered, [this](){
+		// 上次打开过的目录优先，免得每次都在文件树里重新导航
+		const QString dir = Config::getValue("/Interface/OpenDir",
+			lApp->findObject<List>()->defaultPath(Utils::Video | Utils::Audio));
 		QString file = QFileDialog::getOpenFileName(
 			lApp->findObject<Interface>()->widget(),
 			tr("Open File"),
-			lApp->findObject<List>()->defaultPath(Utils::Video | Utils::Audio),
+			dir,
 			tr("Media files (%1);;All files (*.*)").arg(Utils::getSuffix(Utils::Video | Utils::Audio, "*.%1").join(' ')));
 		if (!file.isEmpty()){
+			Config::setValue("/Interface/OpenDir", QFileInfo(file).absolutePath());
 			lApp->findObject<APlayer>()->stop();
 			lApp->findObject<APlayer>()->setMedia(file);
 		}

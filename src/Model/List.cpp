@@ -347,6 +347,34 @@ void List::setRelated(const QModelIndexList &indexes, int reason)
 	item(i)->setIcon(icons[2]);
 }
 
+QString List::resumeCandidate()
+{
+	// 播放日期倒序：优先「有断点(>10s)且文件存在」；全无断点则最新一条存在的
+	QModelIndexList items;
+	for (int i = 0; i < rowCount(); ++i){
+		if (item(i)->data(DateRole).toDateTime().isValid()){
+			items.append(index(i, 0));
+		}
+	}
+	std::sort(items.begin(), items.end(), [this](const QModelIndex &f, const QModelIndex &s){
+		return f.data(DateRole).toDateTime() > s.data(DateRole).toDateTime();
+	});
+	const QModelIndex *fallback = nullptr;
+	for (const QModelIndex &i : items){
+		const QString file = i.data(FileRole).toString();
+		if (!QFile::exists(file)){
+			continue;
+		}
+		if (i.data(TimeRole).toLongLong() > 10000){
+			return file;
+		}
+		if (!fallback){
+			fallback = &i;
+		}
+	}
+	return fallback ? fallback->data(FileRole).toString() : QString();
+}
+
 QString List::defaultPath(int type)
 {
 	QStandardItem *item = cur;

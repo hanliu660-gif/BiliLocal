@@ -143,6 +143,13 @@ QDialog(parent)
 			Config::setValue("/Player/Immediate", state == Qt::Checked);
 		});
 		c->addWidget(load[3], 1, 1);
+		// 启动即续播：免去找目录，双击 exe 直接接着最近一条没看完的播
+		load[4] = new QCheckBox(tr("resume on startup"), widget[0]);
+		load[4]->setChecked(Config::getValue("/Player/AutoResume", true));
+		connect(load[4], &QCheckBox::stateChanged, [](int state){
+			Config::setValue("/Player/AutoResume", state == Qt::Checked);
+		});
+		c->addWidget(load[4], 2, 0, 1, 2);
 		box[0] = new QGroupBox(tr("loading"), widget[0]);
 		box[0]->setLayout(c);
 		list->addWidget(box[0]);

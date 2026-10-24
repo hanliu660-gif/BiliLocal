@@ -43,7 +43,7 @@ namespace UI
 
 		//Playing
 		QGroupBox *box[7];
-		QCheckBox *load[4];
+		QCheckBox *load[5];
 		QCheckBox *fitted[2];
 		QLineEdit *factor;
 		QCheckBox *bold;

@@ -790,6 +790,12 @@ void Home::showContextMenu(QPoint p)
 	if (flag) {
 		QMenu top(this);
 		const Comment *cur = running->commentAt(p);
+		// 子菜单声明必须在函数作用域(exec 在 if 外),否则 if 闭合时
+		// 栈对象析构,exec 时子菜单已销毁、菜单项凭空消失
+		QMenu vid(tr("Video"), this);
+		QMenu aud(tr("Audio"), this);
+		QMenu sub(tr("Subtitle"), this);
+		QMenu dmk(tr("Danmaku"), this);
 		if (cur) {
 			// 弹幕全文：QMenu 自带省略号看不全,换 QLabel 换行展示 + 可选中复制
 			QLabel *title = new QLabel(cur->string, &top);
@@ -859,20 +865,17 @@ void Home::showContextMenu(QPoint p)
 			top.addActions(info->actions());
 			top.addAction(menu->findChild<QAction *>("File"));
 			top.addAction(listA);
-			QMenu vid(tr("Video"), this);
 			vid.setFixedWidth(top.sizeHint().width());
 			addTrack(&vid, Utils::Video);
 			vid.addMenu(spd);
 			vid.addAction(findChild<QAction *>("Rest"));
 			top.addMenu(&vid);
-			QMenu aud(tr("Audio"), this);
 			aud.setFixedWidth(top.sizeHint().width());
 			addTrack(&aud, Utils::Audio);
 			addDelay(&aud, Utils::Audio, 100);
 			aud.addAction(findChild<QAction *>("VoUp"));
 			aud.addAction(findChild<QAction *>("VoDn"));
 			top.addMenu(&aud);
-			QMenu sub(tr("Subtitle"), this);
 			sub.setFixedWidth(top.sizeHint().width());
 			addTrack(&sub, Utils::Subtitle);
 			addDelay(&sub, Utils::Subtitle, 500);
@@ -887,14 +890,13 @@ void Home::showContextMenu(QPoint p)
 				}
 			});
 			top.addMenu(&sub);
-			QMenu dmk(tr("Danmaku"), this);
 			dmk.setFixedWidth(top.sizeHint().width());
-			QMenu dts(tr("Track"), &dmk);
+			QMenu *dts = new QMenu(tr("Track"), &dmk);	// 堆分配:同作用域陷阱
 			for (const Record r : danmaku->getPool()) {
-				dts.addAction(r.string);
+				dts->addAction(r.string);
 			}
-			dts.setEnabled(!dts.isEmpty());
-			dmk.addMenu(&dts);
+			dts->setEnabled(!dts->isEmpty());
+			dmk.addMenu(dts);
 			connect(dmk.addAction(tr("Sync")), &QAction::triggered, [this]() {
 				Editor::exec(this, 2);
 			});

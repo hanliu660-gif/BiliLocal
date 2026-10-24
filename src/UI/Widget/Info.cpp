@@ -30,8 +30,10 @@
 #include "../Interface.h"
 #include "../../Config.h"
 #include "../../Local.h"
+#include "../../Utils.h"
 #include "../../Player/APlayer.h"
 #include "../../Model/Shield.h"
+#include "../../Model/List.h"
 
 using namespace UI;
 
@@ -174,11 +176,16 @@ QWidget(parent)
 	addAction(playA);
 	connect(playA, &QAction::triggered, lApp->findObject<APlayer>(), &APlayer::play);
 	connect(playB, &QPushButton::clicked, playA, &QAction::trigger);
-	// 打开视频
+	// 打开视频：起始目录用 /Interface/OpenDir（与 Menu 面板的打开共用同一份记忆，
+	// 选完写回，重启后仍在）。原来传空值，只靠原生对话框的进程内记忆，
+	// 重启后每次都要重新找目录。
 	connect(openB, &QPushButton::clicked, [this](){
-		QString f = QFileDialog::getOpenFileName(this, tr("Open File"), QString(),
+		const QString dir = Config::getValue("/Interface/OpenDir",
+			lApp->findObject<List>()->defaultPath(Utils::Video));
+		QString f = QFileDialog::getOpenFileName(this, tr("Open File"), dir,
 			tr("Video (*.mp4 *.flv *.mkv *.ts *.mov *.wmv *.avi *.m4v *.webm);;All files (*)"));
 		if (!f.isEmpty()){
+			Config::setValue("/Interface/OpenDir", QFileInfo(f).absolutePath());
 			lApp->tryLocal(f);
 		}
 	});

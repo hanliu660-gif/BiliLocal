@@ -83,7 +83,9 @@ namespace{
 			});
 			addAction(delA);
 
-			connect(this, SIGNAL(doubleClicked(QModelIndex)), lApp->findObject<List>(), SLOT(jumpToIndex(QModelIndex)));
+			connect(this, &QAbstractItemView::doubleClicked, this, [this](const QModelIndex &index){
+				lApp->findObject<List>()->jumpToIndex(index);
+			});
 		}
 
 	private:

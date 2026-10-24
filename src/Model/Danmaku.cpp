@@ -341,32 +341,6 @@ namespace
 	};
 }
 
-void Danmaku::append(QString source, const Comment *comment)
-{
-	Q_D(Danmaku);
-	Record *append = nullptr;
-	for (Record &r : d->pool){
-		if (r.source == source){
-			append = &r;
-			break;
-		}
-	}
-	if (!append){
-		Record r;
-		r.source = source;
-		d->pool.append(r);
-		append = &d->pool.last();
-	}
-	//TODO: Comment * may become dangling!!!
-	append->danmaku.append(*comment);
-	Comment *c = &append->danmaku.last();
-	c->time += append->delay;
-	d->danm.insert(std::upper_bound(d->danm.begin(), d->danm.end(), c, CommentComparer()), c);
-	append->limit = append->limit == 0 ? 0 : qMax(append->limit, c->date);
-	parse(BlockParse);
-	emit modelInsert();
-}
-
 void Danmaku::remove(QString source)
 {
 	Q_D(Danmaku);

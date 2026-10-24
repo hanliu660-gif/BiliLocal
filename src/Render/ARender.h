@@ -36,7 +36,6 @@ class ARender :public QObject
 {
 	Q_OBJECT
 public:
-	static QStringList getModules();
 	static ARender *create(QObject *parent = nullptr, QString name = QString());
 
 	virtual ~ARender();

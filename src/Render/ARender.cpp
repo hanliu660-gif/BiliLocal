@@ -37,11 +37,6 @@
 // ARender 只负责弹幕渲染调度；vmem 视频绘制路径（drawPlay/drawStop/
 // setFormat/setBuffer/宽高比/首选尺寸）已随之移除。
 
-QStringList ARender::getModules()
-{
-	return{ "OpenGL" };
-}
-
 ARender::ARender(QObject *parent)
 	: QObject(parent), d_ptr(nullptr)
 {

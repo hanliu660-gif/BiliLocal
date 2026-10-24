@@ -37,7 +37,6 @@ class Interface :public QObject
 {
 	Q_OBJECT
 public:
-	static QStringList getModules();
 	explicit Interface(QObject *parent = nullptr);
 	virtual ~Interface();
 	void setup();

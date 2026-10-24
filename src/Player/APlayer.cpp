@@ -31,11 +31,6 @@
 
 #include "VPlayer.h"
 
-QStringList APlayer::getModules()
-{
-	return{ "VLC" };
-}
-
 APlayer * APlayer::create(QObject *parent, QString name)
 {
 	Q_UNUSED(name);

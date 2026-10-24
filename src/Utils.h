@@ -29,68 +29,8 @@
 #include <QtCore>
 #include <QtGui>
 
-class Comment
-{
-public:
-	int mode;
-	int font;
-	int color;
-	qint64 time;
-	qint64 date;
-	QString sender;
-	QString string;
-	bool blocked;
-
-	Comment()
-	{
-		mode = font = color = time = date = 0;
-		blocked = false;
-	}
-
-	inline bool operator==(const Comment &o) const
-	{
-		return mode == o.mode && font == o.font && color == o.color && qFuzzyCompare((float)time, (float)o.time) && date == o.date && sender == o.sender && string == o.string;
-	}
-
-	inline bool isLocal() const
-	{
-		return date == 0 && sender.isEmpty();
-	}
-
-	inline bool isEmpty() const
-	{
-		return mode == 0 && font == 0 && color == 0 && time == 0 && date == 0 && sender.isEmpty() && string.isEmpty() && !blocked;
-	}
-};
-
-inline uint qHash(const Comment &c, uint seed = 0)
-{
-	uint h = qHash(c.mode, seed);
-	h = (h << 1) ^ qHash(c.font, seed);
-	h = (h << 1) ^ qHash(c.color, seed);
-	h = (h << 1) ^ qHash(c.date, seed);
-	h = (h << 1) ^ qHash(c.sender, seed);
-	h = (h << 1) ^ qHash(c.string, seed);
-	return h;
-}
-
-class Record
-{
-public:
-	bool full;
-	qint64 delay;
-	qint64 limit;
-	QString source;
-	QString string;
-	QString access;
-	QVector<Comment> danmaku;
-
-	Record()
-	{
-		full = false;
-		delay = limit = 0;
-	}
-};
+// Comment/Record 等弹幕数据类型已挪到 Model/Comment.h
+#include "Model/Comment.h"
 
 namespace Utils
 {

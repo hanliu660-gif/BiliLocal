@@ -115,7 +115,7 @@ QWidget(parent)
 		Qt::Key_MediaTogglePlayPause;
 	playA->setShortcuts(playS);
 	addAction(playA);
-	connect(playA, SIGNAL(triggered()), lApp->findObject<APlayer>(), SLOT(play()));
+	connect(playA, &QAction::triggered, lApp->findObject<APlayer>(), &APlayer::play);
 	connect(playB, &QPushButton::clicked, playA, &QAction::trigger);
 	// 打开视频
 	connect(openB, &QPushButton::clicked, [this](){

@@ -34,11 +34,6 @@
 
 // 单平台化后唯一界面后端：Widget（2026-10-24，Quick2 已删除）
 
-QStringList Interface::getModules()
-{
-	return{ "Widget" };
-}
-
 Interface::Interface(QObject *parent)
 	: QObject(parent), d_ptr(nullptr)
 {

@@ -142,7 +142,9 @@ QWidget(parent)
 		lApp->findObject<List>()->itemFromIndex(index)->setData(QVariant(), List::DateRole);
 	});
 	popup->addAction(hdelA);
-	connect(popup, SIGNAL(entered(QModelIndex)), popup, SLOT(setCurrentIndex(QModelIndex)));
+	connect(popup, &QAbstractItemView::entered, popup, [popup](const QModelIndex &index){
+		popup->setCurrentIndex(index);
+	});
 	connect<void (QCompleter::*)(const QModelIndex &)>(fileC, &QCompleter::activated, [=](const QModelIndex &index){
 		setFocus();
 		lApp->findObject<List>()->jumpToIndex(fileM->mapToSource(qobject_cast<QAbstractProxyModel *>(fileC->completionModel())->mapToSource(index)));

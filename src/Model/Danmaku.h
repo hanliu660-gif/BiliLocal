@@ -89,7 +89,6 @@ signals:
 
 public slots:
 	void clear();
-	void append(QString source, const Comment *comment);
 	void remove(QString source);
 	void parse(int flag = None);
 	void delayAll(qint64 time);

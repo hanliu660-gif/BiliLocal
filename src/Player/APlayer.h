@@ -55,7 +55,6 @@ public:
 	};
 	Q_ENUM(Error);
 
-	static QStringList getModules();
 	static APlayer *create(QObject *parent = nullptr, QString name = QString());
 
 	Q_PROPERTY(int state READ getState NOTIFY stateChanged);

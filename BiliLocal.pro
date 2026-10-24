@@ -51,6 +51,7 @@ HEADERS += \
     src/Graphic/Mode6.h \
     src/Graphic/Mode7.h \
     src/Graphic/Plain.h \
+    src/Model/Comment.h \
     src/Model/Danmaku.h \
     src/Model/Running.h \
     src/Model/List.h \

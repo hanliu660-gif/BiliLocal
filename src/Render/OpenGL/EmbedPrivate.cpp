@@ -77,15 +77,18 @@ namespace
 						QCoreApplication::sendEvent(this, &press);
 						QCoreApplication::sendEvent(this, &release);
 					}
-					// 每周期第 46 拍右键单击：验证悬停数据菜单（菜单会阻塞在本定时器里，外部脚本负责 ESC）
+					// 底栏按钮菜单验证:直接给 弹幕·开 按钮投 ContextMenu
 					if (beat == 56){
-						const QPointF rc(600.0, 320.0);
-						QMouseEvent rp(QEvent::MouseButtonPress, rc, mapToGlobal(rc.toPoint()),
-							Qt::RightButton, Qt::RightButton, Qt::NoModifier);
-						QMouseEvent rr(QEvent::MouseButtonRelease, rc, mapToGlobal(rc.toPoint()),
-							Qt::RightButton, Qt::NoButton, Qt::NoModifier);
-						QCoreApplication::sendEvent(this, &rp);
-						QCoreApplication::sendEvent(this, &rr);
+						// 底栏按钮菜单验证:给 弹幕·开 按钮投 ContextMenu
+						QPushButton *dm = nullptr;
+						for (QPushButton *b : this->render->hostWidget()->findChildren<QPushButton*>()){
+							if (b->contextMenuPolicy() == Qt::CustomContextMenu) { dm = b; break; }
+						}
+						if (dm != nullptr){
+							const QPoint c = dm->rect().center();
+							QContextMenuEvent ce(QContextMenuEvent::Mouse, c, dm->mapToGlobal(c));
+							QCoreApplication::sendEvent(dm, &ce);
+						}
 					}
 					const QPointF local(200.0 + ((n++) % 10) * 80.0, 320.0);
 					QMouseEvent ev(QEvent::MouseMove, local, mapToGlobal(local.toPoint()),
@@ -165,6 +168,15 @@ namespace
 				if (host != nullptr){
 					const QPoint gp = ce->globalPos();
 					QWidget *w = host->childAt(host->mapFromGlobal(gp));
+					// childAt 不保证递归到叶子:底栏按钮在 Info(原生容器)内部,
+					// 不下沉就只会命中 Info 本体,按钮的右键菜单永远收不到
+					while (w != nullptr){
+						QWidget *deeper = w->childAt(w->mapFromGlobal(gp));
+						if (deeper == nullptr || deeper == w) {
+							break;
+						}
+						w = deeper;
+					}
 					while (w != nullptr && w != host && w->testAttribute(Qt::WA_TransparentForMouseEvents)){
 						w = w->parentWidget();
 					}

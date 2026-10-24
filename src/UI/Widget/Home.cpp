@@ -865,18 +865,13 @@ void Home::showContextMenu(QPoint p)
 			top.addActions(info->actions());
 			top.addAction(menu->findChild<QAction *>("File"));
 			top.addAction(listA);
-			vid.setFixedWidth(top.sizeHint().width());
 			addTrack(&vid, Utils::Video);
 			vid.addMenu(spd);
 			vid.addAction(findChild<QAction *>("Rest"));
 			top.addMenu(&vid);
-			aud.setFixedWidth(top.sizeHint().width());
 			addTrack(&aud, Utils::Audio);
 			addDelay(&aud, Utils::Audio, 100);
-			aud.addAction(findChild<QAction *>("VoUp"));
-			aud.addAction(findChild<QAction *>("VoDn"));
 			top.addMenu(&aud);
-			sub.setFixedWidth(top.sizeHint().width());
 			addTrack(&sub, Utils::Subtitle);
 			addDelay(&sub, Utils::Subtitle, 500);
 			connect(sub.addAction(tr("Load Subtitle")), &QAction::triggered, [this]() {
@@ -890,7 +885,6 @@ void Home::showContextMenu(QPoint p)
 				}
 			});
 			top.addMenu(&sub);
-			dmk.setFixedWidth(top.sizeHint().width());
 			QMenu *dts = new QMenu(tr("Track"), &dmk);	// 堆分配:同作用域陷阱
 			for (const Record r : danmaku->getPool()) {
 				dts->addAction(r.string);
@@ -901,9 +895,29 @@ void Home::showContextMenu(QPoint p)
 				Editor::exec(this, 2);
 			});
 			QAction *loadA = menu->findChild<QAction *>("Danm");
+			toggA->setChecked(lApp->findObject<Shield>()->contains(QString("m=%1").arg(Shield::Whole)));
 			dmk.addAction(toggA);
 			dmk.addAction(tr("Load"), loadA, SLOT(trigger()), loadA->shortcut())->setEnabled(loadA->isEnabled());
 			top.addMenu(&dmk);
+
+			// 快捷键列宽度补偿:QSS 给 QMenu::item 的左右大内边距会把
+			// 右对齐的快捷键压进长文字(播放列表/Ctrl+L 重叠),统一把
+			// 主菜单与四个子菜单加宽到 容纳最长快捷键 为止
+			int shortcutW = 0;
+			QList<const QMenu *> menus{ &top, &vid, &aud, &sub, &dmk };
+			for (const QMenu *m : menus){
+				for (const QAction *a : m->actions()){
+					if (!a->shortcut().isEmpty()){
+						shortcutW = qMax(shortcutW,
+							m->fontMetrics().horizontalAdvance(a->shortcut().toString(QKeySequence::NativeText)));
+					}
+				}
+			}
+			const int menuW = top.sizeHint().width() + shortcutW + 6;
+			top.setMinimumWidth(menuW);
+			for (QMenu *m : { &vid, &aud, &sub, &dmk }){
+				m->setMinimumWidth(menuW);
+			}
 	}
 		if (cur == nullptr) {
 			top.addAction(confA);

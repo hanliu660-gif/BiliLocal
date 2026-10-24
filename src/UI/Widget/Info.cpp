@@ -206,10 +206,8 @@ QWidget(parent)
 		}
 	});
 	auto syncDanm = [this](){
-		bool blocked = false;
-		if (QAction *a = parentWidget()->findChild<QAction *>("Togg")){
-			blocked = a->isChecked();
-		}
+		// 直接读屏蔽库,不经过 Togg action 的勾选状态——杜绝任何时序差
+		const bool blocked = lApp->findObject<Shield>()->contains(QString("m=%1").arg(Shield::Whole));
 		danmB->setText(blocked ? tr("Danmaku Off") : tr("Danmaku On"));
 	};
 		connect(lApp->findObject<Shield>(), &Shield::shieldChanged, this, syncDanm);

@@ -25,10 +25,11 @@ namespace
 		return p;
 	}
 
-	void sta(const libvlc_event_t *, void *)
-	{
-		QMetaObject::invokeMethod(cbAPlayer(), "event", Q_ARG(APlayer::Event, APlayer::Event::Init));
-	}
+void sta(const libvlc_event_t *, void *)
+{
+	qWarning("VLC event: Playing -> invoke event(Init)");
+	QMetaObject::invokeMethod(cbAPlayer(), "event", Q_ARG(APlayer::Event, APlayer::Event::Init));
+}
 
 	void mid(const libvlc_event_t *, void *)
 	{
@@ -467,6 +468,7 @@ void VPlayer::addSubtitle(QString file)
 
 void VPlayer::event(APlayer::Event type)
 {
+	qWarning("VPlayer::event %d", int(type));
 	switch (type){
 	case APlayer::Event::Init:
 		init();

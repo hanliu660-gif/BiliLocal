@@ -117,5 +117,8 @@ public slots:
 
 	virtual void    addSubtitle(QString file);
 
-	virtual void    event(Event type);
+	// 参数必须写全限定 APlayer::Event：moc 记录的参数类型串要与
+	// VLC 线程里 Q_ARG(APlayer::Event, ...) 的类型名完全一致，
+	// 否则 invokeMethod 按名匹配静默失败（曾导致 state 永远停在 Stop）
+	virtual void    event(APlayer::Event type);
 };

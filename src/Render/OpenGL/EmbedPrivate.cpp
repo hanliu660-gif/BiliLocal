@@ -41,6 +41,16 @@ namespace
 							Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
 						QCoreApplication::sendEvent(this, &ev);
 					}
+					// 第 35 拍注入单击（进 sendEvent 走 route 完整路径），验证单击暂停链路
+					if (n == 35){
+						const QPointF local(600.0, 300.0);
+						QMouseEvent press(QEvent::MouseButtonPress, local, mapToGlobal(local.toPoint()),
+							Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+						QMouseEvent release(QEvent::MouseButtonRelease, local, mapToGlobal(local.toPoint()),
+							Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+						QCoreApplication::sendEvent(this, &press);
+						QCoreApplication::sendEvent(this, &release);
+					}
 					const QPointF local(200.0 + ((n++) % 10) * 80.0, 320.0);
 					QMouseEvent ev(QEvent::MouseMove, local, mapToGlobal(local.toPoint()),
 						Qt::NoButton, Qt::NoButton, Qt::NoModifier);
@@ -80,6 +90,11 @@ namespace
 			const QPoint gp = e->globalPos();
 			const QPoint hp = host->mapFromGlobal(gp);
 			QWidget *w = host->childAt(hp);
+			// childAt 不看 WA_TransparentForMouseEvents：视频区会命中 ESurface，
+			// 事件送进去就是黑洞（单击/双击/横带拖动全部失灵）。逐级上溯跳过穿透控件
+			while (w != nullptr && w != host && w->testAttribute(Qt::WA_TransparentForMouseEvents)){
+				w = w->parentWidget();
+			}
 			if (w == nullptr){
 				w = host;
 			}

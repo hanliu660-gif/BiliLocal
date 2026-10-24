@@ -208,6 +208,14 @@ Home::Home(QWidget *parent)
 		}
 		aplayer->setRate(3.0);
 	});
+	// 单击画面=暂停/继续：延迟判定，给双击全屏让路（双击会先到一次 press）
+	clickTimer = new QTimer(this);
+	clickTimer->setSingleShot(true);
+	clickTimer->setInterval(250);
+	connect(clickTimer, &QTimer::timeout, this, [this]() {
+		qWarning("click-toggle: play/pause");
+		aplayer->play();
+	});
 
 	addActions(menu->actions());
 	addActions(info->actions());
@@ -522,16 +530,19 @@ void Home::dropEvent(QDropEvent * e)
 
 void Home::mouseDoubleClickEvent(QMouseEvent * e)
 {
+	// 双击全屏优先：掐掉挂起的单击暂停
+	clickTimer->stop();
 	// 按位置判断而不是按"条子是否可见"：以前条子可见的 2 秒窗口内双击会被忽略，
 	// 全屏里想双击退出得先等条子收走。现在只要双击点不在条子上就切换。
 	const QPoint p = e->pos();
 	const bool overUi = (info->isVisible() && info->geometry().contains(p))
 		|| (menu->isShown() && !menu->isWindow() && menu->geometry().contains(p));
-	if (!overUi) {
-		fullA->toggle();
+		if (!overUi) {
+			fullA->toggle();
+		}
+		// 故意不调 QWidget::mouseDoubleClickEvent：它的默认实现会把事件转发给
+		// mousePressEvent，双击会额外触发一次单击暂停
 	}
-	QWidget::mouseDoubleClickEvent(e);
-}
 
 void Home::mouseMoveEvent(QMouseEvent * e)
 {
@@ -607,8 +618,11 @@ void Home::mousePressEvent(QMouseEvent * e)
 		bool inInfo = info->isShown() && info->geometry().contains(p);
 		bool inMenu = !menu->isWindow() && menu->isShown() && menu->geometry().contains(p);
 		if (!inInfo && !inMenu) {
-			if (Config::getValue("/Interface/Sensitive", false)) {
-				aplayer->play();
+			// 单击暂停/继续（默认开）：不立刻切，等 250ms——
+			// 若下一拍是双击全屏，mouseDoubleClickEvent 会掐掉这个定时器
+			if (Config::getValue("/Interface/Sensitive", true)) {
+				qWarning("press@video -> clickTimer start");
+				clickTimer->start();
 			}
 		}
 	}

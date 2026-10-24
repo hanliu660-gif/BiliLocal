@@ -298,8 +298,8 @@ QDialog(parent)
 			Config::setValue("/Interface/Version", state == Qt::Checked);
 		});
 		t->addWidget(vers, 0, 0);
-		sens = new QCheckBox(tr("sensitive pausing"), widget[1]);
-		sens->setChecked(Config::getValue("/Interface/Sensitive", false));
+		sens = new QCheckBox(tr("toggle pause on video click"), widget[1]);
+		sens->setChecked(Config::getValue("/Interface/Sensitive", true));
 		connect(sens, &QCheckBox::stateChanged, [](int state){
 			Config::setValue("/Interface/Sensitive", state == Qt::Checked);
 		});

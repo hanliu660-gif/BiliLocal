@@ -32,6 +32,7 @@ namespace UI
 		QTimer *timer;
 		QTimer *delay;
 		QTimer *holdTimer;
+		QTimer *clickTimer;
 		bool speedHold;
 		double prevRate;
 		int prevVolume;

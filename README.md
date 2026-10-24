@@ -8,6 +8,10 @@ danmaku XML (`*.xml`) that recorder tools drop next to the video.
 
 现代化改造的 64 位 Windows 分支：给本地录播挂载弹幕的播放器。
 
+> **维护者必读**：[docs/HANDOVER.md](docs/HANDOVER.md) 是交接手册——本机目录布局、构建/部署
+> 流程、VLC 运行库升级注意事项、修过的坑（含根因与证据）、验证方法与回滚方式都在里面。
+> 改代码前先读它。
+
 ## What changed vs upstream
 
 - **64-bit build** (Qt 5.15.2 / MinGW 8.1.0), and a long list of upstream-era
@@ -22,9 +26,12 @@ danmaku XML (`*.xml`) that recorder tools drop next to the video.
 - **Modern UI**: a single auto-hiding bottom bar (play/pause, time, seek
   strip, danmaku toggle, speed, volume, open, settings, fullscreen, playlist);
   the playlist panel deliberately never steals keyboard focus
-- **Player conveniences**: 0–9 percentage jump, ±10 s / ±60 s skips, wheel
-  volume, mute memory, hold-right-button 3× speed, resume-where-you-left-off,
-  single instance with argument forwarding
+- **Player conveniences**: click-to-pause / double-click fullscreen on the video
+  area, 0–9 percentage jump, ±10 s / ±60 s skips, wheel volume,
+  Ctrl+wheel danmaku opacity, mute memory, hold-right-button 3× speed,
+  resume-where-you-left-off plus auto-resume of the last unfinished media on a
+  bare launch, light/dark/system theme, single instance with argument
+  forwarding
 - **Online features removed** — the 2013–2016 danmaku servers are long dead;
   only local danmaku files load now
 - **Single-platform consolidation**: the vmem (CPU-copy) rendering line, the
@@ -63,6 +70,16 @@ Sources with Chinese string literals must stay UTF-8 with BOM. Runtime needs
 Qt5 Core/Gui/Widgets/Network/Concurrent, the VLC runtime, the VC runtime
 (vcruntime140 etc.), and `locale/<lang>/bililocal.qm` for translations
 (regenerate with `lupdate` / `lrelease` after changing UI strings).
+
+## Tests
+
+Danmaku parsing and pure helpers are covered by a QtTest suite
+(`test/tst_parse.pro`, 7 cases — it caught an upstream ASS color bug):
+
+```bat
+qmake test\tst_parse.pro && mingw32-make
+release\tst_parse.exe
+```
 
 ## Lineage
 

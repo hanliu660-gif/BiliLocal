@@ -68,6 +68,7 @@
 | （悬停轮补修） | 菜单弹幕全文换行可选中；uid 脱敏显示「匿名」；匿名时禁用「屏蔽发送者」（防 u=0 清空全池） |
 | `ee8f8b2` | 录播姬 2.x 身份提取:user 属性脱敏名→Comment.nick,raw 里 user_hash→sender（录制内稳定标识）
 | （弹幕专属菜单补修） | 专属化把四个子菜单的栈对象关进了 if 作用域,exec 在作用域外——子菜单析构后菜单项凭空消失;声明提到函数作用域、dts 改堆分配。教训:**包 if 时检查作用域内栈对象的寿命是否覆盖 exec** |
+| （底栏弹幕右键补修二） | 「还是没变化」的另一半根因:childAt 不保证递归到叶子——右键事件被投给 Info 容器本体而非内部按钮;路由下沉到最深子控件。另:测试钩子按"文本首字"找按钮命中了 Menu 面板的同名前缀按钮,改按 policy==CustomContextMenu 定位(全树唯一) |
 | （底栏弹幕右键补修） | WM_CONTEXTMENU 落在覆盖层自己头上,按钮的 customContextMenuRequested 不触发——QWindow 系的 Leave/ContextMenu 都要走 event() 虚函数(leaveEvent/contextMenuEvent 这些 QWidget 名字在 QOpenGLWindow 上不存在,override 编译报错) |
 | （底栏弹幕右键） | 底栏「弹幕·开」按钮右键直达弹幕功能(开关/轨道/同步/加载),不必绕视频右键;复用 Togg/Danm 动作与池,零新串 |
 | （弹幕专属菜单） | 点在弹幕上时右键只显示 信息/复制/屏蔽发送者(设置/退出泄漏也已移除,尾分隔线归位),通用功能(播放/文件/视频/设置等)只在空白处右键出现 |

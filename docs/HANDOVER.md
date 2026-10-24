@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> 更新时间：2026-10-24 深夜（**第八版：体检瘦身轮**）——`master` = 7f8685a（瘦身）← 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 → 925,696 字节；dist 358M → 176M。
+> 更新时间：2026-10-25（**第九版：文档勘误轮**）——`master` = 44fbb3e（底栏目录记忆补修）← 7f8685a（瘦身）← 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 → 925,696 字节；dist 358M → 176M。
 > 写给新会话：先读这份，再看 `src\` 的 git 历史——**每个提交都有根因和证据**。
 > 一句话：把开源播放器 BiliLocal 0.4.2（GPL-3.0，2016 年停更）改造成 64 位私人 Windows 播放器：**VLC 3 + d3d11 硬解直出（Embed 唯一输出）+ 单底栏 UI**，日常播服务器录播 + 弹幕，CPU 从 ~210% 降到 ~11%。
 >
@@ -19,26 +19,26 @@
 
 | 路径 | 内容 |
 | --- | --- |
-| `src\` | 源码 git 仓库：`master` = `3f86f74`（全部工作）；tag `v0.5.0-vmem` = 早期 vmem 线回滚点 |
+| `src\` | 源码 git 仓库（全部工作在 `master`）；tag `v0.5.0-vmem` = 早期 vmem 线回滚点 |
 | `src\docs\HANDOVER.md` | 交接手册的仓库备份副本（正本在工程根 `交接文档.md`，更新后同步过来） |
 | `build\` | 影子构建（qmake + mingw32-make），产物 `build\release\BiliLocal.exe` |
 | `dist\` | **可直接运行的成品**：exe + Qt5 + VLC 3.0.24（FFmpeg 8.1.2）+ 插件 + 翻译（Embed 硬解直出版） |
-| `deps\` | 工具链：Qt 5.15.2 (mingw81_64)、MinGW 8.1.0、VLC SDK 头文件/导入库（在 `deps\thirdparty`；旧运行库目录 deps\vlc 连同 2.2.8/3.0.21 各备份已全删，VLC 运行库只存在于 dist） |
+| `deps\` | 工具链：Qt 5.15.2 (mingw81_64)、MinGW 8.1.0、VLC SDK 头文件/导入库（在 `deps\thirdparty`；旧运行库目录 deps\vlc 与 3.0.21 包已删，VLC 运行库只存在于 dist；`deps\dl` 仅剩 vlc-2.2.8-win64.zip（vmem 考古用）） |
 | ~~`backup\`~~ | 已删除（2026-10-24 用户决定）：git 历史就存在 `src\.git` + GitHub 远端里，不再保留离线 bundle |
-| `tools\` | 调试/测试脚本（2026-10-24 只留 8 个通用脚本，见第 8 节） |
+| `tools\` | 调试/测试脚本（11 个，2026-10-25 收编 3 个对话框验证脚本，见第 8 节） |
 | `test\` | `embed.xml` = 测试弹幕 fixture（8KB；媒体自备：任意视频同目录同名即可） |
 | `%LOCALAPPDATA%\BiliLocal\Config.txt` | 运行时配置（JSON） |
 | `%LOCALAPPDATA%\BiliLocal\cache\msg.log` | 日志（超 10MB 自动轮转成 .old） |
 
-> 2026-10-24 清理：`dist-vlc2\`（旧 vmem 线）、`dumps\`（4.9G WER 转储）、`build-dbg/fp\`（旧构建树）、`embed-wt\` worktree、`BiliLocal-64bit.patch`（过时补丁）已删除——回滚材料都在 `backup\` 和 git 历史里。
+> 2026-10-24 清理：`dist-vlc2\`（旧 vmem 线）、`dumps\`（4.9G WER 转储）、`build-dbg/fp\`（旧构建树）、`embed-wt\` worktree、`BiliLocal-64bit.patch`（过时补丁）已删除——回滚材料只在 git 历史里（`backup\` 本体也已删,别再找它）。
 
 ## 2. 当前状态
 
-- **exe**：`dist\BiliLocal.exe`，948,224 字节，SHA256 `1F0A9097…`（构建自 `3f86f74` 同树）
-- **源码**：`master` = **`3f86f74`** ← `3155020`（单击暂停/QSS/路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播）← `c8679e6`（现代化轮）← `d7847e8`（清理）← `49c173c` ← `4702ab1`；上游 = `9d1cb05`；回滚点 tag `v0.5.0-vmem` = `46b68b9`
-- **运行库**：VLC **3.0.24**（FFmpeg 8.1.2，d3d11 直出；2026-10-24 自 3.0.21 升级——130+ 安全修复是动机，A/B 30 秒窗口实测 CPU 持平 0.7%→0.9%；**注意 dist\plugins 里混住着 Qt 平台插件（platforms/imageformats/mediaservice/styles），整目录替换 VLC 时必须把这四个目录合并回来，否则 Qt 起不来**；3.0.21 旧库备份在临时目录，确认稳定后可弃）；dist 只带 exe 实际导入的 5 个 Qt DLL（Concurrent/Core/Gui/Network/Widgets），Qt5Multimedia/Qt5OpenGL 均已移除
+- **exe**：`dist\BiliLocal.exe`，925,696 字节，SHA256 `231BC0FB…`（构建自 `44fbb3e` 同树）
+- **源码**：`master` = **`44fbb3e`** ← `7f8685a`（瘦身轮）← `473ba62`（Win11 UI 轮）← `3f86f74`（VLC 3.0.24）← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`；上游 = `9d1cb05`；回滚点 tag `v0.5.0-vmem` = `46b68b9`
+- **运行库**：VLC **3.0.24**（FFmpeg 8.1.2，d3d11 直出；2026-10-24 自 3.0.21 升级——130+ 安全修复是动机，A/B 30 秒窗口实测 CPU 持平 0.7%→0.9%；**注意 dist\plugins 里混住着 Qt 平台插件（platforms/imageformats/mediaservice/styles），整目录替换 VLC 时必须把这四个目录合并回来，否则 Qt 起不来**；3.0.21 安装包/源码包备份已于 10-25 删除）；dist 只带 exe 实际导入的 5 个 Qt DLL（Concurrent/Core/Gui/Network/Widgets），Qt5Multimedia/Qt5OpenGL 均已移除
 - **配置**：`Output=Embed` 已成唯一输出（键保留但代码不再读取）；`Immediate=True`；`HardwareDecode` 已无消费者（d3d11 固定开启，Arguments 手写 `--avcodec-hw=`/`--vout=` 仍可覆盖）
-- **i18n**：源码全英文串，中文走 `dist\locale\zh_CN\bililocal.qm`（143/143 全译，含繁体）；改 UI 文案后记得 lupdate→补译→lrelease→部署 qm
+- **i18n**：源码全英文串，中文走 `dist\locale\zh_CN\bililocal.qm`（164/164 全译，含繁体）；改 UI 文案后记得 lupdate→补译→lrelease→部署 qm
 - **备份**：git 历史 = 本地 `src\.git` + GitHub fork 双保险（离线 bundle 与 Z: 副本已按用户决定删除）；vmem 旧线源码完整保留在 tag `v0.5.0-vmem`，重编需自行从 VideoLAN 存档获取 VLC 2.2.8
 
 ### 2.1 第四版清理记录（2026-10-24，三轮回，+66/−1114 行 / 33 文件）
@@ -62,14 +62,13 @@
 ### 2.3 现代化轮（c8679e6，2026-10-24 晚）
 - UI：h:mm:ss 时长时间格式；深色主题（/Interface/Theme 0浅/1深/2跟随系统 + DWM 深色标题栏，设置-界面页切换）；底栏 打开/设置/全屏/列表 换 QPainter 矢量图标；倍速按钮单击循环 1.0→3.0；Ctrl+滚轮=弹幕不透明度；快捷键页改 QKeySequenceEdit 按键捕获；「文件与弹幕」面板重做（最近播放+搜索+双击/Del）
 - 源码：c++17；VPlayer 补 override；APlayer::Event enum class（跨线程 invokeMethod 已注册 metatype）；QStringRef 全部退役
-- 测试：`src\test\tst_parse.pro`（qmake+QtTest，7 用例全绿）——构建：`qmake ..\src\test\tst_parse.pro && mingw32-make` 后跑 `build-test
-elease\tst_parse.exe`；**顺手修了上游 ASS 颜色 bug**（\c&H…& 的尾 & 使 toInt 得 0 → 带色 ASS 弹幕全丢；现为 chop+字节序转换）
+- 测试：`src\test\tst_parse.pro`（qmake+QtTest，7 用例全绿）——构建：`qmake ..\src\test\tst_parse.pro && mingw32-make` 后跑 `build-test\release\tst_parse.exe`；**顺手修了上游 ASS 颜色 bug**（\c&H…& 的尾 & 使 toInt 得 0 → 带色 ASS 弹幕全丢；现为 chop+字节序转换）
 - 跳过：CMake 迁移（本机无 cmake，不交付未验证的构建系统）
 ### 2.4 Win11 设计语言轮（32c6597…473ba62，2026-10-25 凌晨）
 - **全局 QSS 重写（双主题）**：Win11 分层表面（深：窗 #202020/卡 #2b2b2b/输入 #2f2f2f；浅：#f3f3f3/#ffffff）、8px 卡片圆角、强调色 #4cc2ff(深)/#0067c0(浅)+黑字选中态、Segoe UI Variable→YaHei UI 字体栈；新增对象名钩子 `Card/CardTitle/CardNote/SepLine/NavList` 供设置页使用；palette 同步对齐（**业务绘制一律走 palette 取色，别写死颜色**）
 - **Prefer 重排**：顶部页签 → 左导航列表+右 QStackedWidget；6 页并 5 页（Thanks+License 合并进关于）；GroupBox 单输入行 → 卡片内"说明左/控件右"行式布局；裸输入框类型化（倍率/跳转秒/密度上限=SpinBox 带后缀，密度 0 显示"不限"；**速度/存活时间保留可编辑下拉预设——值是含 %{width} 的表达式字符串，键没变**）；`/Interface/Size` 的"尾随空格=锁定"暗约定显式化为「锁定」复选框（Home::closeEvent 判定逻辑未动）；Shield 导入/导出从纯右键升级为常规按钮。所有配置键、信号、重启/重解析逻辑零改动
 - **Editor**：Track 绘制调色板化（原硬编码灰底白条在深色下刺眼）；空池提示/滚动条描边交给主题；列表下加 合并/归类/分离/删除 按钮排（右键和快捷键保留）
-- **测试基建**：`BILILOCAL_UI_TEST=prefer/editor/both`（与 EWindow 钩子同一编译开关）进程内自动开对话框巡览，Prefer 巡览时窗口标题带页码「设置 - N」；**外部投递点击对模态弹窗无效（Qt 按真实光标路由）——验证对话框必须走进程内钩子**；Win32 GetWindowTextW 读 Qt 标题会是乱码，用 UIA Name 读（验证脚本样例在 %TEMP%\verify_ui3.ps1）
+- **测试基建**：`BILILOCAL_UI_TEST=prefer/editor/both`（与 EWindow 钩子同一编译开关）进程内自动开对话框巡览，Prefer 巡览时窗口标题带页码「设置 - N」；**外部投递点击对模态弹窗无效（Qt 按真实光标路由）——验证对话框必须走进程内钩子**；Win32 GetWindowTextW 读 Qt 标题会是乱码，用 UIA Name 读（验证脚本已收编为 `tools\verify_ui3.ps1`）
 - **i18n**：新增 13 串全译（zh_CN/zh_TW 各 164/164），qm 已部署 dist
 - 验证：深/浅两主题 × Prefer 五页 + Editor 共 12 张截图逐张人验（渲染、译名、控件状态全对，六图六哈希证明巡览真实切换）；exe 948,224 → 964,608 字节
 ### 2.5 体检+瘦身轮（0c4f7b7…7f8685a，2026-10-25 凌晨）
@@ -115,10 +114,10 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 
 ## 5. 代码结构速览（写给要改代码的你）
 
-- **架构**：`Local` 服务定位器，`lApp->findObject<T>()` 取 12 个模块（Config/Shield/Danmaku/Running/Interface/APlayer/ARender/Load/List…）
+- **架构**：`Local` 服务定位器，`lApp->findObject<T>()` 取 9 个模块（Config/Shield/Danmaku/Running/Interface/APlayer/ARender/Load/List）
 - **播放**：`VPlayer`（libvlc，唯一后端）。视频经 `set_hwnd` 直出到原生子窗口 `ESurface`（d3d11va 硬解 + direct3d11 vout，参数在 VPlayer 构造时固定注入，可被 Arguments 手写覆盖）
 - **弹幕**：`Load`（仅本地文件）→ `Parse::parseComment`（**同步**，直接返回结果）→ `Danmaku` 模型 → `Running`（池线程布局防碰撞）→ `EWindow`（透明 GL 覆盖层，兼作输入面）绘制；弹幕文字精灵走 `ASprite`/`SyncTextureSprite`/`OpenGLAtlas` 图集
-- **UI**：`Home`（主窗，快捷键/全屏/seek 横带）+ `Info`（单底栏）+ `Menu`（文件与弹幕悬浮面板）+ `Editor`（弹幕池编辑）+ `Prefer`（设置，6 页）
+- **UI**：`Home`（主窗，快捷键/全屏/seek 横带）+ `Info`（单底栏）+ `Menu`（文件与弹幕悬浮面板）+ `Editor`（弹幕池编辑）+ `Prefer`（设置，5 页：播放/界面/屏蔽/快捷/关于）
 - 每层的关键决策都写在 git 提交说明里：`git log --oneline` + `git show <hash>`
 
 ## 6. 修过的坑（历史存档，现象 → 根因 → 修法）
@@ -149,10 +148,9 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 
 1. **Z: 网络盘 + Embed 模式的长时段表现未验证**（本地文件全通过；Z: 读速抖动属挂载链路问题，但 d3d11 直出下表现未知）
 2. 大 xml（数万条）解析在 GUI 线程同步执行，可能卡顿数百 ms~秒级（Parse 同步化后引入；本地录播 xml 无感，如需要可再做异步，但要用可靠机制——别回到 QFutureWatcher；注意 Load 的 onFinish 回调里 `&task` 引用，异步化时会悬空）
-3. `Editor`/`Prefer` 对话框还是 2015 年老 UI（功能正常，纯观感问题）
-4. 倍速按钮长按右键的 350ms 阈值/3.0 倍率是拍脑袋值，可按手感调
+3. 倍速按钮长按右键的 350ms 阈值/3.0 倍率是拍脑袋值，可按手感调
 
-## 8. 工具脚本（`tools\`，2026-10-24 精简后仅 8 个）
+## 8. 工具脚本（`tools\`，2026-10-25 收编验证脚本后 11 个）
 
 | 脚本 | 用途 |
 | --- | --- |
@@ -163,10 +161,14 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 | `kids.ps1` / `embed-probe.ps1` | 列窗口树 / 窗口树+父窗口+类名 |
 | `dense.py` | 解析**指定**录播 xml 求密集窗口（注意：脚本内路径写死，需改源码指路） |
 | `fix-bom.ps1` | 源文件 BOM 对齐 git HEAD |
+| `verify_ui3.ps1` | **对话框巡览验证**：配合 `BILILOCAL_UI_TEST=both` 钩子，按窗口标题抓 Prefer 五页+Editor（输出双主题截图组） |
+| `dumpwins.ps1` / `uia_name.ps1` | 列进程全部窗口（标题转码点列）/ 用 UIA Name 读窗口标题与矩形（GetWindowTextW 对 Qt 标题不可靠） |
 
 （历史上几十个 `fs*/popcheck*/stuckslide*` 等一次性排查脚本已删，如需从 git/备份找。）
 
-**进程内自动化验证钩子**（比外部投递消息可靠——后者会被 Qt 按真实光标位置路由而失准）：设环境变量 `BILILOCAL_EMBED_TEST=1` 启动（`cmd /c "set BILILOCAL_EMBED_TEST=1&& start ..."），EWindow 每 300ms 注入鼠标事件：第 30/50 拍画面中央双击（验证全屏闭环）、第 35 拍单击（验证单击暂停），配合 `msg.log` 中 `click-toggle` / `VPlayer::event` 日志判读结果。
+**进程内自动化验证钩子**（比外部投递消息可靠——后者会被 Qt 按真实光标位置路由而失准）：
+- `BILILOCAL_EMBED_TEST=1`：EWindow 每 300ms 注入鼠标事件（第 30/50 拍双击验证全屏闭环、第 35 拍单击验证暂停），配 `msg.log` 判读
+- `BILILOCAL_UI_TEST=prefer/editor/both`：自动打开 Prefer（逐页巡览，标题带页码「设置 - N」）与 Editor——**验证对话框用这个**，配 `tools\verify_ui3.ps1`
 
 **PS 5.1 铁律**：一律 `-NoProfile -ExecutionPolicy Bypass -File` 调用；脚本存 UTF-8 带 BOM、**不写中文字面量**；`$Pid` 只读、`Move/Cli/lp` 是别名；`Start-Process -RedirectStandardError` 别配 `-Wait`；子进程会继承 stdout 管道（给 `UseShellExecute=$false` 的启动加 stdio 重定向，否则调用方假死）。
 
@@ -174,7 +176,7 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 
 - Qt **5.15.2** mingw81_64：`deps\5.15.2\mingw81_64`
 - MinGW **8.1.0**：`deps\Tools\mingw810_64\bin`
-- VLC **3.0.24**：运行库在 `dist`（升级方法：官网下 win64 安装包静默解包 /S，替换 dist 的 libvlc/libvlccore/plugins/lua，**必须把 plugins 里 Qt 的 platforms/imageformats/mediaservice/styles 四目录合并回来**）；构建用头文件/导入库在 `deps\thirdparty`（3.0.21 SDK，libvlc API 兼容）
+- VLC **3.0.24**：运行库在 `dist`（升级方法：官网下 win64 安装包静默解包 /S，替换 dist 的 libvlc/libvlccore/plugins/lua，**必须把 plugins 里 Qt 的 platforms/imageformats/mediaservice/styles 四目录合并到顶层**，再按第 2.5 节「先验证再删」裁掉 gui 等无用类别——10-25 那次升级就是把新树放成了嵌套 plugins\plugins 才多背了 142M）；构建用头文件/导入库在 `deps\thirdparty`（3.0.21 SDK，libvlc API 兼容）
 - Python：`C:\Users\23239\.dsh\dsh-runtimes\dsh-next-primary-runtime\dependencies\python\python.exe`
 - VC 运行库（VLC3 需要）：系统已装 vcruntime140/140_1/msvcp140
 - 网络盘：`Z:` = RaiDrive 挂载 WebDAV，读速 0.1–45 MB/s 抖动；读慢时播放器"未响应"属挂载问题
@@ -182,8 +184,7 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 ## 10. 下一步建议
 
 1. **Z: 真录播日常使用观察**（Embed 模式下挂载抖动的表现是唯一未验证项）
-2. `Editor`/`Prefer` 对话框现代化（低优先，纯观感）
-3. 大 xml 异步解析（仅当某天录播 xml 大到可感知卡顿再做；别用 QFutureWatcher）
+2. 大 xml 异步解析（仅当某天录播 xml 大到可感知卡顿再做；别用 QFutureWatcher）
 4. 渲染层（EmbedPrivate/ARender/OpenGL）**已稳定，别动**
 
 ## 附：快速回滚

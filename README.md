@@ -35,10 +35,11 @@ danmaku XML (`*.xml`) that recorder tools drop next to the video.
 - **Online features removed** — the 2013–2016 danmaku servers are long dead;
   only local danmaku files load now
 - **Single-platform consolidation**: the vmem (CPU-copy) rendering line, the
-  QtMultimedia / dummy player backends, the Raster and Quick2 outputs, and
-  the linux / macx / android configs were removed. Everything is preserved in
-  git history; tag `v0.5.0-vmem` marks the last pre-rewrite vmem state
-- Proper i18n (English sources + complete zh_CN / zh_TW) and roughly 5,700
+  QtMultimedia / dummy player backends, the Raster and Quick2 outputs, the
+  linux / macx / android configs, the plugin interface and the danmaku
+  network stack were removed. Everything is preserved in git history; tag
+  `v0.5.0-vmem` marks the last pre-rewrite vmem state
+- Proper i18n (English sources + complete zh_CN / zh_TW) and over 6,000
   lines of dead code stripped
 
 ## Danmaku

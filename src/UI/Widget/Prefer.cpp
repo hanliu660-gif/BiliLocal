@@ -557,59 +557,45 @@ QDialog(parent)
 		}
 
 		auto rules = card(col, tr("Text and user rules"));
-		type = new QComboBox(page[2]);
-		type->addItem(tr("Text"));
-		type->addItem(tr("User"));
-		edit = new QLineEdit(page[2]);
 		regexp = new List(page[2]);
 		sender = new List(page[2]);
 		regexp->setSelectionMode(QListView::ExtendedSelection);
 		sender->setSelectionMode(QListView::ExtendedSelection);
 		regexp->setModel(rm = new QStringListModel(rl, regexp));
 		sender->setModel(sm = new QStringListModel(sl, sender));
-		action[0] = new QAction(tr("Add"), page[2]);
-		action[1] = new QAction(tr("Del"), page[2]);
-		action[2] = new QAction(tr("Import"), page[2]);
-		action[3] = new QAction(tr("Export"), page[2]);
-		action[1]->setShortcut(QKeySequence("Del"));
-		action[2]->setShortcut(QKeySequence("Ctrl+I"));
-		action[3]->setShortcut(QKeySequence("Ctrl+E"));
-		connect(action[0], &QAction::triggered, [this](){
-			if (!edit->text().isEmpty()){
-				QStringListModel *m = type->currentIndex() == 0 ? rm : sm;
-				m->insertRow(m->rowCount());
-				m->setData(m->index(m->rowCount() - 1), edit->text());
-				edit->clear();
+		// 删除选中行(列内删除按钮与 Del 快捷键共用)
+		auto removeSelected = [this](QListView *v){
+			QList<int> rows;
+			for (const QModelIndex &i : v->selectionModel()->selectedRows()){
+				rows.append(i.row());
 			}
-			else{
-				edit->setFocus();
+			std::sort(rows.begin(), rows.end());
+			while (!rows.isEmpty()){
+				int r = rows.takeFirst();
+				v->model()->removeRow(r);
+				for (int &i : rows){
+					if (i > r){
+						--i;
+					}
+				}
+			}
+		};
+		action[0] = new QAction(tr("Del"), page[2]);
+		action[1] = new QAction(tr("Import"), page[2]);
+		action[2] = new QAction(tr("Export"), page[2]);
+		action[0]->setShortcut(QKeySequence("Del"));
+		action[1]->setShortcut(QKeySequence("Ctrl+I"));
+		action[2]->setShortcut(QKeySequence("Ctrl+E"));
+		connect(action[0], &QAction::triggered, [this, removeSelected](){
+			// Del 键作用于焦点所在的列表
+			if (regexp->hasFocus()){
+				removeSelected(regexp);
+			}
+			if (sender->hasFocus()){
+				removeSelected(sender);
 			}
 		});
 		connect(action[1], &QAction::triggered, [this](){
-			auto remove = [this](QListView *v){
-				QList<int> rows;
-				for (const QModelIndex &i : v->selectionModel()->selectedRows()){
-					rows.append(i.row());
-				}
-				std::sort(rows.begin(), rows.end());
-				while (!rows.isEmpty()){
-					int r = rows.takeFirst();
-					v->model()->removeRow(r);
-					for (int &i : rows){
-						if (i > r){
-							--i;
-						}
-					}
-				}
-			};
-			if (regexp->hasFocus()){
-				remove(regexp);
-			}
-			if (sender->hasFocus()){
-				remove(sender);
-			}
-		});
-		connect(action[2], &QAction::triggered, [this](){
 			QFile file(QFileDialog::getOpenFileName(this, tr("Import File"), QDir::homePath(), tr("Shield files (*.xml *.sol)")));
 			if (file.open(QIODevice::ReadOnly | QIODevice::Text)){
 				QStringList rl = rm->stringList();
@@ -648,7 +634,7 @@ QDialog(parent)
 			}
 			file.close();
 		});
-		connect(action[3], &QAction::triggered, [this](){
+		connect(action[2], &QAction::triggered, [this](){
 			QString path = QFileDialog::getSaveFileName(this, tr("Export File"), QDir::homePath() + "/shield.bililocal.xml", tr("Shield files (*.xml *.sol)"));
 			if (!path.isEmpty()){
 				QFile file(path);
@@ -715,44 +701,71 @@ QDialog(parent)
 		for (QAction *iter : action){
 			page[2]->addAction(iter);
 		}
-		button[0] = new QPushButton(tr("Add"), page[2]);
-		button[1] = new QPushButton(tr("Del"), page[2]);
-		button[2] = new QPushButton(tr("Import"), page[2]);
-		button[3] = new QPushButton(tr("Export"), page[2]);
-		for (int i = 0; i < 4; ++i){
-			button[i]->setFocusPolicy(Qt::NoFocus);
-			connect(button[i], &QPushButton::clicked, action[i], &QAction::trigger);
-		}
-		regexp->addActions(page[2]->actions());
-		sender->addActions(page[2]->actions());
+		// 双列各自编辑器:输入框/添加/删除/列表同列,目标一目了然——
+		// 不再绕"下拉选类型 + 共享输入框 + 焦点决定删除对象"的三段式
+		auto makeColumn = [&](const QString &title, QStringListModel *model, QListView *list){
+			QLineEdit *edit = new QLineEdit(page[2]);
+			auto box = new QWidget(page[2]);
+			auto v = new QVBoxLayout(box);
+			v->setContentsMargins(0, 0, 0, 0);
+			v->setSpacing(6);
+			v->addWidget(new QLabel(title, page[2]));
+			auto bar = new QWidget(box);
+			auto h = new QHBoxLayout(bar);
+			h->setContentsMargins(0, 0, 0, 0);
+			h->setSpacing(6);
+			h->addWidget(edit, 1);
+			auto addBtn = new QPushButton(tr("Add"), page[2]);
+			auto delBtn = new QPushButton(tr("Del"), page[2]);
+			addBtn->setFocusPolicy(Qt::NoFocus);
+			delBtn->setFocusPolicy(Qt::NoFocus);
+			h->addWidget(addBtn);
+			h->addWidget(delBtn);
+			v->addWidget(bar);
+			v->addWidget(list, 1);
+			auto addEntry = [edit, model](){
+				if (!edit->text().isEmpty()){
+					model->insertRow(model->rowCount());
+					model->setData(model->index(model->rowCount() - 1), edit->text());
+					edit->clear();
+				}
+				else{
+					edit->setFocus();
+				}
+			};
+			connect(addBtn, &QPushButton::clicked, box, addEntry);
+			connect(edit, &QLineEdit::returnPressed, box, addEntry);
+			connect(delBtn, &QPushButton::clicked, box, [list, removeSelected](){
+				removeSelected(list);
+			});
+			return box;
+		};
+		auto columns = new QWidget(page[2]);
+		auto g = new QHBoxLayout(columns);
+		g->setContentsMargins(0, 4, 0, 4);
+		g->setSpacing(10);
+		g->addWidget(makeColumn(tr("Text"), rm, regexp), 1);
+		g->addWidget(makeColumn(tr("User"), sm, sender), 1);
+		rules->addWidget(columns, 1);
+		auto ioBar = new QWidget(page[2]);
+		auto io = new QHBoxLayout(ioBar);
+		io->setContentsMargins(0, 4, 0, 0);
+		io->addStretch(1);
+		auto importBtn = new QPushButton(tr("Import"), page[2]);
+		auto exportBtn = new QPushButton(tr("Export"), page[2]);
+		importBtn->setFocusPolicy(Qt::NoFocus);
+		exportBtn->setFocusPolicy(Qt::NoFocus);
+		connect(importBtn, &QPushButton::clicked, action[1], &QAction::trigger);
+		connect(exportBtn, &QPushButton::clicked, action[2], &QAction::trigger);
+		io->addWidget(importBtn);
+		io->addWidget(exportBtn);
+		io->addStretch(1);
+		rules->addWidget(ioBar);
+		// 列表右键只挂导入/导出(列表无关);删除走列内按钮或 Del 键
+		regexp->addActions({action[1], action[2]});
+		sender->addActions({action[1], action[2]});
 		regexp->setContextMenuPolicy(Qt::ActionsContextMenu);
 		sender->setContextMenuPolicy(Qt::ActionsContextMenu);
-
-		{
-			auto bar = new QWidget(page[2]);
-			auto h = new QHBoxLayout(bar);
-			h->setContentsMargins(0, 4, 0, 4);
-			h->setSpacing(6);
-			h->addWidget(type);
-			h->addWidget(edit, 1);
-			for (int i = 0; i < 4; ++i){
-				h->addWidget(button[i]);
-			}
-			rules->addWidget(bar);
-			auto lists = new QWidget(page[2]);
-			auto g = new QHBoxLayout(lists);
-			g->setContentsMargins(0, 4, 0, 4);
-			g->setSpacing(10);
-			auto left = new QVBoxLayout();
-			left->addWidget(new QLabel(tr("Text"), page[2]));
-			left->addWidget(regexp, 1);
-			auto right = new QVBoxLayout();
-			right->addWidget(new QLabel(tr("User"), page[2]));
-			right->addWidget(sender, 1);
-			g->addLayout(left, 1);
-			g->addLayout(right, 1);
-			rules->addWidget(lists, 1);
-		}
 
 		auto density = card(col, tr("Density limits"));
 		same = new QSlider(Qt::Horizontal, page[2]);

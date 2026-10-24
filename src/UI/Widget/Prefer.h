@@ -67,15 +67,12 @@ namespace UI
 		QCheckBox *sizeLock;
 
 		//Shield
-		QLineEdit *edit;
 		QCheckBox *check[8];
-		QComboBox *type;
 		QListView *regexp;
 		QListView *sender;
 		QStringListModel *rm;
 		QStringListModel *sm;
-		QAction *action[4];
-		QPushButton *button[4];
+		QAction *action[3];
 		QSlider *same;
 		QSpinBox *limit;
 

@@ -170,6 +170,21 @@ QWidget(parent)
 	connect(danmB, &QPushButton::clicked, danmA, &QAction::trigger);
 	top->addWidget(openB);
 	top->addWidget(danmB);
+	QPushButton *clearB = new QPushButton(tr("Clear"), this);
+	clearB->setFocusPolicy(Qt::NoFocus);
+	clearB->setToolTip(tr("Clear recent-play marks (files and positions are kept)"));
+	connect(clearB, &QPushButton::clicked, [this](){
+		// 等价于对最近列表每一项按 Del:只清播放日期标记,
+		// 文件、断点与弹幕绑定都保留
+		List *list = lApp->findObject<List>();
+		for (int r = list->rowCount() - 1; r >= 0; --r){
+			QStandardItem *it = list->item(r);
+			if (it->data(List::DateRole).toDateTime().isValid()){
+				it->setData(QVariant(), List::DateRole);
+			}
+		}
+	});
+	top->addWidget(clearB);
 	root->addLayout(top);
 
 	view = new QListView(this);
@@ -217,15 +232,9 @@ QWidget(parent)
 	connect(subC, &QCheckBox::stateChanged, [this](int state){
 		Config::setValue("/Danmaku/Protect", state == Qt::Checked);
 	});
-	loopC = new QCheckBox(tr("Loop"), this);
-	loopC->setChecked(Config::getValue("/Player/Loop", false));
-	connect(loopC, &QCheckBox::stateChanged, [this](int state){
-		Config::setValue("/Player/Loop", state == Qt::Checked);
-	});
 	bottom->addWidget(alphaT);
 	bottom->addWidget(alphaS, 1);
 	bottom->addWidget(subC);
-	bottom->addWidget(loopC);
 	root->addLayout(bottom);
 
 	hide();

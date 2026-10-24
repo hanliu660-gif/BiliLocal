@@ -61,7 +61,6 @@ namespace UI
 		QLabel *alphaT;
 		QSlider *alphaS;
 		QCheckBox *subC;
-		QCheckBox *loopC;
 
 	public slots:
 		void pop();

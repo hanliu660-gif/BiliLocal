@@ -55,9 +55,7 @@ namespace UI
 		//Interface
 		QComboBox *font;
 		QComboBox *reop;
-		QCheckBox *vers;
 		QCheckBox *sens;
-		QCheckBox *less;
 		QComboBox *loca;
 		QComboBox *stay;
 		QComboBox *theme;

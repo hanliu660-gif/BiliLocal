@@ -594,9 +594,6 @@ void Home::mouseMoveEvent(QMouseEvent * e)
 		unsetCursor();
 	}
 	delay->start(4000);
-	if (!sta.isNull() && (windowFlags()&Qt::CustomizeWindowHint) != 0 && !isFullScreen()) {
-		move(wgd + e->globalPos() - sta);
-	}
 	QWidget::mouseMoveEvent(e);
 }
 
@@ -764,9 +761,6 @@ void Home::setGeometry(QSize size, bool center)
 void Home::setWindowFlags()
 {
 	Qt::WindowFlags flags = windowFlags();
-	if (Config::getValue("/Interface/Frameless", false)) {
-		flags = Qt::CustomizeWindowHint;
-	}
 	if ((Config::getValue("/Interface/Top", 0) + (aplayer->getState() == APlayer::Play)) >= 2) {
 		flags |= Qt::WindowStaysOnTopHint;
 	}

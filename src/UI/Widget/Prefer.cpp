@@ -35,6 +35,7 @@
 #include "../../Model/Shield.h"
 #include "../../Player/APlayer.h"
 #include "../../Render/ARender.h"
+#include <vlc/libvlc.h>
 
 using namespace UI;
 
@@ -58,10 +59,7 @@ QHash<QString, QVariant> Prefer::getRestart()
 	QStringList path;
 	path <<
 		"/Player/Arguments" <<
-		"/Interface/Font" <<
-		"/Interface/Frameless" <<
 		"/Interface/Single" <<
-		"/Interface/Version" <<
 		"/Interface/Locale";
 	QHash<QString, QVariant> data;
 	for (QString iter : path){
@@ -242,6 +240,39 @@ QDialog(parent)
 		stack->addWidget(page[0] = new Page(this));
 		auto col = static_cast<Page *>(page[0])->column;
 
+		auto playing = card(col, tr("Playback"));
+		{
+			QCheckBox *resume = new QCheckBox(tr("resume where you left off"), page[0]);
+			resume->setChecked(Config::getValue("/Player/Resume", true));
+			connect(resume, &QCheckBox::stateChanged, [](int state){
+				Config::setValue("/Player/Resume", state == Qt::Checked);
+			});
+			playing->addWidget(resume);
+			QCheckBox *cont = new QCheckBox(tr("auto play next"), page[0]);
+			cont->setChecked(Config::getValue("/Player/Continue", true));
+			connect(cont, &QCheckBox::stateChanged, [](int state){
+				Config::setValue("/Player/Continue", state == Qt::Checked);
+			});
+			playing->addWidget(cont);
+			QCheckBox *loop = new QCheckBox(tr("loop playback"), page[0]);
+			loop->setChecked(Config::getValue("/Player/Loop", false));
+			connect(loop, &QCheckBox::stateChanged, [](int state){
+				Config::setValue("/Player/Loop", state == Qt::Checked);
+			});
+			playing->addWidget(loop);
+			addSep(playing);
+			jump = new QDoubleSpinBox(page[0]);
+			jump->setRange(1.0, 600.0);
+			jump->setSingleStep(1.0);
+			jump->setDecimals(1);
+			jump->setSuffix(QStringLiteral(" s"));
+			jump->setValue(Config::getValue("/Interface/Interval", 10));
+			addRow(playing, tr("skip time"), jump);
+			connect(jump, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [](double value){
+				Config::setValue("/Interface/Interval", value);
+			});
+		}
+
 		auto loading = card(col, tr("Loading"));
 		load[0] = new QCheckBox(tr("clear when reloading"), page[0]);
 		load[0]->setChecked(Config::getValue("/Load/Clear", false));
@@ -369,6 +400,15 @@ QDialog(parent)
 		});
 		dmfont->setMinimumWidth(220);
 		addRow(look, tr("font"), dmfont);
+		addSep(look);
+		QSpinBox *grating = new QSpinBox(page[0]);
+		grating->setRange(4, 100);
+		grating->setSuffix(QStringLiteral(" px"));
+		grating->setValue(Config::getValue("/Danmaku/Grating", 10));
+		addRow(look, tr("lane spacing"), grating, tr("Smaller = more danmaku lanes"));
+		connect(grating, QOverload<int>::of(&QSpinBox::valueChanged), [](int value){
+			Config::setValue("/Danmaku/Grating", value);
+		});
 
 		col->addStretch(10);
 	}
@@ -417,30 +457,6 @@ QDialog(parent)
 			addRow(window, tr("initialize size"), box);
 		}
 
-		jump = new QDoubleSpinBox(page[1]);
-		jump->setRange(1.0, 600.0);
-		jump->setSingleStep(1.0);
-		jump->setDecimals(1);
-		jump->setSuffix(QStringLiteral(" s"));
-		jump->setValue(Config::getValue("/Interface/Interval", 10));
-		addRow(window, tr("skip time"), jump);
-		connect(jump, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [](double value){
-			Config::setValue("/Interface/Interval", value);
-		});
-		addSep(window);
-
-		less = new QCheckBox(tr("frameless"), page[1]);
-		less->setChecked(Config::getValue("/Interface/Frameless", false));
-		connect(less, &QCheckBox::stateChanged, [](int state){
-			Config::setValue("/Interface/Frameless", state == Qt::Checked);
-		});
-		window->addWidget(less);
-		vers = new QCheckBox(tr("version information"), page[1]);
-		vers->setChecked(Config::getValue("/Interface/Version", true));
-		connect(vers, &QCheckBox::stateChanged, [](int state){
-			Config::setValue("/Interface/Version", state == Qt::Checked);
-		});
-		window->addWidget(vers);
 		sens = new QCheckBox(tr("toggle pause on video click"), page[1]);
 		sens->setChecked(Config::getValue("/Interface/Sensitive", true));
 		connect(sens, &QCheckBox::stateChanged, [](int state){
@@ -521,9 +537,16 @@ QDialog(parent)
 		auto grid = new QGridLayout;
 		grid->setContentsMargins(0, 4, 0, 4);
 		grid->setHorizontalSpacing(18);
+		const QStringList typeTips = {
+			tr("Danmaku pinned to the top"), tr("Danmaku pinned to the bottom"),
+			tr("Scrolling danmaku"), tr("Reverse scrolling danmaku"),
+			tr("Guest danmaku"), tr("Advanced danmaku"),
+			tr("Colored danmaku"), tr("All danmaku")
+		};
 		for (int i = 0; i < 8; ++i){
 			check[i] = new QCheckBox(list[i], page[2]);
 			check[i]->setChecked(false);
+			check[i]->setToolTip(typeTips[i]);
 			grid->addWidget(check[i], i / 4, i % 4);
 		}
 		grid->setColumnStretch(4, 1);
@@ -878,6 +901,15 @@ QDialog(parent)
 		license->setReadOnly(true);
 		license->setText(l.readAll());
 		licenseCard->addWidget(license);
+
+		auto buildCard = card(col, tr("This build"));
+		QLabel *buildInfo = new QLabel(page[4]);
+		buildInfo->setTextInteractionFlags(Qt::TextSelectableByMouse);
+		buildInfo->setText(tr("Built: %1\nQt %2\nlibVLC %3")
+			.arg(QStringLiteral(__DATE__))
+			.arg(QT_VERSION_STR)
+			.arg(QString::fromLatin1(libvlc_get_version())));
+		buildCard->addWidget(buildInfo);
 
 		col->addStretch(10);
 	}

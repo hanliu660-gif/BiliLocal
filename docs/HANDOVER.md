@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> 更新时间：2026-10-25（**第九版：文档勘误轮**）——`master` = 44fbb3e（底栏目录记忆补修）← 7f8685a（瘦身）← 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 → 925,696 字节；dist 358M → 176M。
+> 更新时间：2026-10-25（**第十版：历史压缩轮**）——`master` = 44fbb3e（底栏目录记忆补修）← 7f8685a（瘦身）← 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 → 925,696 字节；dist 358M → 176M。
 > 写给新会话：先读这份，再看 `src\` 的 git 历史——**每个提交都有根因和证据**。
 > 一句话：把开源播放器 BiliLocal 0.4.2（GPL-3.0，2016 年停更）改造成 64 位私人 Windows 播放器：**VLC 3 + d3d11 硬解直出（Embed 唯一输出）+ 单底栏 UI**，日常播服务器录播 + 弹幕，CPU 从 ~210% 降到 ~11%。
 >
@@ -26,7 +26,7 @@
 | `deps\` | 工具链：Qt 5.15.2 (mingw81_64)、MinGW 8.1.0、VLC SDK 头文件/导入库（在 `deps\thirdparty`；旧运行库目录 deps\vlc 与 3.0.21 包已删，VLC 运行库只存在于 dist；`deps\dl` 仅剩 vlc-2.2.8-win64.zip（vmem 考古用）） |
 | ~~`backup\`~~ | 已删除（2026-10-24 用户决定）：git 历史就存在 `src\.git` + GitHub 远端里，不再保留离线 bundle |
 | `tools\` | 调试/测试脚本（11 个，2026-10-25 收编 3 个对话框验证脚本，见第 8 节） |
-| `test\` | `embed.xml` = 测试弹幕 fixture（8KB；媒体自备：任意视频同目录同名即可） |
+| `test\` | `embed.xml` = 测试弹幕 fixture（媒体自备：任意视频同目录同名即可） |
 | `%LOCALAPPDATA%\BiliLocal\Config.txt` | 运行时配置（JSON） |
 | `%LOCALAPPDATA%\BiliLocal\cache\msg.log` | 日志（超 10MB 自动轮转成 .old） |
 
@@ -36,49 +36,27 @@
 
 - **exe**：`dist\BiliLocal.exe`，925,696 字节，SHA256 `231BC0FB…`（构建自 `44fbb3e` 同树）
 - **源码**：`master` = **`44fbb3e`** ← `7f8685a`（瘦身轮）← `473ba62`（Win11 UI 轮）← `3f86f74`（VLC 3.0.24）← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`；上游 = `9d1cb05`；回滚点 tag `v0.5.0-vmem` = `46b68b9`
-- **运行库**：VLC **3.0.24**（FFmpeg 8.1.2，d3d11 直出；2026-10-24 自 3.0.21 升级——130+ 安全修复是动机，A/B 30 秒窗口实测 CPU 持平 0.7%→0.9%；**注意 dist\plugins 里混住着 Qt 平台插件（platforms/imageformats/mediaservice/styles），整目录替换 VLC 时必须把这四个目录合并回来，否则 Qt 起不来**；3.0.21 安装包/源码包备份已于 10-25 删除）；dist 只带 exe 实际导入的 5 个 Qt DLL（Concurrent/Core/Gui/Network/Widgets），Qt5Multimedia/Qt5OpenGL 均已移除
+- **运行库**：VLC **3.0.24**（FFmpeg 8.1.2，d3d11 直出；升级缘由见提交 3f86f74）；**dist\plugins 混住着 Qt 平台插件（platforms/imageformats/mediaservice/styles），整目录替换 VLC 时必须把这四个目录合并到顶层，否则 Qt 起不来**（升级/裁剪流程见第 9 节）；dist 只带 exe 实际导入的 5 个 Qt DLL（Concurrent/Core/Gui/Network/Widgets）
 - **配置**：`Output=Embed` 已成唯一输出（键保留但代码不再读取）；`Immediate=True`；`HardwareDecode` 已无消费者（d3d11 固定开启，Arguments 手写 `--avcodec-hw=`/`--vout=` 仍可覆盖）
 - **i18n**：源码全英文串，中文走 `dist\locale\zh_CN\bililocal.qm`（164/164 全译，含繁体）；改 UI 文案后记得 lupdate→补译→lrelease→部署 qm
 - **备份**：git 历史 = 本地 `src\.git` + GitHub fork 双保险（离线 bundle 与 Z: 副本已按用户决定删除）；vmem 旧线源码完整保留在 tag `v0.5.0-vmem`，重编需自行从 VideoLAN 存档获取 VLC 2.2.8
 
-### 2.1 第四版清理记录（2026-10-24，三轮回，+66/−1114 行 / 33 文件）
+### 2.1 版本沿革
 
-删掉的死物（全部经 grep 确认零引用/零消费者后才删）：
-- **死入口/死控件**：Info 永远 0×0 的弹幕表格及其右键菜单、「导出弹幕」功能链（`Danmaku::saveToFile`→`Utils::customUrl`）、`Interface::percent/warning/hide` 三条完整调用链、Prefer 性能页整页（**含能把 Output 写坏成已知崩溃线的三个单选钮**）、界面页「检查更新」复选框与背景图 UI、插件页签（此构建永远空表）、`Calendar`/`Jump` 死类、`Local::synchronize`、`Utils::parseSite`、`Parse::FutureRecord`（QFutureWatcher 危险路径）、Running/VPlayer 调试残留、`.pro` 里 Post/Seek/Sign 死引用与整块 NO_OPENSSL 死配置
-- **死后端**：win32 不再编译 QMM/NIL（源码保留在树里供 linux/android 块引用）
-- **顺手修复**：置顶设置改完即时生效（`Home::setWindowFlags` 挪入 private slots，原来 invokeMethod 静默失败）、语言列表改用 `Utils::localPath` 不再依赖启动目录、AcFun 解析 reserve 算错、List/Danmaku 变量遮蔽、Menu/Info 死状态 isStay
-- 验证：每轮重编后空载启动 + Z: 真实播放（窗口树确认 Direct3D11 vout 子窗铺满、截图确认画面渲染）；弹幕可见性仍需人眼（GL 层抓屏不可见）
+每轮的完整根因与证据都在对应 git 提交信息里（本仓库的纪律），此处只留索引，**别在文档里重复维护细节**（会腐化）：
 
-### 2.2 第五版：单平台化 + 全项目体检（2026-10-24 傍晚）
-
-**架构决策**：本工程定位为"私人 Windows 播放器"，删除所有不可达路径——
-- **vmem 视频输出线整体移除**：Opaque/Widget/Window/Detach 四个 Private、VPlayer 的 PixelBuffer/fmt/lck/dsp 内存帧回调（~120 行）、ARender 的 drawPlay/drawStop/drawTime/fitRect/宽高比/首选尺寸/setFormat/setBuffer、OpenGLRender 的 7 个 YUV/RGB 视频着色器与程序、APlayer::decode 信号。**Embed 成为唯一输出**（弹幕精灵/图集/笔画着色器 ASprite/SyncTextureSprite/OpenGLAtlas 全保留——它们是弹幕绘制路径，不是视频路径）
-- **跨平台配置移除**：.pro 的 linux/macx/android 块、QPlayer/NPlayer/RasterRender 全套源文件、Quick2 界面（UI+QML+Quick2Private）、ABuffer/PFormat 头。回滚材料：tag `v0.5.0-vmem` + backup bundle
-- **Home 顺带清除 Embed 下无效的 UI**：右键菜单的「比率/缩放」子菜单（写 setVideoAspectRatio/按视频尺寸开窗，Embed 下无可视效果）、起播按视频尺寸重摆窗口与播完恢复几何、GL 进度条预览（Embed 下不可见，底栏进度条才是有效 UI）
-- **死资源**：qrc 移除 stop/next/previous.png 与 :/Text/DATA；删 res/00-02.jpg、INFO（老更新检查数据）；**Bundle 推送机制整体删除**（Res.qrc 无 /Bundle 前缀，push 一直是空转）
-- **修复**：msg.log 超 10MB 轮转成 .old；单实例崩溃后 removeServer 重试；`timeMutex` 改 QRecursiveMutex（setTime 持锁 processEvents 的重入地雷）；`QString::SkipEmptyParts`→`Qt::SkipEmptyParts`、`toTime_t`→`toSecsSinceEpoch`、catch 按引用（清掉全部编译警告）
-- **仓库卫生**：logs\ 634MB、dumps\ 1.2GB(WER) 整删；tools\ 只留 8 个通用脚本（setcfg/pwc/shot/perfrun/kids/embed-probe/dense/fix-bom）；根目录过时 patch 删除；dist 移除 Qt5OpenGL.dll
-- 验证：Z: 真实播放（Direct3D11 vout 子窗 + 截图图像分析确认画面）+ 无 Qt5OpenGL 启动正常；**弹幕可见性仍需人眼看一次**
-### 2.3 现代化轮（c8679e6，2026-10-24 晚）
-- UI：h:mm:ss 时长时间格式；深色主题（/Interface/Theme 0浅/1深/2跟随系统 + DWM 深色标题栏，设置-界面页切换）；底栏 打开/设置/全屏/列表 换 QPainter 矢量图标；倍速按钮单击循环 1.0→3.0；Ctrl+滚轮=弹幕不透明度；快捷键页改 QKeySequenceEdit 按键捕获；「文件与弹幕」面板重做（最近播放+搜索+双击/Del）
-- 源码：c++17；VPlayer 补 override；APlayer::Event enum class（跨线程 invokeMethod 已注册 metatype）；QStringRef 全部退役
-- 测试：`src\test\tst_parse.pro`（qmake+QtTest，7 用例全绿）——构建：`qmake ..\src\test\tst_parse.pro && mingw32-make` 后跑 `build-test\release\tst_parse.exe`；**顺手修了上游 ASS 颜色 bug**（\c&H…& 的尾 & 使 toInt 得 0 → 带色 ASS 弹幕全丢；现为 chop+字节序转换）
-- 跳过：CMake 迁移（本机无 cmake，不交付未验证的构建系统）
-### 2.4 Win11 设计语言轮（32c6597…473ba62，2026-10-25 凌晨）
-- **全局 QSS 重写（双主题）**：Win11 分层表面（深：窗 #202020/卡 #2b2b2b/输入 #2f2f2f；浅：#f3f3f3/#ffffff）、8px 卡片圆角、强调色 #4cc2ff(深)/#0067c0(浅)+黑字选中态、Segoe UI Variable→YaHei UI 字体栈；新增对象名钩子 `Card/CardTitle/CardNote/SepLine/NavList` 供设置页使用；palette 同步对齐（**业务绘制一律走 palette 取色，别写死颜色**）
-- **Prefer 重排**：顶部页签 → 左导航列表+右 QStackedWidget；6 页并 5 页（Thanks+License 合并进关于）；GroupBox 单输入行 → 卡片内"说明左/控件右"行式布局；裸输入框类型化（倍率/跳转秒/密度上限=SpinBox 带后缀，密度 0 显示"不限"；**速度/存活时间保留可编辑下拉预设——值是含 %{width} 的表达式字符串，键没变**）；`/Interface/Size` 的"尾随空格=锁定"暗约定显式化为「锁定」复选框（Home::closeEvent 判定逻辑未动）；Shield 导入/导出从纯右键升级为常规按钮。所有配置键、信号、重启/重解析逻辑零改动
-- **Editor**：Track 绘制调色板化（原硬编码灰底白条在深色下刺眼）；空池提示/滚动条描边交给主题；列表下加 合并/归类/分离/删除 按钮排（右键和快捷键保留）
-- **测试基建**：`BILILOCAL_UI_TEST=prefer/editor/both`（与 EWindow 钩子同一编译开关）进程内自动开对话框巡览，Prefer 巡览时窗口标题带页码「设置 - N」；**外部投递点击对模态弹窗无效（Qt 按真实光标路由）——验证对话框必须走进程内钩子**；Win32 GetWindowTextW 读 Qt 标题会是乱码，用 UIA Name 读（验证脚本已收编为 `tools\verify_ui3.ps1`）
-- **i18n**：新增 13 串全译（zh_CN/zh_TW 各 164/164），qm 已部署 dist
-- 验证：深/浅两主题 × Prefer 五页 + Editor 共 12 张截图逐张人验（渲染、译名、控件状态全对，六图六哈希证明巡览真实切换）；exe 948,224 → 964,608 字节
-### 2.5 体检+瘦身轮（0c4f7b7…7f8685a，2026-10-25 凌晨）
-- **dist 358M → 176M**：升级 3.0.24 时旧 3.0.21 插件树残留在 `dist\plugins\` 顶层、新树被放进了嵌套的 `plugins\plugins\`——改名验证确认嵌套树是死重（142M 已删）；再裁掉 gui/stream_out/access_output/services_discovery/visualization/mux/keystore/control/stream_filter/stream_extractor/video_filter（BiliLocal 只用 libvlc 核心，VLC 自带 GUI 等全无用），裁后实测播放正常（截图 24 万独立色）。**整目录替换 VLC 时记得沿用「先验证再删」流程，Qt 四目录(platforms/imageformats/mediaservice/styles)必须保留在顶层**
-- **插件机制+网络栈整体移除**：Plugin::load 每次启动对 dist\plugins 的 758 个 DLL 逐个 LoadLibrary 探测（纯浪费）；联网功能死后 Load 的网络队列(AccessPrivate 167 行)、Running::unrecognizedComment（零接收者）全部不可达。已删 Plugin.*、AccessPrivate.h；**Load 重写为纯本地加载器**（读文件→剥BOM→嗅探→同步解析→入池，文件间用排队槽让步不冻结界面），`getHead()` 改 `busy()`；QtNetwork 保留（QLocalSocket 单实例在 Qt5 属于该模块，已在 .pro 注明）。exe 964,608 → 925,696 字节
-- **List 目录扫描合并**：打开一个视频原来最多 3 次全目录列举（itemFromFile 的 danmakuNearby+分组扫描、mediaChanged 兜底再扫）——Z: 是 WebDAV，每次列举都有可感延迟。现合并为 1 次（danmakuNearby 上移复用；itemFromFile 单次列举同时收集同名弹幕与同系列分组）
-- **小项**：QFontDatabase 字体枚举进程内缓存（Utils::fontFamilies）；Config.h 未用模板特化加 [[maybe_unused]]（MinGW 8.1 要求放 template<> 之后）；单实例 waitForReadyRead 加 500ms 显式超时
-- **踩坑记录**：①invokeMethod 按名调用要求目标是槽——`private slots:` 而非普通私有方法；②Danmaku::append 按 source 路径去重，「同一 xml 传两遍」造不出 pool=2，测 Editor 自动弹出要用两个不同路径的文件；③dequeue 时机：任务在 processNext 开头取出，尾部残留 dequeue 会吞掉下一任务（已修+加了 Load: processed 日志）
-- 验证：双不同源 xml → 两条 Load: processed 日志 + pool=2 + Editor 自动弹出；单实例二次启动进程数保持 1 且文件转发加载；tst_parse 7/7；UI 巡览 6 图 6 哈希；Z: 续播截图正常
-- **补修（44fbb3e）**：cbc0b42 的「记住打开目录」只接了 Menu 面板，底栏打开按钮（常用入口）仍传空目录，靠原生对话框进程内记忆装作正常——重启即失忆。现底栏与面板共用 /Interface/OpenDir（选完写回、重启有效）
+| 提交 | 主题 |
+| --- | --- |
+| `46b68b9` | vmem 线回滚点 tag `v0.5.0-vmem`（VLC 2.2.8，考古用） |
+| `5c33397`…`82a3d13` | Embed 直出重写（d3d11 原生子窗 + GL 覆盖层路由输入）+ 现代快捷键 |
+| `4702ab1` | 单底栏 UI；死在线功能移除 |
+| `49c173c` / `d7847e8` | 死代码大清理 + 单平台化（vmem/跨平台/在线路径全删） |
+| `c8679e6` | 现代化：主题/图标/面板/QtTest；顺手修上游 ASS 颜色 bug |
+| `cbc0b42` / `c834050` | 启动续播 + 目录记忆；enum class 槽全限定修复 |
+| `3155020` / `3f86f74` | 单击暂停 + 输入路由修复；VLC 3.0.24（130+ 安全修复） |
+| `32c6597`…`473ba62` | Win11 设计语言轮（双主题 QSS、Prefer 重排 6→5 页、BILILOCAL_UI_TEST 钩子） |
+| `0c4f7b7`…`7f8685a` | 瘦身轮（dist 358M→176M、插件机制+网络栈移除、Load 本地化、List 扫描合并） |
+| `44fbb3e` | 底栏打开接入 /Interface/OpenDir（cbc0b42 只接了 Menu 面板，底栏重启即失忆） |
 
 ## 3. 怎么用（用户视角）
 
@@ -137,11 +115,13 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 13. lambda 按引用捕获 ctor 局部变量 → 悬空 UB → 改静态
 14. **DWM MPO 启用时 BitBlt/PrintWindow 抓屏黑屏缺层**（视频/弹幕层隐身）→ 用 `pwc.ps1`（PW_RENDERFULLCONTENT）；弹幕 GL 层任何抓屏都不可见，**只能人眼验证**
 15. Parse 异步 ResultDelegate（QFutureWatcher 链）在在线模块移除后不触发 → **同步化 VectorRecord**
-16. Win32 子类化转发鼠标消息
-17. **enum class 槽参数必须全限定**：moc 记录的是声明原文（Event），跨线程 invokeMethod 的 Q_ARG(APlayer::Event,...) 给的是全限定名——不匹配时**静默失败**（无警告、返回值没人查），症状是 state 永远 Stop（拖不动/无时长/标题不变/List 存 Time=-1）。修法：槽签名写全 event(APlayer::Event)。另：**图像分析验证 UI 数字不可靠**（会迎合 prompt 里的示例数字），时长/进度这类断言要用行为证据（标题、配置断点、日志）
-18. （教训）invokeMethod 返回值从不检查——关键投递点要么查返回值，要么改信号转发
-19. **childAt 无视 WA_TransparentForMouseEvents**：EWindow::route 转发点击时 childAt 命中透明 ESurface → 事件进黑洞（视频区单击/双击/拖动全失灵）。转发前要沿 parentWidget 跳过穿透控件
-20. **QWidget::mouseDoubleClickEvent 默认转发 mousePressEvent**：重写双击后调基类 = 双击又触发一遍单击逻辑；不需要基类行为就别调：投递消息不达 vout proc + VLC 重建窗口后钩子悬空崩溃 → 整体废弃，改覆盖层路由输入
+16. **enum class 槽参数必须全限定**：moc 记录的是声明原文（Event），跨线程 invokeMethod 的 Q_ARG(APlayer::Event,...) 给的是全限定名——不匹配时**静默失败**（无警告、返回值没人查），症状是 state 永远 Stop（拖不动/无时长/标题不变/List 存 Time=-1）。修法：槽签名写全 event(APlayer::Event)。另：**图像分析验证 UI 数字不可靠**（会迎合 prompt 里的示例数字），时长/进度这类断言要用行为证据（标题、配置断点、日志）
+17. （教训）invokeMethod 返回值从不检查——关键投递点要么查返回值，要么改信号转发
+18. **childAt 无视 WA_TransparentForMouseEvents**：EWindow::route 转发点击时 childAt 命中透明 ESurface → 事件进黑洞（视频区单击/双击/拖动全失灵）。转发前要沿 parentWidget 跳过穿透控件
+19. **QWidget::mouseDoubleClickEvent 默认转发 mousePressEvent**：重写双击后调基类 = 双击又额外触发一遍单击逻辑——不需要基类行为就别调。（历史路线 Win32 子类化转发鼠标消息已整体废弃：投递消息不达 vout proc + VLC 重建窗口后钩子悬空崩溃 → 改覆盖层路由输入）
+20. **invokeMethod 按名调用要求目标是槽**：普通私有方法会静默失败（只有 "No such method" 打进日志才看得见）；Load::processNext 即例，修法 `private slots:`
+21. **Danmaku::append 按 source 路径去重**：同一 xml 传两遍造不出 pool=2——测 Editor 自动弹出要用两个不同路径的文件
+22. **队列消费的 dequeue 时机**：任务在处理函数开头取出；尾部残留 dequeue 会吞掉下一个任务（Load 重写踩过，靠 `Load: processed` 日志定位）
 
 
 ## 7. 已知问题 / 未完成
@@ -164,7 +144,7 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 | `verify_ui3.ps1` | **对话框巡览验证**：配合 `BILILOCAL_UI_TEST=both` 钩子，按窗口标题抓 Prefer 五页+Editor（输出双主题截图组） |
 | `dumpwins.ps1` / `uia_name.ps1` | 列进程全部窗口（标题转码点列）/ 用 UIA Name 读窗口标题与矩形（GetWindowTextW 对 Qt 标题不可靠） |
 
-（历史上几十个 `fs*/popcheck*/stuckslide*` 等一次性排查脚本已删，如需从 git/备份找。）
+（历史上几十个 `fs*/popcheck*/stuckslide*` 等一次性排查脚本已删；tools\ 从未入 git、离线备份也已删，**不可找回**。）
 
 **进程内自动化验证钩子**（比外部投递消息可靠——后者会被 Qt 按真实光标位置路由而失准）：
 - `BILILOCAL_EMBED_TEST=1`：EWindow 每 300ms 注入鼠标事件（第 30/50 拍双击验证全屏闭环、第 35 拍单击验证暂停），配 `msg.log` 判读
@@ -176,7 +156,7 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 
 - Qt **5.15.2** mingw81_64：`deps\5.15.2\mingw81_64`
 - MinGW **8.1.0**：`deps\Tools\mingw810_64\bin`
-- VLC **3.0.24**：运行库在 `dist`（升级方法：官网下 win64 安装包静默解包 /S，替换 dist 的 libvlc/libvlccore/plugins/lua，**必须把 plugins 里 Qt 的 platforms/imageformats/mediaservice/styles 四目录合并到顶层**，再按第 2.5 节「先验证再删」裁掉 gui 等无用类别——10-25 那次升级就是把新树放成了嵌套 plugins\plugins 才多背了 142M）；构建用头文件/导入库在 `deps\thirdparty`（3.0.21 SDK，libvlc API 兼容）
+- VLC **3.0.24**：运行库在 `dist`（升级方法：官网下 win64 安装包静默解包 /S，替换 dist 的 libvlc/libvlccore/plugins/lua，**必须把 plugins 里 Qt 的 platforms/imageformats/mediaservice/styles 四目录合并到顶层**，再按「先验证再删」裁掉 gui/stream_out/access_output 等对 libvlc 无用的类别（10-25 那次升级就是漏了验证、把新树放成嵌套 plugins\plugins 才多背 142M：替换后先改名/移动留证，启动播放确认无恙再删））；构建用头文件/导入库在 `deps\thirdparty`（3.0.21 SDK，libvlc API 兼容）
 - Python：`C:\Users\23239\.dsh\dsh-runtimes\dsh-next-primary-runtime\dependencies\python\python.exe`
 - VC 运行库（VLC3 需要）：系统已装 vcruntime140/140_1/msvcp140
 - 网络盘：`Z:` = RaiDrive 挂载 WebDAV，读速 0.1–45 MB/s 抖动；读慢时播放器"未响应"属挂载问题

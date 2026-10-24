@@ -794,7 +794,8 @@ void Home::showContextMenu(QPoint p)
 			// 弹幕全文：QMenu 自带省略号看不全,换 QLabel 换行展示 + 可选中复制
 			QLabel *title = new QLabel(cur->string, &top);
 			title->setWordWrap(true);
-			title->setMargin(4);
+			// 左缘对齐 QMenu::item 文字起点(QSS padding 18px + margin 4px)
+			title->setContentsMargins(22, 2, 10, 2);
 			title->setMaximumWidth(340 * logicalDpiX() / 96);
 			title->setTextInteractionFlags(Qt::TextSelectableByMouse);
 			QWidgetAction *text = new QWidgetAction(&top);
@@ -810,7 +811,7 @@ void Home::showContextMenu(QPoint p)
 				a->setEnabled(false);
 			};
 			const bool hasHash = !cur->nick.isEmpty() && !cur->sender.isEmpty() && cur->sender != QLatin1String("0");
-			infoItem(tr("User: %1").arg(hasHash ? cur->nick : (noId ? tr("anonymous") : sender)));
+			infoItem(tr("User: %1").arg(cur->nick.isEmpty() ? (noId ? tr("anonymous") : sender) : cur->nick));
 			if (hasHash) {
 				infoItem(tr("Hash: %1").arg(cur->sender));
 			}

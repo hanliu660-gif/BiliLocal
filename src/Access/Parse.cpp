@@ -155,14 +155,12 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 							comment.nick = Utils::decodeXml(codec->toUnicode(tag.constData() + s, e2 - s), true);
 						}
 					}
-					const QByteArray hashKey = "user_hash&quot;:&quot;";
-					const int h = tag.indexOf(hashKey);
-					if (h >= 0) {
-						const int s = h + hashKey.size();
-						const int e2 = tag.indexOf("&quot;", s);
-						if (e2 > s) {
-							comment.sender = QLatin1String(tag.constData() + s, e2 - s);
-						}
+					// extra JSON 是字符串套字符串:内层引号在 XML 属性里写作
+					// \&quot; (带反斜杠),用正则容忍可选反斜杠,别做逐字节猜
+					static const QRegularExpression hashRe(QStringLiteral("user_hash\\\\?&quot;:\\\\?&quot;(\\w+)"));
+					const auto hm = hashRe.match(QString::fromUtf8(tag));
+					if (hm.hasMatch()) {
+						comment.sender = hm.captured(1);
 					}
 				}
 				for (; arg < raw.second && *arg != '>'; ++arg);

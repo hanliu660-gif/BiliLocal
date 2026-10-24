@@ -35,14 +35,39 @@ namespace
 					// 计数器必须是静态的：ctor 的局部变量按引用捕获会悬空
 					static int n = 0;
 					// 第 30/50 拍在画面中央注入双击，验证全屏进出闭环
-					if (n == 30 || n == 50){
+					// 旧闭环验证拍(双击全屏/单击暂停)需要显式加 BILILOCAL_EMBED_CLICK=1
+					// 才启用:持续单击会把视频在 播放/暂停 间反复切换,干扰悬停测试
+					if ((n == 30 || n == 50) && qEnvironmentVariableIsSet("BILILOCAL_EMBED_CLICK")){
 						const QPointF local(600.0, 300.0);
 						QMouseEvent ev(QEvent::MouseButtonDblClick, local, mapToGlobal(local.toPoint()),
 							Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
 						QCoreApplication::sendEvent(this, &ev);
 					}
-					// 第 35 拍注入单击（进 sendEvent 走 route 完整路径），验证单击暂停链路
-					if (n == 35){
+					// 悬停冻结验证：每 50 拍一个周期——40-43 拍压在 (600,320) 不动
+					// （持续续期），44 拍起继续扫掠触发释放。Z: 起播可能很慢，
+					// 循环模式保证视频起来后必然命中
+					// 悬停测试需要密集弹幕:起播后跳到 10%（片头）,duration 就绪才执行一次
+					static bool seeked = false;
+					if (!seeked && n >= 36){
+						APlayer *ap = lApp->findObject<APlayer>();
+						const qint64 dur = ap->getDuration();
+						if (dur > 0){
+							ap->setTime(dur / 10);
+							seeked = true;
+							qWarning("hover-test: seeked to 10%% (%lld)", (long long)(dur / 10));
+						}
+					}
+					const int beat = n % 50;
+					if (beat >= 40 && beat < 44){
+						const QPointF hold(600.0, 320.0);
+						QMouseEvent stay(QEvent::MouseMove, hold, mapToGlobal(hold.toPoint()),
+							Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+						QCoreApplication::sendEvent(this, &stay);
+						++n;
+						return;
+					}
+					// 单击暂停验证拍：同上,需要 BILILOCAL_EMBED_CLICK=1
+					if (n == 35 && qEnvironmentVariableIsSet("BILILOCAL_EMBED_CLICK")){
 						const QPointF local(600.0, 300.0);
 						QMouseEvent press(QEvent::MouseButtonPress, local, mapToGlobal(local.toPoint()),
 							Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
@@ -50,6 +75,16 @@ namespace
 							Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
 						QCoreApplication::sendEvent(this, &press);
 						QCoreApplication::sendEvent(this, &release);
+					}
+					// 每周期第 46 拍右键单击：验证悬停数据菜单（菜单会阻塞在本定时器里，外部脚本负责 ESC）
+					if (beat == 46){
+						const QPointF rc(600.0, 320.0);
+						QMouseEvent rp(QEvent::MouseButtonPress, rc, mapToGlobal(rc.toPoint()),
+							Qt::RightButton, Qt::RightButton, Qt::NoModifier);
+						QMouseEvent rr(QEvent::MouseButtonRelease, rc, mapToGlobal(rc.toPoint()),
+							Qt::RightButton, Qt::NoButton, Qt::NoModifier);
+						QCoreApplication::sendEvent(this, &rp);
+						QCoreApplication::sendEvent(this, &rr);
 					}
 					const QPointF local(200.0 + ((n++) % 10) * 80.0, 320.0);
 					QMouseEvent ev(QEvent::MouseMove, local, mapToGlobal(local.toPoint()),

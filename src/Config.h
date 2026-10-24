@@ -99,31 +99,39 @@ public:
 	{
 		QStringList tree = key.split('/', Qt::SkipEmptyParts);
 		QString last = tree.takeLast();
-		lock.lockForRead();
-		QJsonObject cur = config;
-		lock.unlock();
-		QList<QJsonObject> path;
-		for (const QString &k : tree){
-			path.append(cur);
-			cur = cur.value(k).toObject();
-		}
-		if (cur.contains(last)){
-			try{
-				return fromJsonValue<T>(cur.value(last));
+		{
+			QReadLocker locker(&lock);
+			QJsonObject cur = config;
+			for (const QString &k : tree){
+				cur = cur.value(k).toObject();
 			}
-			catch (...){}
+			if (cur.contains(last)){
+				try{
+					return fromJsonValue<T>(cur.value(last));
+				}
+				catch (...){}
+			}
 		}
 		QJsonValue val = toJsonValue(def);
 		if (!val.isNull()){
+			// 缺键时写回出厂值：必须与 setValue 一样整段持写锁。旧实现是
+			// “无锁读一份 -> 加写锁整体覆盖”，并发 setValue 的键会被这份
+			// 陈旧快照抹掉（读-改-写丢更新）。
+			QWriteLocker locker(&lock);
+			QStringList keys = tree;
+			QJsonObject cur = config;
+			QList<QJsonObject> path;
+			for (const QString &k : keys){
+				path.append(cur);
+				cur = cur.value(k).toObject();
+			}
 			cur[last] = val;
 			while (!path.isEmpty()){
 				QJsonObject pre = path.takeLast();
-				pre[tree.takeLast()] = cur;
+				pre[keys.takeLast()] = cur;
 				cur = pre;
 			}
-			lock.lockForWrite();
 			config = cur;
-			lock.unlock();
 		}
 		return def;
 	}
@@ -133,21 +141,24 @@ public:
 	{
 		QStringList tree = key.split('/', Qt::SkipEmptyParts);
 		QString last = tree.takeLast();
-		QJsonObject cur = config;
-		QList<QJsonObject> path;
-		for (const QString &k : tree){
-			path.append(cur);
-			cur = cur.value(k).toObject();
+		{
+			// 整段（读-改-写）都在写锁里：外面再没有无锁窗口，
+			// 两个线程改不同键也不会互相覆盖。
+			QWriteLocker locker(&lock);
+			QJsonObject cur = config;
+			QList<QJsonObject> path;
+			for (const QString &k : tree){
+				path.append(cur);
+				cur = cur.value(k).toObject();
+			}
+			cur[last] = toJsonValue(set);
+			while (!path.isEmpty()){
+				QJsonObject pre = path.takeLast();
+				pre[tree.takeLast()] = cur;
+				cur = pre;
+			}
+			config = cur;
 		}
-		cur[last] = toJsonValue(set);
-		while (!path.isEmpty()){
-			QJsonObject pre = path.takeLast();
-			pre[tree.takeLast()] = cur;
-			cur = pre;
-		}
-		lock.lockForWrite();
-		config = cur;
-		lock.unlock();
 		touch();
 	}
 

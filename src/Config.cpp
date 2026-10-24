@@ -50,8 +50,25 @@ void Config::load()
 	QString path = Utils::localPath(Utils::Config) + "Config.txt";
 	QFile conf(path);
 	if (conf.open(QIODevice::ReadOnly | QIODevice::Text)){
-		config = QJsonDocument::fromJson(conf.readAll()).object();
+		const QByteArray data = conf.readAll();
 		conf.close();
+		const QJsonDocument doc = QJsonDocument::fromJson(data);
+		// 手改坏的 Config.txt（漏逗号、截断）以前会被静默读成空对象，退出时
+		// 再被 save() 用出厂值整体覆盖，原文件就没了。现在先留一份带时间戳的
+		// 备份，再按空配置启动 —— 用户还能把它捞回来。
+		if (!doc.isObject() && !data.trimmed().isEmpty()){
+			const QString backup = path + QString(".broken-%1")
+				.arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"));
+			// 日志一律走英文：message handler 用 qPrintable 写盘，
+			// 中文在非 UTF-8 控制台/日志里会变乱码
+			if (QFile::copy(path, backup)){
+				qWarning("Config: parse failed, original kept at %s", qPrintable(backup));
+			}
+			else{
+				qWarning("Config: parse failed and backup also failed");
+			}
+		}
+		config = doc.object();
 	}
 	else{
 		// 老版本把 Config.txt 写在 exe 旁边，搬到用户目录后顺手迁移一次，
@@ -91,7 +108,13 @@ void Config::save()
 		saving = false;
 		return;
 	}
-	conf.write(QJsonDocument(config).toJson());
+	// 锁内只取一份快照，避免和工作线程的 setValue 竞争读到半更新状态
+	QJsonObject snapshot;
+	{
+		QReadLocker locker(&lock);
+		snapshot = config;
+	}
+	conf.write(QJsonDocument(snapshot).toJson());
 	if (!conf.commit()){
 		qWarning("Config: %s", qPrintable(conf.errorString()));
 	}

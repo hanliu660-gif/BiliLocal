@@ -199,25 +199,38 @@ List::List(QObject *parent)
 			success = true;
 			break;;
 		case Surmise:
-			for (int i = 1;; i++){
-				QStandardItem *head = item(cur->row() - i);
-				if (head->data(CodeRole).toInt() != Records){
-					continue;
+		{
+			// 向上找所属的 Records 头。老实现是 for (int i = 1;; i++)：既没有
+			// 上界，也不判 item() 是否为空。一旦第 0 行本身就是个孤立的 Surmise
+			// 子项（外部改过 Config.txt、换机迁移、旧版遗留数据），row() - i 变负
+			// 后 item() 返回 nullptr，下一行解引用就崩。
+			QStandardItem *head = nullptr;
+			int offset = 0;
+			for (int i = 1; cur->row() - i >= 0; ++i){
+				QStandardItem *up = item(cur->row() - i);
+				if (up && up->data(CodeRole).toInt() == Records){
+					head = up;
+					offset = i;
+					break;
 				}
+			}
+			if (head){
 				for (int j = 0; j < head->rowCount(); ++j){
 					QString code = head->child(j)->data(CodeRole).toString();
 					int sharp = code.indexOf(QRegularExpression("[#_]"));
 					if (sharp != -1 && !QFile::exists(code)){
 						QString id = code.mid(0, sharp);
 						QString pt = code.mid(sharp + 1);
-						lApp->findObject<Load>()->loadDanmaku((id + "#%1").arg(pt.toInt() + i));
+						lApp->findObject<Load>()->loadDanmaku((id + "#%1").arg(pt.toInt() + offset));
 						success = true;
 					}
 				}
-				break;
 			}
+			// 找不到头就不再冒认组内成员：success 保持 false，
+			// 留给下面的“同目录同名弹幕”兜底。
 			lApp->findObject<Danmaku>()->clear();
 			break;
+		}
 		case Records:
 		{
 			QFileInfo info(cur->data(FileRole).toString());
@@ -611,6 +624,12 @@ void List::group(const QModelIndexList &indexes)
 void List::jumpToLast()
 {
 	int rc = rowCount();
+	// 空列表时 PgUp/PgDn 仍能触发（这两个是窗口级 QAction），
+	// 必须先挡住：否则下面的 (i + rc - 1) % rc 在 rc==0 时是整数
+	// 除零，Windows 上直接 EXCEPTION_INT_DIVIDE_BY_ZERO 崩掉。
+	if (rc <= 0){
+		return;
+	}
 	int i = cur ? cur->row() : rc;
 	jumpToIndex(index((i + rc - 1) % rc, 0));
 }
@@ -618,6 +637,9 @@ void List::jumpToLast()
 void List::jumpToNext()
 {
 	int rc = rowCount();
+	if (rc <= 0){
+		return;
+	}
 	int i = cur ? cur->row() : -1;
 	jumpToIndex(index((i + rc + 1) % rc, 0));
 }

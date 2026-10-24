@@ -142,6 +142,29 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 						lst = arg + 1;
 					}
 				}
+				// 录播姬 2.x:uid 已脱敏(p 第 7 字段为 0),但标签带 user="脱敏名"
+				// 属性,raw 里的 user_hash 是录制内稳定标识——拿它当 sender,
+				// 屏蔽发送者才能真正屏蔽同一个人
+				{
+					const QByteArray tag(raw.first, int(raw.second - raw.first));
+					int u = tag.indexOf("user=\"");
+					if (u >= 0) {
+						const int s = u + 6;
+						const int e2 = tag.indexOf('"', s);
+						if (e2 > s) {
+							comment.nick = Utils::decodeXml(codec->toUnicode(tag.constData() + s, e2 - s), true);
+						}
+					}
+					const QByteArray hashKey = "user_hash&quot;:&quot;";
+					const int h = tag.indexOf(hashKey);
+					if (h >= 0) {
+						const int s = h + hashKey.size();
+						const int e2 = tag.indexOf("&quot;", s);
+						if (e2 > s) {
+							comment.sender = QLatin1String(tag.constData() + s, e2 - s);
+						}
+					}
+				}
 				for (; arg < raw.second && *arg != '>'; ++arg);
 				lst = arg + 1;
 				for (; arg < raw.second && *arg != '<'; ++arg);

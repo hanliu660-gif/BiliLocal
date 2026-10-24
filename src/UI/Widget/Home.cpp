@@ -568,7 +568,8 @@ void Home::mouseMoveEvent(QMouseEvent * e)
 {
 	lastMove = QDateTime::currentMSecsSinceEpoch();
 	QPoint cur = e->pos();
-	// 悬停冻结：光标压在弹幕上就把它停住（离开/超时自动恢复）。
+	// 悬停冻结：光标压在弹幕上就把它停住（移开自动恢复,无超时——
+	// 鼠标静止时不产生 mousemove,靠续期的定时器会把冻结拆台）。
 	// 拖进度条或悬停在底栏上时不冻结——那不是在看弹幕。
 	// 悬浮面板是独立窗口，光标过去后事件不再进来，过期定时器自然解冻。
 	if (seekdrag || (info->isVisible() && info->geometry().contains(cur))) {
@@ -790,17 +791,29 @@ void Home::showContextMenu(QPoint p)
 		QMenu top(this);
 		const Comment *cur = running->commentAt(p);
 		if (cur) {
-			QAction *text = new QAction(&top);
+			// 弹幕全文：QMenu 自带省略号看不全,换 QLabel 换行展示 + 可选中复制
+			QLabel *title = new QLabel(cur->string, &top);
+			title->setWordWrap(true);
+			title->setMargin(4);
+			title->setMaximumWidth(340 * logicalDpiX() / 96);
+			title->setTextInteractionFlags(Qt::TextSelectableByMouse);
+			QWidgetAction *text = new QWidgetAction(&top);
+			text->setDefaultWidget(title);
 			top.addAction(text);
-			int w = top.actionGeometry(text).width() - 24;
-			text->setText(top.fontMetrics().elidedText(cur->string, Qt::ElideRight, w));
-			// 发送者数据块：禁用态菜单项，只读展示
+			// 发送者数据块：禁用态菜单项，只读展示。
+			// 录播姬 2.x 与新 B 站弹幕的 uid 已脱敏（一律 0）,按"匿名"展示
+			const QString sender = cur->sender;
+			const bool noId = sender.isEmpty() || sender == QLatin1String("0");
 			const QDateTime sent = cur->date > 0 ? QDateTime::fromSecsSinceEpoch(cur->date) : QDateTime();
 			auto infoItem = [&top](const QString &text) {
 				QAction *a = top.addAction(text);
 				a->setEnabled(false);
 			};
-			infoItem(tr("Sender: %1").arg(cur->sender.isEmpty() ? tr("unknown") : cur->sender));
+			const bool hasHash = !cur->nick.isEmpty() && !cur->sender.isEmpty() && cur->sender != QLatin1String("0");
+			infoItem(tr("User: %1").arg(hasHash ? cur->nick : (noId ? tr("anonymous") : sender)));
+			if (hasHash) {
+				infoItem(tr("Hash: %1").arg(cur->sender));
+			}
 			if (sent.isValid()) {
 				infoItem(tr("Sent at: %1").arg(sent.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"))));
 			}
@@ -811,8 +824,9 @@ void Home::showContextMenu(QPoint p)
 					: QString("%1:%2").arg(sec / 60, 2, 10, QChar('0')).arg(sec % 60, 2, 10, QChar('0'));
 				infoItem(tr("Position: %1").arg(pos));
 			}
+			const bool hasId = hasHash || (!sender.isEmpty() && sender != QLatin1String("0"));
 			int same = 0;
-			if (!cur->sender.isEmpty()) {
+			if (hasId) {
 				for (const Record &r : danmaku->getPool()) {
 					for (const Comment &c : r.danmaku) {
 						if (c.sender == cur->sender) {
@@ -821,14 +835,16 @@ void Home::showContextMenu(QPoint p)
 					}
 				}
 			}
-			if (same > 0) {
+			if (same > 1) {
 				infoItem(tr("%1 danmaku from this sender").arg(same));
 			}
 			top.addSeparator();
 			connect(top.addAction(tr("Copy")), &QAction::triggered, [=]() {
 				qApp->clipboard()->setText(cur->string);
 			});
-			connect(top.addAction(tr("Eliminate The Sender")), &QAction::triggered, [=]() {
+			QAction *elim = top.addAction(tr("Eliminate The Sender"));
+			elim->setEnabled(hasId);	// 屏蔽 u=0 等于清空整个池,禁用防手滑
+			connect(elim, &QAction::triggered, [=]() {
 				QString sender = cur->sender;
 				if (!sender.isEmpty()) {
 					lApp->findObject<Shield>()->insert("u=" + sender);

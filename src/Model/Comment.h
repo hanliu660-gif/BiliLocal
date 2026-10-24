@@ -39,6 +39,7 @@ public:
 	qint64 time;
 	qint64 date;
 	QString sender;
+	QString nick;	// 脱敏用户名(录播姬 2.x 的 user 属性);sender 存 user_hash
 	QString string;
 	bool blocked;
 

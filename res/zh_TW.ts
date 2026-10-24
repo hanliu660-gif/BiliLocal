@@ -165,7 +165,7 @@
     </message>
     <message>
         <location filename="../src/UI/Widget/Home.cpp" line="45"/>
-        <location filename="../src/UI/Widget/Home.cpp" line="879"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="895"/>
         <source>Sync</source>
         <translation>同步</translation>
     </message>
@@ -210,88 +210,101 @@
         <translation>檔案與彈幕</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="697"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="698"/>
         <source>Danmaku alpha %1%</source>
         <translation>彈幕不透明度 %1%</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="803"/>
         <source>Sender: %1</source>
-        <translation>發送者：%1</translation>
+        <translation type="vanished">發送者：%1</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="803"/>
         <source>unknown</source>
-        <translation>未知</translation>
+        <translation type="vanished">未知</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="805"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="818"/>
         <source>Sent at: %1</source>
         <translation>發送時間：%1</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="812"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="825"/>
         <source>Position: %1</source>
         <translation>影片位置：%1</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="825"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="839"/>
         <source>%1 danmaku from this sender</source>
         <translation>該發送者共 %1 條彈幕</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="828"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="842"/>
         <source>Copy</source>
         <translation>複製</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="843"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="859"/>
         <source>Video</source>
         <translation>視頻</translation>
     </message>
     <message>
         <location filename="../src/UI/Widget/Home.cpp" line="27"/>
-        <location filename="../src/UI/Widget/Home.cpp" line="873"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="889"/>
         <source>Track</source>
         <translation>軌道</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="849"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="813"/>
+        <source>anonymous</source>
+        <translation>匿名</translation>
+    </message>
+    <message>
+        <location filename="../src/UI/Widget/Home.cpp" line="813"/>
+        <source>User: %1</source>
+        <translation>用戶：%1</translation>
+    </message>
+    <message>
+        <location filename="../src/UI/Widget/Home.cpp" line="815"/>
+        <source>Hash: %1</source>
+        <translation>用戶雜湊：%1</translation>
+    </message>
+    <message>
+        <location filename="../src/UI/Widget/Home.cpp" line="865"/>
         <source>Audio</source>
         <translation>音頻</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="856"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="872"/>
         <source>Subtitle</source>
         <translation>字幕</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="871"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="887"/>
         <source>Danmaku</source>
         <translation>彈幕</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="884"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="900"/>
         <source>Load</source>
         <translation>加載彈幕</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="860"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="876"/>
         <source>Load Subtitle</source>
         <translation>打開字幕</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="863"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="879"/>
         <source>Open File</source>
         <translation>打開文件</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="865"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="881"/>
         <source>Subtitle files (%1);;All files (*.*)</source>
         <translation>字幕文件 (%1);;所有文件(*.*)</translation>
     </message>
     <message>
-        <location filename="../src/UI/Widget/Home.cpp" line="831"/>
+        <location filename="../src/UI/Widget/Home.cpp" line="845"/>
         <source>Eliminate The Sender</source>
         <translation>屏蔽發送者</translation>
     </message>

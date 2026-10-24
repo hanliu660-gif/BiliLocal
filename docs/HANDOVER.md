@@ -79,6 +79,7 @@ elease\tst_parse.exe`；**顺手修了上游 ASS 颜色 bug**（\c&H…& 的尾 
 - **小项**：QFontDatabase 字体枚举进程内缓存（Utils::fontFamilies）；Config.h 未用模板特化加 [[maybe_unused]]（MinGW 8.1 要求放 template<> 之后）；单实例 waitForReadyRead 加 500ms 显式超时
 - **踩坑记录**：①invokeMethod 按名调用要求目标是槽——`private slots:` 而非普通私有方法；②Danmaku::append 按 source 路径去重，「同一 xml 传两遍」造不出 pool=2，测 Editor 自动弹出要用两个不同路径的文件；③dequeue 时机：任务在 processNext 开头取出，尾部残留 dequeue 会吞掉下一任务（已修+加了 Load: processed 日志）
 - 验证：双不同源 xml → 两条 Load: processed 日志 + pool=2 + Editor 自动弹出；单实例二次启动进程数保持 1 且文件转发加载；tst_parse 7/7；UI 巡览 6 图 6 哈希；Z: 续播截图正常
+- **补修（44fbb3e）**：cbc0b42 的「记住打开目录」只接了 Menu 面板，底栏打开按钮（常用入口）仍传空目录，靠原生对话框进程内记忆装作正常——重启即失忆。现底栏与面板共用 /Interface/OpenDir（选完写回、重启有效）
 
 ## 3. 怎么用（用户视角）
 

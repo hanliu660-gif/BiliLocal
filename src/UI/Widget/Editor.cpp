@@ -88,6 +88,12 @@ namespace{
 			});
 		}
 
+		// 供 Editor 在列表下方的工具条里挂按钮；右键菜单照旧
+		QList<QAction *> editorActions() const
+		{
+			return{ megA, grpA, splA, delA };
+		}
+
 	private:
 		QAction *megA;
 		QAction *grpA;
@@ -205,10 +211,16 @@ namespace{
 
 		void paintEvent(QPaintEvent *e)
 		{
+			// 配色全部取自 palette（跟随深浅主题），不写死颜色：
+			// 底=Window 标签条=Base 直方图=Highlight 计数=半透明 Base+Text
+			const QPalette &pal = palette();
+			const QColor base = pal.color(QPalette::Base);
+			const QColor bar = pal.color(QPalette::Highlight);
+			const QColor text = pal.color(QPalette::Text);
 			QPainter painter(this);
 			double x = 100 * logicalDpiX() / 96, y = 100 * logicalDpiY() / 96;
-			painter.fillRect(e->rect(), Qt::gray);
-			painter.fillRect(0, 0, x - 2, y - 2, Qt::white);
+			painter.fillRect(e->rect(), pal.color(QPalette::Window));
+			painter.fillRect(0, 0, x - 2, y - 2, base);
 			if (x >= width() - 5 || m_duration <= 0){
 				return;
 			}
@@ -240,16 +252,18 @@ namespace{
 				painter.setClipRect(x, 0, w, y);
 				for (int j = 0; j < w; j += 5){
 					int he = c[j / 5] * (y - 2) / m;
-					painter.fillRect(o + j + x, y - 2 - he, 5, he, Qt::white);
+					painter.fillRect(o + j + x, y - 2 - he, 5, he, bar);
 				}
-				painter.setPen(Qt::white);
+				painter.setPen(text);
 				QString count = QString("%1/%2").arg(t).arg(m_record->danmaku.size());
 				QRect rect = painter.fontMetrics().boundingRect(x, 0, w, y - 2, Qt::AlignRight, count);
 				rect.adjust(-5, 0, 0, 0);
-				painter.fillRect(rect, QColor(160, 160, 164, 100));
+				QColor dim = base;
+				dim.setAlpha(140);
+				painter.fillRect(rect, dim);
 				painter.drawText(rect, Qt::AlignCenter, count);
 				if (m_current > 0){
-					painter.fillRect(m_current*w / m_duration + x, 0, 1, y, Qt::red);
+					painter.fillRect(m_current*w / m_duration + x, 0, 1, y, QColor(232, 58, 58));
 				}
 			}
 		}
@@ -316,25 +330,6 @@ namespace{
 		}
 	};
 
-	class MScroll :public QScrollBar
-	{
-	public:
-		explicit MScroll(QWidget *parent = 0) :
-			QScrollBar(parent)
-		{
-		}
-
-	private:
-		void paintEvent(QPaintEvent *e)
-		{
-			QScrollBar::paintEvent(e);
-			QPainter painter(this);
-			painter.setPen(Qt::gray);
-			QPoint points[4] = { rect().topLeft(), rect().topRight(), rect().bottomRight(), rect().bottomLeft() };
-			painter.drawPolyline(points, 4);
-		}
-	};
-
 	class PoolEditor :public QWidget
 	{
 	public:
@@ -342,7 +337,7 @@ namespace{
 			QWidget(parent)
 		{
 			setMinimumWidth(100 * logicalDpiX() / 96);
-			scroll = new MScroll(this);
+			scroll = new QScrollBar(this);
 			scroll->setSingleStep(20);
 			connect(scroll, &QScrollBar::valueChanged, [this](int value){
 				value = -value;
@@ -387,8 +382,8 @@ namespace{
 			if (!lApp->findObject<Danmaku>()->getPool().isEmpty()){
 				return;
 			}
-			QPainter p(this);
-			p.setPen(Qt::gray);
+		QPainter p(this);
+		p.setPen(palette().color(QPalette::Disabled, QPalette::Text));
 			QString t = QStringLiteral("_(:з」∠)_");
 			QFont f = p.font();
 			f.setPointSize(55);
@@ -492,7 +487,26 @@ QDialog(parent)
 	setWindowTitle(tr("Editor"));
 
 	QSplitter *splitter = new QSplitter(this);
-	splitter->addWidget(list = new ListEditor(this));
+	// 左栏：列表 + 常用操作按钮条（右键菜单与快捷键照旧，按钮降低发现成本）
+	list = new QWidget(this);
+	auto listBox = new QVBoxLayout(list);
+	listBox->setContentsMargins(0, 0, 0, 0);
+	listBox->setSpacing(4);
+	auto view = new ListEditor(list);
+	listBox->addWidget(view, 1);
+	auto bar = new QHBoxLayout();
+	bar->setContentsMargins(2, 0, 2, 2);
+	bar->setSpacing(6);
+	for (QAction *a : view->editorActions()){
+		auto b = new QPushButton(a->text(), list);
+		b->setToolTip(a->text());
+		b->setFocusPolicy(Qt::NoFocus);
+		connect(b, &QPushButton::clicked, a, &QAction::trigger);
+		bar->addWidget(b);
+	}
+	bar->addStretch(1);
+	listBox->addLayout(bar);
+	splitter->addWidget(list);
 	splitter->setStretchFactor(0, 0);
 	splitter->addWidget(pool = new PoolEditor(this));
 	splitter->setStretchFactor(1, 1);

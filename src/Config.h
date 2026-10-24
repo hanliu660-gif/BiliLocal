@@ -46,7 +46,10 @@ namespace{
 		return v.toVariant();
 	}
 
+	// 模板特化并非每个编译单元都会实例化，[[maybe_unused]] 压掉 MinGW 的
+	// "defined but not used" 告警（每 TU 刷屏的那四条）
 	template<>
+	[[maybe_unused]]
 	QJsonArray fromJsonValue(QJsonValue v)
 	{
 		if (QJsonValue::Array != v.type()){
@@ -56,6 +59,7 @@ namespace{
 	}
 
 	template<>
+	[[maybe_unused]]
 	QJsonObject fromJsonValue(QJsonValue v)
 	{
 		if (QJsonValue::Object != v.type()){
@@ -71,6 +75,7 @@ namespace{
 	}
 
 	template<>
+	[[maybe_unused]]
 	QJsonValue toJsonValue(QVariant v)
 	{
 		return QJsonValue::fromVariant(v);

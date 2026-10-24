@@ -251,6 +251,14 @@ QString Utils::defaultFont(bool monospace)
 	}
 }
 
+QStringList Utils::fontFamilies()
+{
+	// QFontsDatabase 全量字体枚举要几十毫秒：启动(setDefaultFont)与打开
+	// Prefer(两个字体下拉)都会调，进程内缓存一次就够
+	static QStringList families = QFontDatabase().families();
+	return families;
+}
+
 QString Utils::localPath(Path path)
 {
 	// 配置与缓存一律放到用户目录：程序装在 Program Files 或只读盘时，

@@ -65,6 +65,7 @@ namespace Utils
 	};
 
 	QString defaultFont(bool monospace = false);
+	QStringList fontFamilies();
 	QString localPath(Path path);
 	void applyTheme(int mode);
 	QString decodeTxt(QString &&txt);

@@ -692,12 +692,12 @@ void Home::wheelEvent(QWheelEvent * e)
 		if (e->modifiers() & Qt::ControlModifier){
 			const int alpha = qBound(0, Config::getValue("/Danmaku/Alpha", 80) + (dy > 0 ? 5 : -5), 100);
 			Config::setValue("/Danmaku/Alpha", alpha);
-			QToolTip::showText(e->globalPos(), tr("Danmaku alpha %1%").arg(alpha));
+			QToolTip::showText(e->globalPosition().toPoint(), tr("Danmaku alpha %1%").arg(alpha));
 		}
 		else{
 			const int vol = qBound(0, aplayer->getVolume() + (dy > 0 ? 5 : -5), 100);
 			aplayer->setVolume(vol);
-			QToolTip::showText(e->globalPos(), QString::number(vol));
+			QToolTip::showText(e->globalPosition().toPoint(), QString::number(vol));
 		}
 	}
 	QWidget::wheelEvent(e);

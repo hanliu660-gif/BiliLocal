@@ -41,6 +41,7 @@ namespace{
 	}
 
 	template<>
+	[[maybe_unused]]
 	QVariant fromJsonValue(QJsonValue v)
 	{
 		return v.toVariant();

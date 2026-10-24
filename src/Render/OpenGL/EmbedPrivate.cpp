@@ -163,7 +163,7 @@ namespace
 		void wheelEvent(QWheelEvent *e) override
 		{
 			// 滚轮统一交给 Home 做音量调节
-			QWheelEvent copy(e->position(), e->globalPos(), e->pixelDelta(), e->angleDelta(),
+			QWheelEvent copy(e->position(), e->globalPosition(), e->pixelDelta(), e->angleDelta(),
 				e->buttons(), e->modifiers(), e->phase(), e->inverted());
 			QCoreApplication::sendEvent(render->hostWidget(), &copy);
 		}

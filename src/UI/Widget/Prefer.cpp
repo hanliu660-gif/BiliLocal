@@ -665,12 +665,12 @@ QDialog(parent)
 					file.open(QIODevice::WriteOnly | QIODevice::Text);
 					QTextStream stream(&file);
 					stream.setCodec("UTF-8");
-					stream << "<filters>" << endl;
+					stream << "<filters>" << Qt::endl;
 					for (const QString &iter : rm->stringList()){
-						stream << "  <item enabled=\"true\">t=" << iter << "</item>" << endl;
+						stream << "  <item enabled=\"true\">t=" << iter << "</item>" << Qt::endl;
 					}
 					for (const QString &iter : sm->stringList()){
-						stream << "  <item enabled=\"true\">u=" << iter << "</item>" << endl;
+						stream << "  <item enabled=\"true\">u=" << iter << "</item>" << Qt::endl;
 					}
 					stream << "</filters>";
 				}

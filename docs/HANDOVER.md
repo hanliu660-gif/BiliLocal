@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> 更新时间：2026-10-25（**第十二版：交互打磨+设置审计轮（归档版）**；同日校正版次哈希、目录表与工具数）——`master` = 最新提交（`git log -1 --oneline`，2026-10-25 05:30 之后全是纯文档提交）；**最后一个代码提交 = `a9fbcb3`**（悬停冻结持久化）← `63f9a4b`（设置审计）← 8d9c8ec（悬停冻结+发送者数据）← 44fbb3e（底栏目录记忆补修）← 7f8685a（瘦身）← 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 → 925,696 → 943,616 字节；dist 358M → 176M（实测可再至 155M，见 §10）。
+> 更新时间：2026-10-25（**第十二版：交互打磨+设置审计轮（归档版）**；同日校正版次哈希、目录表与工具数）——`master` = 最新提交（`git log -1 --oneline`，2026-10-25 05:30 之后全是纯文档提交）；**最后一个代码提交 = `a9fbcb3`**（悬停冻结持久化）← `63f9a4b`（设置审计）← 8d9c8ec（悬停冻结+发送者数据）← 44fbb3e（底栏目录记忆补修）← 7f8685a（瘦身）← 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 → 925,696 → 943,616 字节；dist 358M → 176M（2026-10-25 裁定不再瘦身，`lua\` 与 `opengl32sw.dll` 保留）。
 > 写给新会话：先读这份，再看 `src\` 的 git 历史——**每个提交都有根因和证据**。
 > 一句话：把开源播放器 BiliLocal 0.4.2（GPL-3.0，2016 年停更）改造成 64 位私人 Windows 播放器：**VLC 3 + d3d11 硬解直出（Embed 唯一输出）+ 单底栏 UI**，日常播服务器录播 + 弹幕，CPU 从 ~210% 降到 ~11%。
 >
@@ -43,7 +43,7 @@
 
 ## 2. 当前状态
 
-- **exe**：`dist\BiliLocal.exe`，943,616 字节，SHA256 `7D8ABE2F…`（构建自 `a9fbcb3` 同树；2026-10-25 核对：与 `build\release\BiliLocal.exe` **逐字节相同**，构建时间 05:01 晚于最后一次代码改动，即 dist 跑的就是当前源码）
+- **exe**：`dist\BiliLocal.exe`，943,616 字节，SHA256 `7D8ABE2F…`（构建自 `a9fbcb3` 同树；2026-10-25 双证：①与 `build\release\BiliLocal.exe` **逐字节相同**；②用当前源码在空目录全量重建，产物**只差 4 个字节**——PE 头里的时间戳/校验和，代码段完全一致 ⇒ dist 就是当前源码编出来的，没有忘记重编的死角）
 - **源码**：`master` = 最新提交（**从 2026-10-25 05:30 起改为不写死文档哈希**——写死的那个值在提交的瞬间就过期了，当前值请用 `git log -1 --oneline` 取）；**最后一个代码提交 = `a9fbcb3`**（悬停冻结持久化）← `63f9a4b`（设置审计）← `8d9c8ec`（悬停冻结+发送者数据）← `44fbb3e`（底栏目录记忆补修）← `7f8685a`（瘦身轮）← `473ba62`（Win11 UI 轮）← `3f86f74`（VLC 3.0.24）← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`；上游 = `9d1cb05`；回滚点 tag `v0.5.0-vmem` = `46b68b9`
 - **运行库**：VLC **3.0.24**（FFmpeg 8.1.2，d3d11 直出；升级缘由见提交 3f86f74）；**dist\plugins 混住着 Qt 平台插件（platforms/imageformats/mediaservice/styles），整目录替换 VLC 时必须把这四个目录合并到顶层，否则 Qt 起不来**（升级/裁剪流程见第 9 节）；dist 只带 exe 实际导入的 5 个 Qt DLL（Concurrent/Core/Gui/Network/Widgets）
 - **配置**：`Output=Embed` 已成唯一输出（键保留但代码不再读取）；`Immediate=True`；`HardwareDecode` 已无消费者（d3d11 固定开启，Arguments 手写 `--avcodec-hw=`/`--vout=` 仍可覆盖）
@@ -54,9 +54,10 @@
 
 - **已交付并推送（全部在 github/master 上，最后一个代码提交是 `a9fbcb3`）**：悬停冻结单条弹幕(静止持久)/右键弹幕数据块(全文/用户名+哈希/时间/位置/真实同源计数)/屏蔽发送者按 hash 真实生效/屏蔽页双列重构/弹幕专属右键菜单/菜单对齐与文案翻转/设置审计轮(见 §2.1 沿革)/文件面板「清空」
 - **明确放弃,勿重做**：底栏「弹幕·开」按钮的右键菜单(a4b5acf)——三层窗口结构盲区,详见 §2.1 与 §6 23-25
-- **未决**：§10-2 的 dist 再瘦身候选待用户拍板;§7-1 的 Z: 长时段观察持续中
+- **未决**：无（2026-10-25 裁定：dist 不再瘦身、Z: 长时段观察结案，见 §10 末尾）
 - **验证分工（用户明确要求）**：功能/交互的验收测试交给用户本人做,自动化只负责日志与时序取证;最后两轮(菜单对齐+设置审计)为自测通过,未经用户逐项验收
-- 单测 9/9（2026-10-25 复跑 `build-test\release\tst_parse.exe` 确认：7 用例 + init/cleanup = 9 passed）；i18n 187/187（`zh_CN.ts` 194 条 message − 7 条 vanished，0 unfinished）；警告普查 42 条全部低危(29 条 Config.h 模板噪音可一并清理)
+- 单测 9/9（2026-10-25 复跑 `build-test\release\tst_parse.exe` 确认：7 用例 + init/cleanup = 9 passed）；i18n 187/187（`zh_CN.ts` 194 条 message − 7 条 vanished，0 unfinished）
+- **编译警告普查 42 条，全部低危**（2026-10-25 用当前源码全量重建实测，临时目录跑完即删，去重后 10 个位置）：`Config.h:44` 的 `fromJsonValue<QVariant>` defined-but-unused **29 条**（匿名命名空间里的头文件模板，每个 TU 各得一份；同文件 QJsonArray/QJsonObject 两个特化已加 `[[maybe_unused]]` 压掉，QVariant 那个漏了，补一行即清）；`endl` 3 处（Prefer.cpp:668/670/673，`QTextStreamFunctions::endl`→`Qt::endl`）；`QWheelEvent::globalPos` 3 处（Home.cpp:695/700、EmbedPrivate.cpp:166）；`libvlc_video_set_subtitle_file` 1 处（VPlayer.cpp:462）；`-Wimplicit-fallthrough` 2 处（Danmaku.cpp:115 内层 switch 的 default 落到 ModeRole、Running.cpp:276 的 `case 1` 故意落到 `case 0`，后者是有意为之）
 
 ### 2.1 版本沿革
 
@@ -144,11 +145,10 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 27. **录播姬 raw 属性里的 JSON 是字符串套字符串**：内层引号写作 \\&quot; 带反斜杠——按 &quot; 字面量搜索永不命中;且合成单测样本若手写漏了反斜杠会**假绿**。用正则容忍可选反斜杠,并拿真实弹幕字节做单测
 
 
-## 7. 已知问题 / 未完成
+## 7. 已知限制（不是待办，是设计取舍）
 
-1. **Z: 网络盘 + Embed 模式的长时段表现未验证**（本地文件全通过；Z: 读速抖动属挂载链路问题，但 d3d11 直出下表现未知）
-2. 大 xml（数万条）解析在 GUI 线程同步执行，可能卡顿数百 ms~秒级（Parse 同步化后引入；本地录播 xml 无感，如需要可再做异步，但要用可靠机制——别回到 QFutureWatcher；注意 Load 的 onFinish 回调里 `&task` 引用，异步化时会悬空）
-3. 倍速按钮长按右键的 350ms 阈值/3.0 倍率是拍脑袋值，可按手感调
+1. 大 xml（数万条）解析在 GUI 线程同步执行，可能卡顿数百 ms~秒级（Parse 同步化后引入；本地录播 xml 无感，如需要可再做异步，但要用可靠机制——别回到 QFutureWatcher；注意 Load 的 onFinish 回调里 `&task` 引用，异步化时会悬空）
+2. 倍速按钮长按右键的 350ms 阈值/3.0 倍率是拍脑袋值，可按手感调
 
 ## 8. 工具脚本（`tools\`，2026-10-25 归档时 13 个）
 
@@ -178,17 +178,17 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 
 - Qt **5.15.2** mingw81_64：`deps\5.15.2\mingw81_64`
 - MinGW **8.1.0**：`deps\Tools\mingw810_64\bin`
-- VLC **3.0.24**：运行库在 `dist`（升级方法：官网下 win64 安装包静默解包 /S，替换 dist 的 libvlc/libvlccore/plugins（lua\ 与 opengl32sw.dll 本播放器用不到,已实测可去,见 §10）,**必须把 plugins 里 Qt 的 platforms/imageformats/mediaservice/styles 四目录合并到顶层**，再按「先验证再删」裁掉 gui/stream_out/access_output 等对 libvlc 无用的类别（10-25 那次升级就是漏了验证、把新树放成嵌套 plugins\plugins 才多背 142M：替换后先改名/移动留证，启动播放确认无恙再删））；构建用头文件/导入库在 `deps\thirdparty`（3.0.21 SDK，libvlc API 兼容）
+- VLC **3.0.24**：运行库在 `dist`（升级方法：官网下 win64 安装包静默解包 /S，替换 dist 的 libvlc/libvlccore/plugins（lua\ 与 opengl32sw.dll 本播放器用不到，已实测可去，2026-10-25 决定保留，升级时按原样回填）,**必须把 plugins 里 Qt 的 platforms/imageformats/mediaservice/styles 四目录合并到顶层**，再按「先验证再删」裁掉 gui/stream_out/access_output 等对 libvlc 无用的类别（10-25 那次升级就是漏了验证、把新树放成嵌套 plugins\plugins 才多背 142M：替换后先改名/移动留证，启动播放确认无恙再删））；构建用头文件/导入库在 `deps\thirdparty`（3.0.21 SDK，libvlc API 兼容）
 - Python：`C:\Users\23239\.dsh\dsh-runtimes\dsh-next-primary-runtime\dependencies\python\python.exe`
 - VC 运行库（VLC3 需要）：系统已装 vcruntime140/140_1/msvcp140——**dist 未自带**,换机器先装 [vc_redist.x64](https://aka.ms/vs/17/release/vc_redist.x64.exe),或把三个 DLL 拷进 dist（支持应用目录部署）
 - 网络盘：`Z:` = RaiDrive 挂载 WebDAV，读速 0.1–45 MB/s 抖动；读慢时播放器"未响应"属挂载问题
 
 ## 10. 下一步建议
 
-1. **Z: 真录播日常使用观察**（Embed 模式下挂载抖动的表现是唯一未验证项）
-2. **dist 再瘦身候选（已实测,待拍板）**：`lua\`（1.1M,VLC 脚本,本地播放用不到）与 `opengl32sw.dll`（21M,软件 GL 后备,应用走 ANGLE 用不到）——2026-10-25 移出后启动/播放实测正常,用户暂缓;升级 VLC 时不必回填
-3. 大 xml 异步解析（仅当某天录播 xml 大到可感知卡顿再做；别用 QFutureWatcher）
-4. 渲染层（EmbedPrivate/ARender/OpenGL）**已稳定，别动**
+1. 大 xml 异步解析（仅当某天录播 xml 大到可感知卡顿再做；别用 QFutureWatcher）
+2. 渲染层（EmbedPrivate/ARender/OpenGL）**已稳定，别动**
+
+> 2026-10-25 裁定并结案两条：**dist 不再瘦身**（`lua\` 1.1M + `opengl32sw.dll` 21M 实测可去，决定保留——升级 VLC 时按原样回填即可）；**Z: 长时段观察不再挂账**（挂载抖动属 RaiDrive 链路问题，日常播到不对劲再查，见 §9）。
 
 ## 附：快速回滚
 

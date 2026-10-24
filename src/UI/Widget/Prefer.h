@@ -38,21 +38,21 @@ namespace UI
 		static void exec(QWidget *parent = 0, int index = 0);
 
 	private:
-		QTabWidget *tab;
-		QWidget *widget[6];
+		// Win11 式设置布局：左侧导航列表 + 右侧堆叠页（替代旧的 QTabWidget）
+		QListWidget *nav;
+		QStackedWidget *stack;
+		QWidget *page[5];
 
 		//Playing
-		QGroupBox *box[7];
 		QCheckBox *load[5];
 		QCheckBox *fitted[2];
-		QLineEdit *factor;
+		QDoubleSpinBox *factor;
 		QCheckBox *bold;
 		QComboBox *dmfont;
 		QComboBox *effect;
-		QLineEdit *play[2];
+		QComboBox *play[2];
 
 		//Interface
-		QGroupBox *ui[8];
 		QComboBox *font;
 		QComboBox *reop;
 		QCheckBox *vers;
@@ -61,8 +61,10 @@ namespace UI
 		QComboBox *loca;
 		QComboBox *stay;
 		QComboBox *theme;
-		QLineEdit *jump;
-		QLineEdit *size;
+		QDoubleSpinBox *jump;
+		QSpinBox *sizeW;
+		QSpinBox *sizeH;
+		QCheckBox *sizeLock;
 
 		//Shield
 		QLineEdit *edit;
@@ -73,18 +75,15 @@ namespace UI
 		QStringListModel *rm;
 		QStringListModel *sm;
 		QAction *action[4];
-		QPushButton *button[2];
+		QPushButton *button[4];
 		QSlider *same;
-		QLineEdit *limit;
-		QGroupBox *label[2];
+		QSpinBox *limit;
 
 		//Shortcut
 		QTreeWidget *hotkey;
 
-		//Thanks
+		//About（Thanks + License 合并）
 		QTextEdit *thanks;
-
-		//License
 		QTextEdit *license;
 
 		//Shared

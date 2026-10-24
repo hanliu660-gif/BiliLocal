@@ -18,7 +18,7 @@
 *   but WITHOUT ANY WARRANTY; without even the implied warranty of
 *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *   GNU General Public License for more details.
-
+*
 *   You should have received a copy of the GNU General Public License
 *   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -44,7 +44,7 @@ void Prefer::exec(QWidget *parent, int index)
 	static Prefer *executing;
 	if (!executing){
 		Prefer prefer(parent);
-		prefer.tab->setCurrentIndex(index);
+		prefer.nav->setCurrentRow(index);
 		executing = &prefer;
 		prefer.QDialog::exec();
 		executing = nullptr;
@@ -102,87 +102,209 @@ namespace
 			selectionModel()->setCurrentIndex(QModelIndex(), QItemSelectionModel::NoUpdate);
 		}
 	};
+
+	// Win11 式设置页骨架：无框滚动区 + 卡片列
+	class Page :public QWidget
+	{
+	public:
+		explicit Page(QWidget *parent = 0) :
+			QWidget(parent)
+		{
+			auto outer = new QVBoxLayout(this);
+			outer->setContentsMargins(0, 0, 0, 0);
+			auto scroll = new QScrollArea(this);
+			scroll->setWidgetResizable(true);
+			scroll->setFrameShape(QFrame::NoFrame);
+			auto body = new QWidget(scroll);
+			column = new QVBoxLayout(body);
+			column->setContentsMargins(16, 14, 16, 16);
+			column->setSpacing(10);
+			scroll->setWidget(body);
+			outer->addWidget(scroll);
+		}
+
+		QVBoxLayout *column;
+	};
+
+	// 卡片：标题 + 可选副标题 + 内容列；返回内容列供调用方继续加行
+	QVBoxLayout *card(QVBoxLayout *parent, const QString &title, const QString &note = QString())
+	{
+		auto frame = new QFrame;
+		frame->setObjectName("Card");
+		auto box = new QVBoxLayout(frame);
+		box->setContentsMargins(14, 10, 14, 12);
+		box->setSpacing(4);
+		auto head = new QLabel(title, frame);
+		head->setObjectName("CardTitle");
+		box->addWidget(head);
+		if (!note.isEmpty()){
+			auto sub = new QLabel(note, frame);
+			sub->setObjectName("CardNote");
+			sub->setWordWrap(true);
+			box->addWidget(sub);
+		}
+		parent->addWidget(frame);
+		return box;
+	}
+
+	// 设置行：说明在左、控件靠右；说明与控件共用 tooltip
+	void addRow(QVBoxLayout *parent, const QString &text, QWidget *control, const QString &tip = QString())
+	{
+		auto row = new QWidget;
+		auto h = new QHBoxLayout(row);
+		h->setContentsMargins(0, 4, 0, 4);
+		h->setSpacing(10);
+		auto label = new QLabel(text, row);
+		if (!tip.isEmpty()){
+			label->setToolTip(tip);
+			control->setToolTip(tip);
+		}
+		h->addWidget(label);
+		h->addStretch(1);
+		control->setMinimumWidth(170);
+		h->addWidget(control);
+		parent->addWidget(row);
+	}
+
+	void addSep(QVBoxLayout *parent)
+	{
+		auto line = new QFrame;
+		line->setObjectName("SepLine");
+		line->setFrameShape(QFrame::NoFrame);
+		line->setFixedHeight(1);
+		parent->addWidget(line);
+	}
+
+	// 导航小图标：QPainter 矢量，中性灰，深浅主题通用（2x pixmap 供高分屏取用）
+	QIcon navIcon(int kind)
+	{
+		QPixmap pm(32, 32);
+		pm.fill(Qt::transparent);
+		QPainter p(&pm);
+		p.setRenderHint(QPainter::Antialiasing);
+		QPen pen(QColor(130, 130, 136), 1.7);
+		p.setPen(pen);
+		p.setBrush(Qt::NoBrush);
+		p.scale(2, 2);
+		switch (kind){
+		case 0:	// Playing：圆角框里的播放三角
+			p.drawRoundedRect(QRectF(1.6, 3.2, 12.8, 9.6), 1.6, 1.6);
+			p.drawPolyline(QPolygonF() << QPointF(6.2, 5.9) << QPointF(6.2, 10.1) << QPointF(10.2, 8.0) << QPointF(6.2, 5.9));
+			break;
+		case 1:	// Interface：显示器
+			p.drawRoundedRect(QRectF(1.6, 2.6, 12.8, 9.0), 1.5, 1.5);
+			p.drawLine(QPointF(5.0, 13.7), QPointF(11.0, 13.7));
+			p.drawLine(QPointF(8.0, 11.6), QPointF(8.0, 13.7));
+			break;
+		case 2:	// Shield：盾牌
+		{
+			QPolygonF shield;
+			shield << QPointF(8.0, 2.0) << QPointF(13.4, 4.2) << QPointF(13.4, 8.2)
+				<< QPointF(8.0, 12.6) << QPointF(2.6, 8.2) << QPointF(2.6, 4.2);
+			p.drawPolygon(shield);
+			break;
+		}
+		case 3:	// Shortcut：键盘
+			p.drawRoundedRect(QRectF(1.2, 4.0, 13.6, 8.0), 1.5, 1.5);
+			for (int r = 0; r < 2; ++r){
+				for (int c = 0; c < 4; ++c){
+					p.drawPoint(4.0 + c * 2.2, 6.4 + r * 2.6);
+				}
+			}
+			p.drawLine(QPointF(5.4, 10.4), QPointF(10.6, 10.4));
+			break;
+		default:	// About：i 圆
+			p.drawEllipse(QRectF(2.4, 2.4, 11.2, 11.2));
+			p.drawPoint(8.0, 6.4);
+			p.drawLine(QPointF(8.0, 8.2), QPointF(8.0, 11.4));
+			break;
+		}
+		return QIcon(pm);
+	}
 }
 
 Prefer::Prefer(QWidget *parent) :
 QDialog(parent)
 {
 	setWindowTitle(tr("Config"));
-	auto outer = new QGridLayout(this);
-	tab = new QTabWidget(this);
-	connect(tab, &QTabWidget::currentChanged, [this](int index){
-		tab->widget(index)->setFocus();
-	});
-	outer->addWidget(tab);
+	auto outer = new QHBoxLayout(this);
+	outer->setContentsMargins(10, 10, 10, 10);
+	outer->setSpacing(10);
+
+	nav = new QListWidget(this);
+	nav->setObjectName("NavList");
+	nav->setIconSize(QSize(18 * logicalDpiX() / 96, 18 * logicalDpiY() / 96));
+	nav->setFixedWidth(176 * logicalDpiX() / 96);
+	stack = new QStackedWidget(this);
+	outer->addWidget(nav);
+	outer->addWidget(stack, 1);
+
 	//Playing
 	{
-		widget[0] = new QWidget(this);
-		auto list = new QVBoxLayout(widget[0]);
-		auto c = new QGridLayout;
-		load[0] = new QCheckBox(tr("clear when reloading"), widget[0]);
+		stack->addWidget(page[0] = new Page(this));
+		auto col = static_cast<Page *>(page[0])->column;
+
+		auto loading = card(col, tr("Loading"));
+		load[0] = new QCheckBox(tr("clear when reloading"), page[0]);
 		load[0]->setChecked(Config::getValue("/Load/Clear", false));
 		connect(load[0], &QCheckBox::stateChanged, [](int state){
 			Config::setValue("/Load/Clear", state == Qt::Checked);
 		});
-		c->addWidget(load[0], 0, 0);
-		load[1] = new QCheckBox(tr("auto delay after loaded"), widget[0]);
+		loading->addWidget(load[0]);
+		load[1] = new QCheckBox(tr("auto delay after loaded"), page[0]);
 		load[1]->setChecked(Config::getValue("/Load/Delay", false));
 		connect(load[1], &QCheckBox::stateChanged, [](int state){
 			Config::setValue("/Load/Delay", state == Qt::Checked);
 		});
-		c->addWidget(load[1], 0, 1);
-		load[2] = new QCheckBox(tr("load local subtitles"), widget[0]);
+		loading->addWidget(load[1]);
+		load[2] = new QCheckBox(tr("load local subtitles"), page[0]);
 		load[2]->setChecked(Config::getValue("/Player/Subtitle", true));
 		connect(load[2], &QCheckBox::stateChanged, [](int state){
 			Config::setValue("/Player/Subtitle", state == Qt::Checked);
 		});
-		c->addWidget(load[2], 1, 0);
-		load[3] = new QCheckBox(tr("auto play after loaded"), widget[0]);
+		loading->addWidget(load[2]);
+		load[3] = new QCheckBox(tr("auto play after loaded"), page[0]);
 		load[3]->setChecked(Config::getValue("/Player/Immediate", false));
 		connect(load[3], &QCheckBox::stateChanged, [](int state){
 			Config::setValue("/Player/Immediate", state == Qt::Checked);
 		});
-		c->addWidget(load[3], 1, 1);
+		loading->addWidget(load[3]);
 		// 启动即续播：免去找目录，双击 exe 直接接着最近一条没看完的播
-		load[4] = new QCheckBox(tr("resume on startup"), widget[0]);
+		load[4] = new QCheckBox(tr("resume on startup"), page[0]);
 		load[4]->setChecked(Config::getValue("/Player/AutoResume", true));
 		connect(load[4], &QCheckBox::stateChanged, [](int state){
 			Config::setValue("/Player/AutoResume", state == Qt::Checked);
 		});
-		c->addWidget(load[4], 2, 0, 1, 2);
-		box[0] = new QGroupBox(tr("loading"), widget[0]);
-		box[0]->setLayout(c);
-		list->addWidget(box[0]);
+		loading->addWidget(load[4]);
 
-		auto s = new QHBoxLayout;
-		play[0] = new QLineEdit(widget[0]);
-		play[0]->setText(Config::getValue("/Danmaku/Speed", QString("150")));
-		connect(play[0], &QLineEdit::editingFinished, [=](){
-			Config::setValue("/Danmaku/Speed", play[0]->text());
+		const QString widthTip = tr("%{width} means the width of an danmaku");
+		auto look = card(col, tr("Danmaku appearance"));
+
+		// 滑动速度/存活时间支持 %{width} 表达式：可编辑下拉给常用预设，值仍以字符串存储
+		play[0] = new QComboBox(page[0]);
+		play[0]->setEditable(true);
+		play[0]->addItems({ QStringLiteral("150"), QStringLiteral("125+%{width}/5"), QStringLiteral("200"), QStringLiteral("100") });
+		play[0]->setCurrentText(Config::getValue("/Danmaku/Speed", QString("150")));
+		addRow(look, tr("slide speed"), play[0], widthTip);
+		connect(play[0], &QComboBox::currentTextChanged, [](const QString &text){
+			Config::setValue("/Danmaku/Speed", text);
 		});
-		s->addWidget(play[0]);
-		box[1] = new QGroupBox(tr("slide speed"), widget[0]);
-		box[1]->setToolTip(tr("%{width} means the width of an danmaku"));
-		box[1]->setLayout(s);
-		list->addWidget(box[1]);
+		addSep(look);
 
-		auto l = new QHBoxLayout;
-		play[1] = new QLineEdit(widget[0]);
-		play[1]->setText(Config::getValue("/Danmaku/Life", QString("5")));
-		connect(play[1], &QLineEdit::editingFinished, [=](){
-			Config::setValue("/Danmaku/Life", play[1]->text());
+		play[1] = new QComboBox(page[0]);
+		play[1]->setEditable(true);
+		play[1]->addItems({ QStringLiteral("5"), QStringLiteral("8"), QStringLiteral("12") });
+		play[1]->setCurrentText(Config::getValue("/Danmaku/Life", QString("5")));
+		addRow(look, tr("life time"), play[1], widthTip);
+		connect(play[1], &QComboBox::currentTextChanged, [](const QString &text){
+			Config::setValue("/Danmaku/Life", text);
 		});
-		l->addWidget(play[1]);
-		box[2] = new QGroupBox(tr("life time"), widget[0]);
-		box[2]->setToolTip(tr("%{width} means the width of an danmaku"));
-		box[2]->setLayout(l);
-		list->addWidget(box[2]);
+		addSep(look);
 
-		auto e = new QHBoxLayout;
 		int state = Config::getValue("/Danmaku/Scale/Fitted", 0x1);
-		fitted[0] = new QCheckBox(tr("ordinary"), widget[0]);
+		fitted[0] = new QCheckBox(tr("ordinary"), page[0]);
 		fitted[0]->setChecked((state & 0x2) > 0);
-		fitted[1] = new QCheckBox(tr("advanced"), widget[0]);
+		fitted[1] = new QCheckBox(tr("advanced"), page[0]);
 		fitted[1]->setChecked((state & 0x1) > 0);
 		auto slot = [=](){
 			int n = fitted[0]->checkState() == Qt::Checked;
@@ -191,35 +313,37 @@ QDialog(parent)
 		};
 		connect(fitted[0], &QCheckBox::stateChanged, slot);
 		connect(fitted[1], &QCheckBox::stateChanged, slot);
-		e->addWidget(fitted[0], 1);
-		e->addWidget(fitted[1], 1);
-		box[3] = new QGroupBox(tr("scale to fitted"), widget[0]);
-		box[3]->setLayout(e);
+		{
+			auto box = new QWidget(page[0]);
+			auto h = new QHBoxLayout(box);
+			h->setContentsMargins(0, 0, 0, 0);
+			h->setSpacing(12);
+			h->addWidget(fitted[0]);
+			h->addWidget(fitted[1]);
+			h->addStretch(1);
+			addRow(look, tr("scale to fitted"), box);
+		}
+		addSep(look);
 
-		auto a = new QHBoxLayout;
-		factor = new QLineEdit(widget[0]);
-		factor->setText(QString::number(Config::getValue("/Danmaku/Scale/Factor", 1.0), 'f', 2));
-		connect(factor, &QLineEdit::editingFinished, [=](){
-			Config::setValue("/Danmaku/Scale/Factor", factor->text().toDouble());
+		factor = new QDoubleSpinBox(page[0]);
+		factor->setRange(0.1, 4.0);
+		factor->setSingleStep(0.05);
+		factor->setDecimals(2);
+		factor->setSuffix(QStringLiteral(" ") + QChar(0xD7));
+		factor->setValue(Config::getValue("/Danmaku/Scale/Factor", 1.0));
+		addRow(look, tr("scale by factor"), factor);
+		connect(factor, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [](double value){
+			Config::setValue("/Danmaku/Scale/Factor", value);
 		});
-		a->addWidget(factor);
-		box[4] = new QGroupBox(tr("scale by factor"), widget[0]);
-		box[4]->setLayout(a);
+		addSep(look);
 
-		auto o = new QHBoxLayout;
-		o->addWidget(box[3], 1);
-		o->addWidget(box[4], 1);
-		list->addLayout(o);
-
-		auto g = new QHBoxLayout;
 		int ef = Config::getValue("/Danmaku/Effect", 5);
-		bold = new QCheckBox(tr("Bold"), widget[0]);
+		bold = new QCheckBox(tr("Bold"), page[0]);
 		bold->setChecked(ef & 1);
 		connect(bold, &QCheckBox::stateChanged, [=](int s){
 			Config::setValue("/Danmaku/Effect", (effect->currentIndex() << 1) | (int)(s == Qt::Checked));
 		});
-		g->addWidget(bold);
-		effect = new QComboBox(widget[0]);
+		effect = new QComboBox(page[0]);
 		effect->addItem(tr("Stroke"));
 		effect->addItem(tr("Projection"));
 		effect->addItem(tr("Shadow"));
@@ -227,116 +351,118 @@ QDialog(parent)
 		connect<void (QComboBox::*)(int)>(effect, &QComboBox::currentIndexChanged, [=](int i){
 			Config::setValue("/Danmaku/Effect", (i << 1) | (int)(bold->checkState() == Qt::Checked));
 		});
-		g->addWidget(effect);
-		box[5] = new QGroupBox(tr("style"), widget[0]);
-		box[5]->setLayout(g);
+		{
+			auto box = new QWidget(page[0]);
+			auto h = new QHBoxLayout(box);
+			h->setContentsMargins(0, 0, 0, 0);
+			h->setSpacing(10);
+			h->addWidget(effect);
+			h->addWidget(bold);
+			h->addStretch(1);
+			addRow(look, tr("style"), box);
+		}
+		addSep(look);
 
-		auto f = new QHBoxLayout;
-		dmfont = new QComboBox(widget[0]);
+		dmfont = new QComboBox(page[0]);
 		dmfont->addItems(QFontDatabase().families());
 		dmfont->setCurrentText(Config::getValue("/Danmaku/Font", QFont().family()));
-		connect(dmfont, &QComboBox::currentTextChanged, [this](QString _font){
+		connect(dmfont, &QComboBox::currentTextChanged, [](QString _font){
 			Config::setValue("/Danmaku/Font", _font);
 		});
-		f->addWidget(dmfont);
-		box[6] = new QGroupBox(tr("font"), widget[0]);
-		box[6]->setLayout(f);
+		dmfont->setMinimumWidth(220);
+		addRow(look, tr("font"), dmfont);
 
-		auto v = new QHBoxLayout;
-		v->addWidget(box[5], 1);
-		v->addWidget(box[6], 1);
-		list->addLayout(v);
-
-		list->addStretch(10);
-		tab->addTab(widget[0], tr("Playing"));
+		col->addStretch(10);
 	}
 	//Interface
 	{
-		widget[1] = new QWidget(this);
-		auto list = new QVBoxLayout(widget[1]);
+		stack->addWidget(page[1] = new Page(this));
+		auto col = static_cast<Page *>(page[1])->column;
 
-		auto s = new QHBoxLayout;
-		size = new QLineEdit(widget[1]);
-		size->setText(Config::getValue("/Interface/Size", QString("720,405")).trimmed());
-		connect(size, &QLineEdit::editingFinished, [=](){
-			QRegularExpression r("\\D");
-			r.setPatternOptions(QRegularExpression::UseUnicodePropertiesOption);
-			QString s = size->text().trimmed();
-			s.replace(r, ",");
-			size->setText(s);
-			Config::setValue("/Interface/Size", s + " ");
+		auto window = card(col, tr("Window"));
+
+		// 初始窗口尺寸：显式"锁定"复选框取代旧的"配置里加尾随空格"暗约定；
+		// Home::closeEvent 仍按尾随空格判定锁定，这里负责显式写入该标记
+		{
+			QString sizeConf = Config::getValue("/Interface/Size", QString("720,405"));
+			const bool locked = sizeConf.endsWith(' ');
+			QStringList nums = sizeConf.trimmed().split(',', Qt::SkipEmptyParts);
+			sizeW = new QSpinBox(page[1]);
+			sizeH = new QSpinBox(page[1]);
+			sizeW->setRange(240, 7680);
+			sizeH->setRange(135, 4320);
+			sizeW->setValue(nums.size() > 0 ? qBound(240, nums[0].toInt(), 7680) : 720);
+			sizeH->setValue(nums.size() > 1 ? qBound(135, nums[1].toInt(), 4320) : 405);
+			sizeLock = new QCheckBox(tr("lock"), page[1]);
+			sizeLock->setChecked(locked);
+			sizeLock->setToolTip(tr("Locked size survives window close; otherwise the size on close is remembered instead"));
+			auto writeSize = [this](){
+				QString s = QString("%1,%2").arg(sizeW->value()).arg(sizeH->value());
+				if (sizeLock->isChecked()){
+					s += ' ';
+				}
+				Config::setValue("/Interface/Size", s);
+			};
+			connect(sizeW, QOverload<int>::of(&QSpinBox::valueChanged), writeSize);
+			connect(sizeH, QOverload<int>::of(&QSpinBox::valueChanged), writeSize);
+			connect(sizeLock, &QCheckBox::toggled, writeSize);
+			auto box = new QWidget(page[1]);
+			auto h = new QHBoxLayout(box);
+			h->setContentsMargins(0, 0, 0, 0);
+			h->setSpacing(8);
+			h->addWidget(sizeW);
+			h->addWidget(new QLabel(QString(QChar(0xD7)), page[1]));
+			h->addWidget(sizeH);
+			h->addSpacing(8);
+			h->addWidget(sizeLock);
+			h->addStretch(1);
+			addRow(window, tr("initialize size"), box);
+		}
+
+		jump = new QDoubleSpinBox(page[1]);
+		jump->setRange(1.0, 600.0);
+		jump->setSingleStep(1.0);
+		jump->setDecimals(1);
+		jump->setSuffix(QStringLiteral(" s"));
+		jump->setValue(Config::getValue("/Interface/Interval", 10));
+		addRow(window, tr("skip time"), jump);
+		connect(jump, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [](double value){
+			Config::setValue("/Interface/Interval", value);
 		});
-		s->addWidget(size);
-		ui[0] = new QGroupBox(tr("initialize size"), widget[1]);
-		ui[0]->setLayout(s);
+		addSep(window);
 
-		auto j = new QHBoxLayout;
-		jump = new QLineEdit(widget[1]);
-		jump->setText(QString::number(Config::getValue("/Interface/Interval", 10), 'f', 2));
-		connect(jump, &QLineEdit::editingFinished, [=](){
-			Config::setValue("/Interface/Interval", jump->text().toDouble());
-		});
-		j->addWidget(jump);
-		ui[1] = new QGroupBox(tr("skip time"), widget[1]);
-		ui[1]->setLayout(j);
-
-		auto q = new QHBoxLayout;
-		q->addWidget(ui[0]);
-		q->addWidget(ui[1]);
-		list->addLayout(q);
-
-		auto t = new QGridLayout;
-		less = new QCheckBox(tr("frameless"), widget[1]);
+		less = new QCheckBox(tr("frameless"), page[1]);
 		less->setChecked(Config::getValue("/Interface/Frameless", false));
 		connect(less, &QCheckBox::stateChanged, [](int state){
 			Config::setValue("/Interface/Frameless", state == Qt::Checked);
 		});
-		t->addWidget(less, 0, 1);
-		vers = new QCheckBox(tr("version information"), widget[1]);
+		window->addWidget(less);
+		vers = new QCheckBox(tr("version information"), page[1]);
 		vers->setChecked(Config::getValue("/Interface/Version", true));
 		connect(vers, &QCheckBox::stateChanged, [](int state){
 			Config::setValue("/Interface/Version", state == Qt::Checked);
 		});
-		t->addWidget(vers, 0, 0);
-		sens = new QCheckBox(tr("toggle pause on video click"), widget[1]);
+		window->addWidget(vers);
+		sens = new QCheckBox(tr("toggle pause on video click"), page[1]);
 		sens->setChecked(Config::getValue("/Interface/Sensitive", true));
 		connect(sens, &QCheckBox::stateChanged, [](int state){
 			Config::setValue("/Interface/Sensitive", state == Qt::Checked);
 		});
-		t->addWidget(sens, 1, 0);
-		ui[2] = new QGroupBox(tr("window flag"), widget[1]);
-		ui[2]->setLayout(t);
-		list->addWidget(ui[2]);
+		window->addWidget(sens);
 
-		auto f = new QHBoxLayout;
-		font = new QComboBox(widget[1]);
-		font->addItems(QFontDatabase().families());
-		font->setCurrentText(Config::getValue("/Interface/Font/Family", QFont().family()));
-		connect(font, &QComboBox::currentTextChanged, [=](QString _font){
-			Config::setValue("/Interface/Font/Family", _font);
+		auto look = card(col, tr("Appearance and language"));
+
+		theme = new QComboBox(page[1]);
+		theme->addItems({ tr("light"), tr("dark"), tr("follow system") });
+		theme->setCurrentIndex(Config::getValue("/Interface/Theme", 0));
+		addRow(look, tr("theme"), theme);
+		connect<void (QComboBox::*)(int)>(theme, &QComboBox::currentIndexChanged, [](int i){
+			Config::setValue("/Interface/Theme", i);
+			Utils::applyTheme(i);
 		});
-		f->addWidget(font);
-		ui[3] = new QGroupBox(tr("interface font"), widget[1]);
-		ui[3]->setLayout(f);
+		addSep(look);
 
-		auto r = new QHBoxLayout;
-		reop = new QComboBox(widget[1]);
-		reop->addItems({ tr("open in new window"), tr("open in current window"), tr("append to playlist") });
-		reop->setCurrentIndex(Config::getValue("/Interface/Single", 1));
-		connect<void (QComboBox::*)(int)>(reop, &QComboBox::currentIndexChanged, [=](int i){
-			Config::setValue("/Interface/Single", i);
-		});
-		r->addWidget(reop);
-		ui[4] = new QGroupBox(tr("reopen action"), widget[1]);
-		ui[4]->setLayout(r);
-
-		auto v = new QHBoxLayout;
-		v->addWidget(ui[3], 1);
-		v->addWidget(ui[4], 1);
-		list->addLayout(v);
-
-		auto l = new QHBoxLayout;
-		loca = new QComboBox(widget[1]);
+		loca = new QComboBox(page[1]);
 		loca->addItem("English", QString());
 		for (const QFileInfo &info : QDir(Utils::localPath(Utils::Locale)).entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot)){
 			QLocale l(info.baseName());
@@ -347,66 +473,63 @@ QDialog(parent)
 				loca->setCurrentIndex(loca->count() - 1);
 			}
 		}
+		addRow(look, tr("locale"), loca);
 		connect<void(QComboBox::*)(int)>(loca, &QComboBox::currentIndexChanged, [this](int i){
 			Config::setValue("/Interface/Locale", loca->itemData(i).toString());
 		});
-		l->addWidget(loca);
-		ui[5] = new QGroupBox(tr("locale"));
-		ui[5]->setLayout(l);
+		addSep(look);
 
-		auto m = new QHBoxLayout;
-		stay = new QComboBox(widget[1]);
+		font = new QComboBox(page[1]);
+		font->addItems(QFontDatabase().families());
+		font->setCurrentText(Config::getValue("/Interface/Font/Family", QFont().family()));
+		connect(font, &QComboBox::currentTextChanged, [=](QString _font){
+			Config::setValue("/Interface/Font/Family", _font);
+		});
+		font->setMinimumWidth(220);
+		addRow(look, tr("interface font"), font);
+		addSep(look);
+
+		reop = new QComboBox(page[1]);
+		reop->addItems({ tr("open in new window"), tr("open in current window"), tr("append to playlist") });
+		reop->setCurrentIndex(Config::getValue("/Interface/Single", 1));
+		addRow(look, tr("reopen action"), reop);
+		connect<void (QComboBox::*)(int)>(reop, &QComboBox::currentIndexChanged, [=](int i){
+			Config::setValue("/Interface/Single", i);
+		});
+		addSep(look);
+
+		stay = new QComboBox(page[1]);
 		stay->addItems({ tr("never"), tr("playing"), tr("always") });
 		stay->setCurrentIndex(Config::getValue("/Interface/Top", 0));
-		connect<void (QComboBox::*)(int)>(stay, &QComboBox::currentIndexChanged, [this](int i){
+		addRow(look, tr("stay on top"), stay);
+		connect<void (QComboBox::*)(int)>(stay, &QComboBox::currentIndexChanged, [=](int i){
 			Config::setValue("/Interface/Top", i);
 			QMetaObject::invokeMethod(lApp->findObject<Interface>()->widget(), "setWindowFlags");
 		});
-		m->addWidget(stay);
-		ui[6] = new QGroupBox(tr("stay on top"), widget[1]);
-		ui[6]->setLayout(m);
 
-		auto th = new QHBoxLayout;
-		theme = new QComboBox(widget[1]);
-		theme->addItems({ tr("light"), tr("dark"), tr("follow system") });
-		theme->setCurrentIndex(Config::getValue("/Interface/Theme", 0));
-		connect<void (QComboBox::*)(int)>(theme, &QComboBox::currentIndexChanged, [](int i){
-			Config::setValue("/Interface/Theme", i);
-			Utils::applyTheme(i);
-		});
-		th->addWidget(theme);
-		ui[7] = new QGroupBox(tr("theme"), widget[1]);
-		ui[7]->setLayout(th);
-
-		auto n = new QHBoxLayout;
-		n->addWidget(ui[5]);
-		n->addWidget(ui[6]);
-		list->addLayout(n);
-		auto n2 = new QHBoxLayout;
-		n2->addWidget(ui[7]);
-		list->addLayout(n2);
-
-		list->addStretch(10);
-		tab->addTab(widget[1], tr("Interface"));
+		col->addStretch(10);
 	}
 	//Shield
 	{
-		widget[2] = new QWidget(this);
+		stack->addWidget(page[2] = new Page(this));
+		auto col = static_cast<Page *>(page[2])->column;
+
+		auto kinds = card(col, tr("Block by type"));
 		QStringList list;
 		list << tr("Top") << tr("Bottom") <<
 			tr("Slide") << tr("Reverse") <<
 			tr("Guest") << tr("Advanced") <<
 			tr("Color") << tr("Whole");
-		auto grid = new QGridLayout(widget[2]);
-
-		auto g = new QHBoxLayout;
+		auto grid = new QGridLayout;
+		grid->setContentsMargins(0, 4, 0, 4);
+		grid->setHorizontalSpacing(18);
 		for (int i = 0; i < 8; ++i){
-			check[i] = new QCheckBox(list[i], widget[2]);
-			check[i]->setFixedHeight(40);
+			check[i] = new QCheckBox(list[i], page[2]);
 			check[i]->setChecked(false);
-			g->addWidget(check[i]);
+			grid->addWidget(check[i], i / 4, i % 4);
 		}
-		grid->addLayout(g, 0, 0, 1, 4);
+		grid->setColumnStretch(4, 1);
+		kinds->addLayout(grid);
 
 		QStringList rl, sl;
 		for (const QString &shield : lApp->findObject<Shield>()->getAllShields()){
@@ -435,20 +558,21 @@ QDialog(parent)
 			}
 		}
 
-		type = new QComboBox(widget[2]);
+		auto rules = card(col, tr("Text and user rules"));
+		type = new QComboBox(page[2]);
 		type->addItem(tr("Text"));
 		type->addItem(tr("User"));
-		edit = new QLineEdit(widget[2]);
-		regexp = new List(widget[2]);
-		sender = new List(widget[2]);
+		edit = new QLineEdit(page[2]);
+		regexp = new List(page[2]);
+		sender = new List(page[2]);
 		regexp->setSelectionMode(QListView::ExtendedSelection);
 		sender->setSelectionMode(QListView::ExtendedSelection);
 		regexp->setModel(rm = new QStringListModel(rl, regexp));
 		sender->setModel(sm = new QStringListModel(sl, sender));
-		action[0] = new QAction(tr("Add"), widget[2]);
-		action[1] = new QAction(tr("Del"), widget[2]);
-		action[2] = new QAction(tr("Import"), widget[2]);
-		action[3] = new QAction(tr("Export"), widget[2]);
+		action[0] = new QAction(tr("Add"), page[2]);
+		action[1] = new QAction(tr("Del"), page[2]);
+		action[2] = new QAction(tr("Import"), page[2]);
+		action[3] = new QAction(tr("Export"), page[2]);
 		action[1]->setShortcut(QKeySequence("Del"));
 		action[2]->setShortcut(QKeySequence("Ctrl+I"));
 		action[3]->setShortcut(QKeySequence("Ctrl+E"));
@@ -591,31 +715,53 @@ QDialog(parent)
 			}
 		});
 		for (QAction *iter : action){
-			widget[2]->addAction(iter);
+			page[2]->addAction(iter);
 		}
-		button[0] = new QPushButton(tr("Add"), widget[2]);
-		button[1] = new QPushButton(tr("Del"), widget[2]);
-		button[0]->setFixedWidth(60 * logicalDpiX() / 96);
-		button[1]->setFixedWidth(60 * logicalDpiX() / 96);
-		button[0]->setFocusPolicy(Qt::NoFocus);
-		button[1]->setFocusPolicy(Qt::NoFocus);
-		connect(button[0], &QPushButton::clicked, action[0], &QAction::trigger);
-		connect(button[1], &QPushButton::clicked, action[1], &QAction::trigger);
-		regexp->addActions(widget[2]->actions());
-		sender->addActions(widget[2]->actions());
+		button[0] = new QPushButton(tr("Add"), page[2]);
+		button[1] = new QPushButton(tr("Del"), page[2]);
+		button[2] = new QPushButton(tr("Import"), page[2]);
+		button[3] = new QPushButton(tr("Export"), page[2]);
+		for (int i = 0; i < 4; ++i){
+			button[i]->setFocusPolicy(Qt::NoFocus);
+			connect(button[i], &QPushButton::clicked, action[i], &QAction::trigger);
+		}
+		regexp->addActions(page[2]->actions());
+		sender->addActions(page[2]->actions());
 		regexp->setContextMenuPolicy(Qt::ActionsContextMenu);
 		sender->setContextMenuPolicy(Qt::ActionsContextMenu);
 
-		grid->addWidget(type, 1, 0);
-		grid->addWidget(edit, 1, 1);
-		grid->addWidget(button[0], 1, 2);
-		grid->addWidget(button[1], 1, 3);
-		grid->addWidget(regexp, 2, 0, 1, 2);
-		grid->addWidget(sender, 2, 2, 1, 2);
+		{
+			auto bar = new QWidget(page[2]);
+			auto h = new QHBoxLayout(bar);
+			h->setContentsMargins(0, 4, 0, 4);
+			h->setSpacing(6);
+			h->addWidget(type);
+			h->addWidget(edit, 1);
+			for (int i = 0; i < 4; ++i){
+				h->addWidget(button[i]);
+			}
+			rules->addWidget(bar);
+			auto lists = new QWidget(page[2]);
+			auto g = new QHBoxLayout(lists);
+			g->setContentsMargins(0, 4, 0, 4);
+			g->setSpacing(10);
+			auto left = new QVBoxLayout();
+			left->addWidget(new QLabel(tr("Text"), page[2]));
+			left->addWidget(regexp, 1);
+			auto right = new QVBoxLayout();
+			right->addWidget(new QLabel(tr("User"), page[2]));
+			right->addWidget(sender, 1);
+			g->addLayout(left, 1);
+			g->addLayout(right, 1);
+			rules->addWidget(lists, 1);
+		}
 
-		same = new QSlider(Qt::Horizontal, widget[2]);
+		auto density = card(col, tr("Density limits"));
+		same = new QSlider(Qt::Horizontal, page[2]);
 		same->setRange(0, 40);
 		same->setValue(Config::getValue("/Shield/Amount/Repeat", 5));
+		same->setMinimumWidth(190);
+		addRow(density, tr("limit of the same"), same, tr("0 means disabled"));
 		connect(same, &QSlider::valueChanged, [=](int value){
 			Config::setValue("/Shield/Amount/Repeat", value);
 			QPoint p;
@@ -623,145 +769,172 @@ QDialog(parent)
 			p.setY(same->mapToGlobal(same->rect().center()).y());
 			QToolTip::showText(p, QString::number(value));
 		});
-		auto a = new QHBoxLayout;
-		a->addWidget(same);
-		label[0] = new QGroupBox(tr("limit of the same"), widget[2]);
-		label[0]->setToolTip(tr("0 means disabled"));
-		label[0]->setLayout(a);
-		grid->addWidget(label[0], 3, 0, 1, 2);
+		addSep(density);
 
-		limit = new QLineEdit(widget[2]);
-		limit->setText(QString::number(Config::getValue("/Shield/Amount/Screen", 0)));
-		connect(limit, &QLineEdit::editingFinished, [=](){
-			Config::setValue("/Shield/Amount/Screen", limit->text().toInt());
+		limit = new QSpinBox(page[2]);
+		limit->setRange(0, 2000);
+		limit->setValue(Config::getValue("/Shield/Amount/Screen", 0));
+		limit->setSpecialValueText(tr("unlimited"));
+		addRow(density, tr("limit of density"), limit, tr("0 means disabled"));
+		connect(limit, QOverload<int>::of(&QSpinBox::valueChanged), [](int value){
+			Config::setValue("/Shield/Amount/Screen", value);
 		});
-		auto m = new QHBoxLayout;
-		m->addWidget(limit);
-		label[1] = new QGroupBox(tr("limit of density"), widget[2]);
-		label[1]->setToolTip(tr("0 means disabled"));
-		label[1]->setLayout(m);
-		grid->addWidget(label[1], 3, 2, 1, 2);
 
-		tab->addTab(widget[2], tr("Shield"));
+		col->addStretch(10);
 	}
 	//Shortcut
-		{
-			widget[3] = new QWidget(this);
-			auto w = new QGridLayout(widget[3]);
-			hotkey = new QTreeWidget(widget[3]);
-			hotkey->setSelectionMode(QAbstractItemView::NoSelection);
-			hotkey->setColumnCount(2);
-			hotkey->header()->hide();
-			hotkey->header()->setStretchLastSection(false);
-			hotkey->header()->setSectionResizeMode(0, QHeaderView::Stretch);
-			hotkey->setColumnWidth(1, 1.2*logicalDpiX());
-			hotkey->setEditTriggers(QAbstractItemView::NoEditTriggers);
-			for (QAction *iter : lApp->findObject<Interface>()->widget()->findChildren<QAction *>(QRegularExpression(".{4}"))){
-				QTreeWidgetItem *item = new QTreeWidgetItem;
-				item->setData(0, Qt::DisplayRole, iter->text());
-				item->setData(1, Qt::DisplayRole, iter->shortcut().toString());
-				item->setData(1, Qt::UserRole, iter->objectName());
-				item->setFlags(Qt::ItemIsEditable | Qt::ItemIsEnabled);
-				item->setSizeHint(0, QSize(60, 25 * logicalDpiY() / 72));
-				hotkey->addTopLevelItem(item);
-			}
-			w->addWidget(hotkey);
-			connect(hotkey, &QTreeWidget::currentItemChanged, [this](){
-				hotkey->setCurrentItem(nullptr);
-			});
-			// 点击快捷键列弹出按键捕获框：按下即录（QKeySequenceEdit），
-			// 代替旧版"手打 Ctrl+X 文本再回车"
-			connect(hotkey, &QTreeWidget::itemClicked, [=](QTreeWidgetItem *item, int column){
-				if (column != 1){
-					return;
-				}
-				const QVariant v = item->data(1, Qt::UserRole);
-				if (!v.isValid()){
-					return;
-				}
-				QAction *a = lApp->findObject<Interface>()->widget()->findChild<QAction *>(v.toString());
-				if (!a){
-					return;
-				}
-				QDialog dlg(this);
-				dlg.setWindowTitle(tr("Shortcut: %1").arg(a->text()));
-				auto box = new QVBoxLayout(&dlg);
-				auto edit = new QKeySequenceEdit(&dlg);
-				edit->setKeySequence(a->shortcut());
-				box->addWidget(edit);
-				auto btn = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::Reset, &dlg);
-				box->addWidget(btn);
-				connect(btn, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
-				connect(btn, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
-				connect(btn->button(QDialogButtonBox::Reset), &QPushButton::clicked, edit, &QKeySequenceEdit::clear);
-				dlg.exec();
-				const QKeySequence ns = edit->keySequence();
-				if (ns != a->shortcut()){
-					const QString text = ns.toString(QKeySequence::NativeText);
-					a->setShortcut(text);
-					item->setText(1, text);
-					Config::setValue("/Shortcut/" + a->objectName(), text);
-				}
-			});
-			tab->addTab(widget[3], tr("Shortcut"));
+	{
+		stack->addWidget(page[3] = new Page(this));
+		auto col = static_cast<Page *>(page[3])->column;
+
+		auto keys = card(col, tr("Shortcuts"), tr("Click the key column to record a new shortcut"));
+		hotkey = new QTreeWidget(page[3]);
+		hotkey->setSelectionMode(QAbstractItemView::NoSelection);
+		hotkey->setColumnCount(2);
+		hotkey->header()->hide();
+		hotkey->header()->setStretchLastSection(false);
+		hotkey->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+		hotkey->setColumnWidth(1, 1.2*logicalDpiX());
+		hotkey->setEditTriggers(QAbstractItemView::NoEditTriggers);
+		for (QAction *iter : lApp->findObject<Interface>()->widget()->findChildren<QAction *>(QRegularExpression(".{4}"))){
+			QTreeWidgetItem *item = new QTreeWidgetItem;
+			item->setData(0, Qt::DisplayRole, iter->text());
+			item->setData(1, Qt::DisplayRole, iter->shortcut().toString());
+			item->setData(1, Qt::UserRole, iter->objectName());
+			item->setFlags(Qt::ItemIsEditable | Qt::ItemIsEnabled);
+			item->setSizeHint(0, QSize(60, 25 * logicalDpiY() / 72));
+			hotkey->addTopLevelItem(item);
 		}
-		//Thanks
-		{
-			widget[4] = new QWidget(this);
-			auto w = new QGridLayout(widget[4]);
-			QFile t(":/Text/THANKS");
-			t.open(QIODevice::ReadOnly | QIODevice::Text);
-			thanks = new QTextEdit(widget[4]);
-			thanks->setReadOnly(true);
-			thanks->setText(t.readAll());
-			w->addWidget(thanks);
-			tab->addTab(widget[4], tr("Thanks"));
-		}
-		//License
-		{
-			widget[5] = new QWidget(this);
-			auto w = new QGridLayout(widget[5]);
-			QFile l(":/Text/COPYING");
-			l.open(QIODevice::ReadOnly | QIODevice::Text);
-			license = new QTextEdit(widget[5]);
-			license->setReadOnly(true);
-			license->setText(l.readAll());
-			w->addWidget(license);
-			tab->addTab(widget[5], tr("License"));
-		}
-		connect(this, &QDialog::finished, [this](){
-			Danmaku *d = lApp->findObject<Danmaku>();
-			APlayer *p = lApp->findObject<APlayer>();
-			if (reparse != getReparse()){
-				QStringList shields;
-				for (int i = 0; i < 8; ++i){
-					if (check[i]->isChecked()){
-						shields.append(QString("m=%1").arg(i));
-					}
-				}
-				for (const QString &regexp : rm->stringList()){
-					shields.append("t=" + regexp);
-				}
-				for (const QString &sender : sm->stringList()){
-					shields.append("u=" + sender);
-				}
-				lApp->findObject<Shield>()->setAllShields(shields);
-				d->parse(Danmaku::Block);
-			}
-			if (restart != getRestart() && ((p->getState() == APlayer::Stop && d->rowCount() == 0) || QMessageBox::warning(
-				this,
-				tr("Warning"),
-				tr("Restart to apply changes?"),
-				QMessageBox::Yes, QMessageBox::No) == QMessageBox::Yes)){
-				qApp->exit(12450);
+		keys->addWidget(hotkey);
+		connect(hotkey, &QTreeWidget::currentItemChanged, [this](){
+			hotkey->setCurrentItem(nullptr);
+		});
+		// 点击快捷键列弹出按键捕获框：按下即录（QKeySequenceEdit），
+		// 代替旧版"手打 Ctrl+X 文本再回车"
+		connect(hotkey, &QTreeWidget::itemClicked, [=](QTreeWidgetItem *item, int column){
+			if (column != 1){
 				return;
 			}
-			Config::save();
+			const QVariant v = item->data(1, Qt::UserRole);
+			if (!v.isValid()){
+				return;
+			}
+			QAction *a = lApp->findObject<Interface>()->widget()->findChild<QAction *>(v.toString());
+			if (!a){
+				return;
+			}
+			QDialog dlg(this);
+			dlg.setWindowTitle(tr("Shortcut: %1").arg(a->text()));
+			auto box = new QVBoxLayout(&dlg);
+			auto edit = new QKeySequenceEdit(&dlg);
+			edit->setKeySequence(a->shortcut());
+			box->addWidget(edit);
+			auto btn = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::Reset, &dlg);
+			box->addWidget(btn);
+			connect(btn, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+			connect(btn, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+			connect(btn->button(QDialogButtonBox::Reset), &QPushButton::clicked, edit, &QKeySequenceEdit::clear);
+			dlg.exec();
+			const QKeySequence ns = edit->keySequence();
+			if (ns != a->shortcut()){
+				const QString text = ns.toString(QKeySequence::NativeText);
+				a->setShortcut(text);
+				item->setText(1, text);
+				Config::setValue("/Shortcut/" + a->objectName(), text);
+			}
 		});
-		int h = outer->minimumSize().height(), w = 1.15*h;
-		setMinimumSize(w, h);
-		Utils::setCenter(this);
 
-		restart = getRestart();
-		reparse = getReparse();
+		col->addStretch(10);
+	}
+	//About（Thanks + License 合并成一页）
+	{
+		stack->addWidget(page[4] = new Page(this));
+		auto col = static_cast<Page *>(page[4])->column;
+
+		auto thanksCard = card(col, tr("Thanks"));
+		QFile t(":/Text/THANKS");
+		t.open(QIODevice::ReadOnly | QIODevice::Text);
+		thanks = new QTextEdit(page[4]);
+		thanks->setReadOnly(true);
+		thanks->setText(t.readAll());
+		thanks->setMinimumHeight(160 * logicalDpiY() / 96);
+		thanksCard->addWidget(thanks);
+
+		auto licenseCard = card(col, tr("License"));
+		QFile l(":/Text/COPYING");
+		l.open(QIODevice::ReadOnly | QIODevice::Text);
+		license = new QTextEdit(page[4]);
+		license->setReadOnly(true);
+		license->setText(l.readAll());
+		licenseCard->addWidget(license);
+
+		col->addStretch(10);
+	}
+
+	const QString titles[5] = { tr("Playing"), tr("Interface"), tr("Shield"), tr("Shortcut"), tr("About") };
+	for (int i = 0; i < 5; ++i){
+		auto item = new QListWidgetItem(navIcon(i), titles[i], nav);
+		item->setSizeHint(QSize(-1, 38 * logicalDpiY() / 96));
+	}
+	connect(nav, &QListWidget::currentRowChanged, stack, &QStackedWidget::setCurrentIndex);
+	nav->setCurrentRow(0);
+
+	connect(this, &QDialog::finished, [this](){
+		Danmaku *d = lApp->findObject<Danmaku>();
+		APlayer *p = lApp->findObject<APlayer>();
+		if (reparse != getReparse()){
+			QStringList shields;
+			for (int i = 0; i < 8; ++i){
+				if (check[i]->isChecked()){
+					shields.append(QString("m=%1").arg(i));
+				}
+			}
+			for (const QString &regexp : rm->stringList()){
+				shields.append("t=" + regexp);
+			}
+			for (const QString &sender : sm->stringList()){
+				shields.append("u=" + sender);
+			}
+			lApp->findObject<Shield>()->setAllShields(shields);
+			d->parse(Danmaku::Block);
+		}
+		if (restart != getRestart() && ((p->getState() == APlayer::Stop && d->rowCount() == 0) || QMessageBox::warning(
+			this,
+			tr("Warning"),
+			tr("Restart to apply changes?"),
+			QMessageBox::Yes, QMessageBox::No) == QMessageBox::Yes)){
+			qApp->exit(12450);
+			return;
+		}
+		Config::save();
+	});
+
+	setMinimumSize(560 * logicalDpiX() / 96, 460 * logicalDpiY() / 96);
+	resize(680 * logicalDpiX() / 96, 520 * logicalDpiY() / 96);
+	Utils::setCenter(this);
+
+	restart = getRestart();
+	reparse = getReparse();
+
+#ifdef BILILOCAL_EMBED_TEST
+	// 自动化验证钩子（与 Home/EWindow 的钩子同一编译开关）：BILILOCAL_UI_TEST
+	// 触发逐页巡览，页码写进窗口标题，外部脚本按标题抓帧——外部投递的鼠标
+	// 点击会被 Qt 按真实光标位置路由，对模态对话框不可靠。正常使用零影响。
+	if (qEnvironmentVariableIsSet("BILILOCAL_UI_TEST")){
+		auto tour = new QTimer(this);
+		tour->setInterval(1200);
+		connect(tour, &QTimer::timeout, this, [this, tour]() mutable {
+			static int step = 0;	// ctor 局部变量按引用捕获会悬空，用 static
+			if (step > 4){
+				tour->stop();
+				accept();
+				return;
+			}
+			nav->setCurrentRow(step);
+			setWindowTitle(tr("Config") + QStringLiteral(" - %1").arg(step));
+			++step;
+		});
+		tour->start();
+	}
+#endif
 }

@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> 更新时间：2026-10-25（**第十二版：交互打磨+设置审计轮（归档版）**）——`master` = a9fbcb3（悬停冻结持久化）← 63f9a4b（设置审计）← 8d9c8ec（悬停冻结+发送者数据）← 44fbb3e（底栏目录记忆补修）← 7f8685a（瘦身）← 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 → 925,696 → 943,616 字节；dist 358M → 176M（实测可再至 155M，见 §10）。
+> 更新时间：2026-10-25（**第十二版：交互打磨+设置审计轮（归档版）**；同日校正版次哈希、目录表与工具数）——`master` = `3549ebe`（归档文档轮，纯文档）← `a9fbcb3`（悬停冻结持久化）← `63f9a4b`（设置审计）← 8d9c8ec（悬停冻结+发送者数据）← 44fbb3e（底栏目录记忆补修）← 7f8685a（瘦身）← 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 → 925,696 → 943,616 字节；dist 358M → 176M（实测可再至 155M，见 §10）。
 > 写给新会话：先读这份，再看 `src\` 的 git 历史——**每个提交都有根因和证据**。
 > 一句话：把开源播放器 BiliLocal 0.4.2（GPL-3.0，2016 年停更）改造成 64 位私人 Windows 播放器：**VLC 3 + d3d11 硬解直出（Embed 唯一输出）+ 单底栏 UI**，日常播服务器录播 + 弹幕，CPU 从 ~210% 降到 ~11%。
 >
@@ -29,20 +29,22 @@
 | `src\` | 源码 git 仓库（全部工作在 `master`）；tag `v0.5.0-vmem` = 早期 vmem 线回滚点 |
 | `src\docs\HANDOVER.md` | 交接手册的仓库备份副本（正本在工程根 `交接文档.md`，更新后同步过来） |
 | `build\` | 影子构建（qmake + mingw32-make），产物 `build\release\BiliLocal.exe` |
+| `build-test\` | 单测构建树（`src\test\tst_parse.pro` 的产物，只链 Parse 与 Utils 两个 TU）。跑 `release\tst_parse.exe` 前要把 `deps\5.15.2\mingw81_64\bin` 与 `deps\Tools\mingw810_64\bin` 放进 PATH，否则缺 Qt5Test/Core |
 | `dist\` | **可直接运行的成品**：exe + Qt5 + VLC 3.0.24（FFmpeg 8.1.2）+ 插件 + 翻译（Embed 硬解直出版） |
 | `deps\` | 工具链：Qt 5.15.2 (mingw81_64)、MinGW 8.1.0、VLC SDK 头文件/导入库（在 `deps\thirdparty`；旧运行库目录 deps\vlc 与 3.0.21 包已删，VLC 运行库只存在于 dist；`deps\dl` 仅剩 vlc-2.2.8-win64.zip（vmem 考古用）） |
 | ~~`backup\`~~ | 已删除（2026-10-24 用户决定）：git 历史就存在 `src\.git` + GitHub 远端里，不再保留离线 bundle |
-| `tools\` | 调试/测试脚本（11 个，2026-10-25 收编 3 个对话框验证脚本，见第 8 节） |
-| `test\` | `embed.xml` = 测试弹幕 fixture（媒体自备：任意视频同目录同名即可） |
+| `tools\` | 调试/测试脚本（13 个，2026-10-25 收编 3 个对话框验证脚本，见第 8 节） |
+| `test\` | `embed.xml` = 测试弹幕 fixture；`rec.xml` + `rec.flv` = 指向 Z: 真实录播的**符号链接**（Z: 未挂载时这两个链接悬空，单测不依赖它们） |
 | `%LOCALAPPDATA%\BiliLocal\Config.txt` | 运行时配置（JSON） |
 | `%LOCALAPPDATA%\BiliLocal\cache\msg.log` | 日志（超 10MB 自动轮转成 .old） |
 
 > 2026-10-24 清理：`dist-vlc2\`（旧 vmem 线）、`dumps\`（4.9G WER 转储）、`build-dbg/fp\`（旧构建树）、`embed-wt\` worktree、`BiliLocal-64bit.patch`（过时补丁）已删除——回滚材料只在 git 历史里（`backup\` 本体也已删,别再找它）。
+> 2026-10-25 再清一次：`dumps\` 又积了 3 个 dump（00:14/00:20/00:21 各一个，共 1.9G，交互轮排查期残留）连同目录一并删除。**WER 转储默认写这里，排查完记得清**；别让它横向长到几个 G。
 
 ## 2. 当前状态
 
-- **exe**：`dist\BiliLocal.exe`，943,616 字节，SHA256 `7D8ABE2F…`（构建自 `a9fbcb3` 同树）
-- **源码**：`master` = **`44fbb3e`** ← `7f8685a`（瘦身轮）← `473ba62`（Win11 UI 轮）← `3f86f74`（VLC 3.0.24）← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`；上游 = `9d1cb05`；回滚点 tag `v0.5.0-vmem` = `46b68b9`
+- **exe**：`dist\BiliLocal.exe`，943,616 字节，SHA256 `7D8ABE2F…`（构建自 `a9fbcb3` 同树；2026-10-25 核对：与 `build\release\BiliLocal.exe` **逐字节相同**，构建时间 05:01 晚于最后一次代码改动，即 dist 跑的就是当前源码）
+- **源码**：`master` = **`3549ebe`**（归档文档轮，纯文档）← `a9fbcb3`（悬停冻结持久化，最后一个代码提交）← `63f9a4b`（设置审计）← `8d9c8ec`（悬停冻结+发送者数据）← `44fbb3e`（底栏目录记忆补修）← `7f8685a`（瘦身轮）← `473ba62`（Win11 UI 轮）← `3f86f74`（VLC 3.0.24）← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`；上游 = `9d1cb05`；回滚点 tag `v0.5.0-vmem` = `46b68b9`
 - **运行库**：VLC **3.0.24**（FFmpeg 8.1.2，d3d11 直出；升级缘由见提交 3f86f74）；**dist\plugins 混住着 Qt 平台插件（platforms/imageformats/mediaservice/styles），整目录替换 VLC 时必须把这四个目录合并到顶层，否则 Qt 起不来**（升级/裁剪流程见第 9 节）；dist 只带 exe 实际导入的 5 个 Qt DLL（Concurrent/Core/Gui/Network/Widgets）
 - **配置**：`Output=Embed` 已成唯一输出（键保留但代码不再读取）；`Immediate=True`；`HardwareDecode` 已无消费者（d3d11 固定开启，Arguments 手写 `--avcodec-hw=`/`--vout=` 仍可覆盖）
 - **i18n**：源码全英文串，中文走 `dist\locale\zh_CN\bililocal.qm`（187/187 全译，含繁体）；改 UI 文案后记得 lupdate→补译→lrelease→部署 qm
@@ -50,11 +52,11 @@
 
 ### 2.0 上一会话纪要（2026-10-25 归档,写给接棒的会话）
 
-- **已交付并推送（至 `a9fbcb3`）**：悬停冻结单条弹幕(静止持久)/右键弹幕数据块(全文/用户名+哈希/时间/位置/真实同源计数)/屏蔽发送者按 hash 真实生效/屏蔽页双列重构/弹幕专属右键菜单/菜单对齐与文案翻转/设置审计轮(见 §2.1 沿革)/文件面板「清空」
+- **已交付并推送（至 `3549ebe`，最后一个代码提交是 `a9fbcb3`）**：悬停冻结单条弹幕(静止持久)/右键弹幕数据块(全文/用户名+哈希/时间/位置/真实同源计数)/屏蔽发送者按 hash 真实生效/屏蔽页双列重构/弹幕专属右键菜单/菜单对齐与文案翻转/设置审计轮(见 §2.1 沿革)/文件面板「清空」
 - **明确放弃,勿重做**：底栏「弹幕·开」按钮的右键菜单(a4b5acf)——三层窗口结构盲区,详见 §2.1 与 §6 23-25
 - **未决**：§10-2 的 dist 再瘦身候选待用户拍板;§7-1 的 Z: 长时段观察持续中
 - **验证分工（用户明确要求）**：功能/交互的验收测试交给用户本人做,自动化只负责日志与时序取证;最后两轮(菜单对齐+设置审计)为自测通过,未经用户逐项验收
-- 单测 9/9;i18n 187/187;警告普查 42 条全部低危(29 条 Config.h 模板噪音可一并清理)
+- 单测 9/9（2026-10-25 复跑 `build-test\release\tst_parse.exe` 确认：7 用例 + init/cleanup = 9 passed）；i18n 187/187（`zh_CN.ts` 194 条 message − 7 条 vanished，0 unfinished）；警告普查 42 条全部低危(29 条 Config.h 模板噪音可一并清理)
 
 ### 2.1 版本沿革
 

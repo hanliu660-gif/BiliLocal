@@ -159,20 +159,6 @@ void Running::setup()
 		lApp->findObject<ARender>()->draw();
 	});
 
-	// 悬停冻结的过期定时器：光标停止投喂 400ms 后自动解冻，
-	// 对"光标离开窗口/弹出对话框/任何断供"天然自愈
-	hoverTimer = new QTimer(this);
-	hoverTimer->setSingleShot(true);
-	hoverTimer->setInterval(400);
-	connect(hoverTimer, &QTimer::timeout, this, [this]() {
-		Q_D(Running);
-		if (d->pinned || d->frozen == nullptr) {
-			return;
-		}
-		qWarning("hover: release (timeout)");
-		d->frozen = nullptr;
-		lApp->findObject<ARender>()->draw();
-	});
 }
 
 void Running::clear(bool soft)
@@ -537,18 +523,16 @@ void Running::setHover(QPointF point, bool active)
 		d->lock.unlock();
 	}
 	if (hit == d->frozen) {
-		// 同一条：只续期，不刷日志
-		if (hit != nullptr && !d->pinned) {
-			hoverTimer->start();
-		}
+		return;
+	}
+	if (hit == nullptr && d->pinned) {
+		// 右键数据菜单开着（它弹出的瞬间会触发 EWindow leave）：
+		// 期间不解冻，菜单关闭后下一次 mouseMove 自然重新判定
 		return;
 	}
 	d->frozen = hit;
 	if (hit != nullptr) {
 		qWarning("hover: freeze \"%s\"", qPrintable(hit->getSource()->string));
-		if (!d->pinned) {
-			hoverTimer->start();
-		}
 	}
 	else {
 		qWarning("hover: release (left)");
@@ -560,8 +544,4 @@ void Running::pinHover(bool pin)
 {
 	Q_D(Running);
 	d->pinned = pin;
-	if (!pin && d->frozen != nullptr) {
-		// 菜单关闭后仍给一个过期窗口，光标动了会自然续期
-		hoverTimer->start();
-	}
 }

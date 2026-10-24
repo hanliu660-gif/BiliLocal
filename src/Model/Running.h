@@ -44,7 +44,6 @@ public:
 private:
 	RunningPrivate *d_ptr;
 	Q_DECLARE_PRIVATE(Running);
-	QTimer *hoverTimer = nullptr;
 
 public slots:
 	void clear(bool soft = false);
@@ -55,9 +54,11 @@ public slots:
 	const Comment *commentAt(QPointF point) const;
 	int size() const;
 
-	// 悬停冻结：光标压在某条弹幕上就停住它，离开/超时自动恢复。
-	// point 无效坐标 = 立即解冻。由 Home 在 mouseMove 里持续投喂。
+	// 悬停冻结：光标压在某条弹幕上就停住它，移开（或离开窗口）才解冻。
+	// **没有超时**——鼠标静止时 Windows 不发 mousemove，靠定时器续期反而
+	// 会在"光标静止压在弹幕上"时把弹幕解冻。point 无效坐标 = 请求解冻
+	// （被 pin 时忽略）。由 Home 的 mouseMove 驱动，EWindow::leaveEvent 解冻。
 	void setHover(QPointF point, bool active);
-	// 右键菜单打开期间钉住冻结（菜单的嵌套事件循环里过期定时器还会跑）
+	// 右键菜单弹出会触发 EWindow leave，钉住以免菜单开着、弹幕飞了
 	void pinHover(bool pin);
 };

@@ -120,6 +120,9 @@ QVariant Danmaku::data(const QModelIndex &index, int role) const
 			default:
 				break;
 			}
+			// 1-6 是普通弹幕（滚动/底端/顶端/逆向），没有专属底色；这里必须显式返回
+			// 空值，否则会穿透到下面的 case ModeRole，把 mode 整数当背景刷交出去
+			return QVariant();
 		case ModeRole:
 			return comment.mode;
 		case FontRole:

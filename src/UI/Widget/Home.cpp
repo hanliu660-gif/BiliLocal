@@ -858,10 +858,10 @@ void Home::showContextMenu(QPoint p)
 					danmaku->parse(Danmaku::Block);
 				}
 			});
-			top.addSeparator();
 		}
 	// 点在弹幕上:这是弹幕专属菜单,只保留信息/复制/屏蔽;通用功能只在空白处右键出现
 	if (cur == nullptr) {
+			top.addSeparator();
 			top.addActions(info->actions());
 			top.addAction(menu->findChild<QAction *>("File"));
 			top.addAction(listA);
@@ -905,8 +905,10 @@ void Home::showContextMenu(QPoint p)
 			dmk.addAction(tr("Load"), loadA, SLOT(trigger()), loadA->shortcut())->setEnabled(loadA->isEnabled());
 			top.addMenu(&dmk);
 	}
-		top.addAction(confA);
-		top.addAction(quitA);
+		if (cur == nullptr) {
+			top.addAction(confA);
+			top.addAction(quitA);
+		}
 		// 菜单开着时钉住冻结：嵌套事件循环里过期定时器还会跑，
 		// 不钉住的话菜单开着、弹幕却飞了
 		if (cur) {

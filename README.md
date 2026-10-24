@@ -14,7 +14,7 @@ danmaku XML (`*.xml`) that recorder tools drop next to the video.
   bugs fixed (config persistence, UTF-8 BOM danmaku parsing, crash-on-quit,
   fullscreen glitches — see the commit history, every commit documents the
   root cause and its evidence)
-- **VLC 3 + Direct3D11 hardware decode, direct output**: video is rendered by
+- **VLC 3.0.24 (FFmpeg 8.1.2) + Direct3D11 hardware decode, direct output**: video is rendered by
   libvlc itself into a native child window (`--avcodec-hw=d3d11va`,
   `--vout=direct3d11`); danmaku are painted by a separate transparent OpenGL
   overlay that follows the main window. Playback CPU dropped from ~210% to
@@ -50,7 +50,7 @@ Toolchain used by this fork:
 
 - Qt 5.15.2 (mingw81_64)
 - MinGW 8.1.0 (x86_64-w64-mingw32)
-- VLC 3.0.21 — SDK (headers + import libs) at build time, full runtime
+- VLC 3.0.24 — SDK (headers + import libs) at build time, full runtime
   (libvlc, libvlccore, plugins) at run time
 
 ```bat

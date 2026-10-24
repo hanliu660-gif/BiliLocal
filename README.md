@@ -63,8 +63,11 @@ danmaku XML (`*.xml`) that recorder tools drop next to the video.
   volume, and four icon buttons (open, settings, fullscreen, playlist)
 - The playlist panel never steals keyboard focus
 - Hover the video to freeze the danmaku under the cursor (it resumes when
-  you move off); right-click it for a read-only block with the sender,
-  sent time, video position, same-sender count, plus copy / shield-sender
+  you move off); right-click it for the full text (word-wrapped,
+  selectable) plus a read-only block with the masked username and stable
+  user hash (uid itself is anonymized by Bilibili; the hash still
+  identifies the person within a recording, so shield-sender works),
+  sent time, video position, same-sender count, and copy
 - Shortcuts: click video = pause/resume (250 ms disambiguation against
   double-click, `/Interface/Sensitive` toggles it); wheel = volume;
   Ctrl+wheel = danmaku opacity; 0–9 = percentage jump; Shift+←/→ = ±60 s;

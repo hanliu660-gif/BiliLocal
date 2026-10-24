@@ -77,18 +77,15 @@ namespace
 						QCoreApplication::sendEvent(this, &press);
 						QCoreApplication::sendEvent(this, &release);
 					}
-					// 底栏按钮菜单验证:直接给 弹幕·开 按钮投 ContextMenu
+					// 每周期第 56 拍右键单击:验证通用上下文菜单(含四个子菜单)
 					if (beat == 56){
-						// 底栏按钮菜单验证:给 弹幕·开 按钮投 ContextMenu
-						QPushButton *dm = nullptr;
-						for (QPushButton *b : this->render->hostWidget()->findChildren<QPushButton*>()){
-							if (b->contextMenuPolicy() == Qt::CustomContextMenu) { dm = b; break; }
-						}
-						if (dm != nullptr){
-							const QPoint c = dm->rect().center();
-							QContextMenuEvent ce(QContextMenuEvent::Mouse, c, dm->mapToGlobal(c));
-							QCoreApplication::sendEvent(dm, &ce);
-						}
+						const QPointF rc(600.0, 320.0);
+						QMouseEvent rp(QEvent::MouseButtonPress, rc, mapToGlobal(rc.toPoint()),
+							Qt::RightButton, Qt::RightButton, Qt::NoModifier);
+						QMouseEvent rr(QEvent::MouseButtonRelease, rc, mapToGlobal(rc.toPoint()),
+							Qt::RightButton, Qt::NoButton, Qt::NoModifier);
+						QCoreApplication::sendEvent(this, &rp);
+						QCoreApplication::sendEvent(this, &rr);
 					}
 					const QPointF local(200.0 + ((n++) % 10) * 80.0, 320.0);
 					QMouseEvent ev(QEvent::MouseMove, local, mapToGlobal(local.toPoint()),
@@ -154,38 +151,11 @@ namespace
 		// QWindow 系的 leave 走 event(QEvent::Leave),不是 QWidget 的 leaveEvent
 		bool event(QEvent *ev) override
 		{
-			// QWindow 系的 leave/ContextMenu 都走 event(),不是 QWidget 的专属虚函数
+			// QWindow 系的 leave 走 event(QEvent::Leave),不是 QWidget 的 leaveEvent
 			if (ev->type() == QEvent::Leave){
 				// 光标离开覆盖层（出窗/被弹窗抢走抓取）：解除悬停冻结。
 				// 右键数据菜单打开期间由 Running::pinHover 钉住,不受影响
 				lApp->findObject<Running>()->setHover(QPointF(), false);
-			}
-			else if (ev->type() == QEvent::ContextMenu){
-				// WM_CONTEXTMENU 发给覆盖层自己,不合成转发的话,底栏按钮的
-				// customContextMenuRequested 永远不会触发
-				QContextMenuEvent *ce = static_cast<QContextMenuEvent *>(ev);
-				QWidget *host = render->hostWidget();
-				if (host != nullptr){
-					const QPoint gp = ce->globalPos();
-					QWidget *w = host->childAt(host->mapFromGlobal(gp));
-					// childAt 不保证递归到叶子:底栏按钮在 Info(原生容器)内部,
-					// 不下沉就只会命中 Info 本体,按钮的右键菜单永远收不到
-					while (w != nullptr){
-						QWidget *deeper = w->childAt(w->mapFromGlobal(gp));
-						if (deeper == nullptr || deeper == w) {
-							break;
-						}
-						w = deeper;
-					}
-					while (w != nullptr && w != host && w->testAttribute(Qt::WA_TransparentForMouseEvents)){
-						w = w->parentWidget();
-					}
-					if (w != nullptr && w != host){
-						QContextMenuEvent copy(QContextMenuEvent::Mouse, w->mapFromGlobal(gp), gp);
-						QCoreApplication::sendEvent(w, &copy);
-						return true;
-					}
-				}
 			}
 			return QOpenGLWindow::event(ev);
 		}

@@ -34,8 +34,6 @@
 #include "../../Player/APlayer.h"
 #include "../../Model/Shield.h"
 #include "../../Model/List.h"
-#include "../../Model/Danmaku.h"
-#include "Editor.h"
 
 using namespace UI;
 
@@ -216,27 +214,6 @@ QWidget(parent)
 	};
 		connect(lApp->findObject<Shield>(), &Shield::shieldChanged, this, syncDanm);
 		syncDanm();
-		// 右键弹幕开关:轨道/同步/开关/加载 直达,不用绕视频右键或面板
-		danmB->setContextMenuPolicy(Qt::CustomContextMenu);
-		connect(danmB, &QPushButton::customContextMenuRequested, [this](const QPoint &pos){
-			QMenu m(danmB);
-			if (QAction *togg = parentWidget()->findChild<QAction *>("Togg")){
-				m.addAction(togg);
-			}
-			m.addSeparator();
-			QMenu *dts = m.addMenu(tr("Track"));
-			for (const Record &r : lApp->findObject<Danmaku>()->getPool()) {
-				dts->addAction(r.string);
-			}
-			dts->setEnabled(!dts->isEmpty());
-			m.addAction(tr("Sync"), [this](){
-				Editor::exec(parentWidget(), 2);
-			});
-			if (QAction *loadA = parentWidget()->findChild<QAction *>("Danm")){
-				m.addAction(tr("Load"), loadA, SLOT(trigger()))->setEnabled(loadA->isEnabled());
-			}
-			m.exec(danmB->mapToGlobal(pos));
-		});
 	// 倍速按钮：文字实时跟随（包括长按右键 3 倍速）
 	APlayer *ap = lApp->findObject<APlayer>();
 	auto syncRate = [this](double r){ rateB->setText(QString("%1x").arg(r < 0.05 ? 1.0 : r, 0, 'f', 1)); };

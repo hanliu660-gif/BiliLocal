@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> 更新时间：2026-10-25（**第十版：历史压缩轮**）——`master` = 44fbb3e（底栏目录记忆补修）← 7f8685a（瘦身）← 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 → 925,696 字节；dist 358M → 176M。
+> 更新时间：2026-10-25（**第十一版：悬停冻结轮**）——`master` = 8d9c8ec（悬停冻结+发送者数据）← e9c5ba4（毫秒时间戳修复）← 54e718c ← 44fbb3e（底栏目录记忆补修）← 7f8685a（瘦身）← 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 → 925,696 字节；dist 358M → 176M。
 > 写给新会话：先读这份，再看 `src\` 的 git 历史——**每个提交都有根因和证据**。
 > 一句话：把开源播放器 BiliLocal 0.4.2（GPL-3.0，2016 年停更）改造成 64 位私人 Windows 播放器：**VLC 3 + d3d11 硬解直出（Embed 唯一输出）+ 单底栏 UI**，日常播服务器录播 + 弹幕，CPU 从 ~210% 降到 ~11%。
 >
@@ -40,7 +40,7 @@
 
 ## 2. 当前状态
 
-- **exe**：`dist\BiliLocal.exe`，925,696 字节，SHA256 `231BC0FB…`（构建自 `44fbb3e` 同树）
+- **exe**：`dist\BiliLocal.exe`，932,352 字节（构建自 `8d9c8ec` 同树）
 - **源码**：`master` = **`44fbb3e`** ← `7f8685a`（瘦身轮）← `473ba62`（Win11 UI 轮）← `3f86f74`（VLC 3.0.24）← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`；上游 = `9d1cb05`；回滚点 tag `v0.5.0-vmem` = `46b68b9`
 - **运行库**：VLC **3.0.24**（FFmpeg 8.1.2，d3d11 直出；升级缘由见提交 3f86f74）；**dist\plugins 混住着 Qt 平台插件（platforms/imageformats/mediaservice/styles），整目录替换 VLC 时必须把这四个目录合并到顶层，否则 Qt 起不来**（升级/裁剪流程见第 9 节）；dist 只带 exe 实际导入的 5 个 Qt DLL（Concurrent/Core/Gui/Network/Widgets）
 - **配置**：`Output=Embed` 已成唯一输出（键保留但代码不再读取）；`Immediate=True`；`HardwareDecode` 已无消费者（d3d11 固定开启，Arguments 手写 `--avcodec-hw=`/`--vout=` 仍可覆盖）
@@ -63,6 +63,7 @@
 | `32c6597`…`473ba62` | Win11 设计语言轮（双主题 QSS、Prefer 重排 6→5 页、BILILOCAL_UI_TEST 钩子） |
 | `0c4f7b7`…`7f8685a` | 瘦身轮（dist 358M→176M、插件机制+网络栈移除、Load 本地化、List 扫描合并） |
 | `44fbb3e` | 底栏打开接入 /Interface/OpenDir（cbc0b42 只接了 Menu 面板，底栏重启即失忆） |
+| `54e718c`…`8d9c8ec` | 悬停冻结单条弹幕 + 右键发送者数据块；录播姬毫秒时间戳修复（2038 bug）；测试钩子循环化 |
 
 ## 3. 怎么用（用户视角）
 
@@ -149,6 +150,7 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 **进程内自动化验证钩子**（比外部投递消息可靠——后者会被 Qt 按真实光标位置路由而失准）：
 - `BILILOCAL_EMBED_TEST=1`：EWindow 每 300ms 注入鼠标事件（第 30/50 拍双击验证全屏闭环、第 35 拍单击验证暂停），配 `msg.log` 判读
 - `BILILOCAL_UI_TEST=prefer/editor/both`：自动打开 Prefer（逐页巡览，标题带页码「设置 - N」）与 Editor——**验证对话框用这个**，配 `tools\verify_ui3.ps1`
+- `BILILOCAL_UI_TEST` 同源的悬停验证：钩子每 50 拍循环「扫掠→(600,320) 压 4 拍→右键」，起播后自动跳 10%（片头弹幕密）；旧闭环拍(双击全屏/单击暂停)需另加 `BILILOCAL_EMBED_CLICK=1` 才启用——**不加的话它们会把视频反复切暂停，干扰悬停测试**；`msg.log` 找 `hover: freeze/release` 判读
 
 **PS 5.1 铁律**：一律 `-NoProfile -ExecutionPolicy Bypass -File` 调用；脚本存 UTF-8 带 BOM、**不写中文字面量**；`$Pid` 只读、`Move/Cli/lp` 是别名；`Start-Process -RedirectStandardError` 别配 `-Wait`；子进程会继承 stdout 管道（给 `UseShellExecute=$false` 的启动加 stdio 重定向，否则调用方假死）。
 

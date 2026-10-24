@@ -62,6 +62,9 @@ danmaku XML (`*.xml`) that recorder tools drop next to the video.
   (click-to-jump, draggable), danmaku on/off, speed cycler (1.0 → 3.0),
   volume, and four icon buttons (open, settings, fullscreen, playlist)
 - The playlist panel never steals keyboard focus
+- Hover the video to freeze the danmaku under the cursor (it resumes when
+  you move off); right-click it for a read-only block with the sender,
+  sent time, video position, same-sender count, plus copy / shield-sender
 - Shortcuts: click video = pause/resume (250 ms disambiguation against
   double-click, `/Interface/Sensitive` toggles it); wheel = volume;
   Ctrl+wheel = danmaku opacity; 0–9 = percentage jump; Shift+←/→ = ±60 s;

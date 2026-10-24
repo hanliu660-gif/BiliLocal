@@ -4,7 +4,7 @@
 > 写给新会话：先读这份，再看 `src\` 的 git 历史——**每个提交都有根因和证据**。
 > 一句话：把开源播放器 BiliLocal 0.4.2（GPL-3.0，2016 年停更）改造成 64 位私人 Windows 播放器：**VLC 3 + d3d11 硬解直出（Embed 唯一输出）+ 单底栏 UI**，日常播服务器录播 + 弹幕，CPU 从 ~210% 降到 ~11%。
 >
-> **路径基准（2026-10-24 起本文随仓库分发）**：本文的路径以本机工程根 `C:\DSH\APP\BiliLocal\` 为基准；git 仓库根是其中的 `src\`（即 GitHub 上的仓库根）。下表 `build\dist\deps\tools\test` 等目录在仓库外、不入 git；本文自身位于 `src\docs\HANDOVER.md`（工程根的 `交接文档.md` 是指向它的桩文件）。
+> **路径基准（2026-10-24 修订）**：本文是工程级文档，**正本在工程根 `C:\DSH\APP\BiliLocal\交接文档.md`**；git 仓库（`src\`，即 GitHub 仓库根）内的 `src\docs\HANDOVER.md` 是它的同步备份副本——**更新正本后 `cp 交接文档.md src\docs\HANDOVER.md`，随仓库提交推送**，两份内容必须保持一致。下表 `build\dist\deps\tools\test` 等目录在仓库外、不入 git。
 
 ---
 
@@ -20,7 +20,7 @@
 | 路径 | 内容 |
 | --- | --- |
 | `src\` | 源码 git 仓库：`master` = `3f86f74`（全部工作）；tag `v0.5.0-vmem` = 早期 vmem 线回滚点 |
-| `src\docs\HANDOVER.md` | 本文档（随仓库走，git + GitHub 双备份） |
+| `src\docs\HANDOVER.md` | 交接手册的仓库备份副本（正本在工程根 `交接文档.md`，更新后同步过来） |
 | `build\` | 影子构建（qmake + mingw32-make），产物 `build\release\BiliLocal.exe` |
 | `dist\` | **可直接运行的成品**：exe + Qt5 + VLC 3.0.24（FFmpeg 8.1.2）+ 插件 + 翻译（Embed 硬解直出版） |
 | `deps\` | 工具链：Qt 5.15.2 (mingw81_64)、MinGW 8.1.0、VLC SDK 头文件/导入库（在 `deps\thirdparty`；旧运行库目录 deps\vlc 连同 2.2.8/3.0.21 各备份已全删，VLC 运行库只存在于 dist） |

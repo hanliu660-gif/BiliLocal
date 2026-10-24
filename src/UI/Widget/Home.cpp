@@ -1,4 +1,4 @@
-﻿#include "Common.h"
+#include "Common.h"
 #include "Home.h"
 #include <QtGui>
 #include <QtNetwork>
@@ -568,6 +568,15 @@ void Home::mouseMoveEvent(QMouseEvent * e)
 {
 	lastMove = QDateTime::currentMSecsSinceEpoch();
 	QPoint cur = e->pos();
+	// 悬停冻结：光标压在弹幕上就把它停住（离开/超时自动恢复）。
+	// 拖进度条或悬停在底栏上时不冻结——那不是在看弹幕。
+	// 悬浮面板是独立窗口，光标过去后事件不再进来，过期定时器自然解冻。
+	if (seekdrag || (info->isVisible() && info->geometry().contains(cur))) {
+		running->setHover(QPointF(), false);
+	}
+	else {
+		running->setHover(cur, true);
+	}
 	if (seekdrag) {
 		if (!info->isShown()) {
 			info->pop();
@@ -785,6 +794,36 @@ void Home::showContextMenu(QPoint p)
 			top.addAction(text);
 			int w = top.actionGeometry(text).width() - 24;
 			text->setText(top.fontMetrics().elidedText(cur->string, Qt::ElideRight, w));
+			// 发送者数据块：禁用态菜单项，只读展示
+			const QDateTime sent = cur->date > 0 ? QDateTime::fromSecsSinceEpoch(cur->date) : QDateTime();
+			auto infoItem = [&top](const QString &text) {
+				QAction *a = top.addAction(text);
+				a->setEnabled(false);
+			};
+			infoItem(tr("Sender: %1").arg(cur->sender.isEmpty() ? tr("unknown") : cur->sender));
+			if (sent.isValid()) {
+				infoItem(tr("Sent at: %1").arg(sent.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"))));
+			}
+			{
+				const qint64 sec = cur->time / 1000;
+				const QString pos = sec >= 3600
+					? QString("%1:%2:%3").arg(sec / 3600).arg(sec % 3600 / 60, 2, 10, QChar('0')).arg(sec % 60, 2, 10, QChar('0'))
+					: QString("%1:%2").arg(sec / 60, 2, 10, QChar('0')).arg(sec % 60, 2, 10, QChar('0'));
+				infoItem(tr("Position: %1").arg(pos));
+			}
+			int same = 0;
+			if (!cur->sender.isEmpty()) {
+				for (const Record &r : danmaku->getPool()) {
+					for (const Comment &c : r.danmaku) {
+						if (c.sender == cur->sender) {
+							++same;
+						}
+					}
+				}
+			}
+			if (same > 0) {
+				infoItem(tr("%1 danmaku from this sender").arg(same));
+			}
 			top.addSeparator();
 			connect(top.addAction(tr("Copy")), &QAction::triggered, [=]() {
 				qApp->clipboard()->setText(cur->string);
@@ -846,6 +885,14 @@ void Home::showContextMenu(QPoint p)
 		top.addMenu(&dmk);
 		top.addAction(confA);
 		top.addAction(quitA);
+		// 菜单开着时钉住冻结：嵌套事件循环里过期定时器还会跑，
+		// 不钉住的话菜单开着、弹幕却飞了
+		if (cur) {
+			running->pinHover(true);
+		}
 		top.exec(mapToGlobal(p));
+		if (cur) {
+			running->pinHover(false);
+		}
 	}
 }

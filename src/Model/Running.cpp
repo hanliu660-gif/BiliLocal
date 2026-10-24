@@ -1,4 +1,4 @@
-﻿/*=======================================================================
+/*=======================================================================
 *
 *   Copyright (C) 2013-2016 Lysine.
 *
@@ -93,6 +93,11 @@ public:
 	int wait;
 	TextCounter text;
 	mutable QReadWriteLock lock;
+	// 悬停冻结态：只在 GUI 线程读写（setHover 与 draw 都在 GUI 线程），
+	// 池线程不碰；指向的 Graphic 可能被池线程删除，使用处一律做"仍在
+	// d->draw 列表里"的成员资格判断，比较裸指针值本身不会解引用
+	Graphic *frozen = nullptr;
+	bool pinned = false;
 };
 
 Running::Running(QObject *parent)
@@ -129,6 +134,9 @@ void Running::setup()
 		for (auto iter = d->draw.begin(); iter != d->draw.end();) {
 			const Comment *cur = (*iter)->getSource();
 			if (cur && cur->blocked) {
+				if (*iter == d->frozen) {
+					d->frozen = nullptr;
+				}
 				d->text.remove(cur);
 				delete *iter;
 				iter = d->draw.erase(iter);
@@ -150,6 +158,21 @@ void Running::setup()
 		jumpTime(d->time);
 		lApp->findObject<ARender>()->draw();
 	});
+
+	// 悬停冻结的过期定时器：光标停止投喂 400ms 后自动解冻，
+	// 对"光标离开窗口/弹出对话框/任何断供"天然自愈
+	hoverTimer = new QTimer(this);
+	hoverTimer->setSingleShot(true);
+	hoverTimer->setInterval(400);
+	connect(hoverTimer, &QTimer::timeout, this, [this]() {
+		Q_D(Running);
+		if (d->pinned || d->frozen == nullptr) {
+			return;
+		}
+		qWarning("hover: release (timeout)");
+		d->frozen = nullptr;
+		lApp->findObject<ARender>()->draw();
+	});
 }
 
 void Running::clear(bool soft)
@@ -164,6 +187,9 @@ void Running::clear(bool soft)
 			++iter;
 		}
 		else {
+			if (g == d->frozen) {
+				d->frozen = nullptr;
+			}
 			d->text.remove(g);
 			delete g;
 			iter = d->draw.erase(iter);
@@ -460,7 +486,7 @@ void Running::draw(QPainter *painter, double move)
 	dirty.reserve(d->draw.size());
 	for (auto iter = d->draw.begin(); iter != d->draw.end();) {
 		Graphic *g = *iter;
-		if (g->move(move)) {
+		if (g->move(g == d->frozen ? 0.0 : move)) {
 			dirty.append(g);
 			++iter;
 		}
@@ -494,4 +520,48 @@ int Running::size() const
 {
 	Q_D(const Running);
 	return d->draw.size();
+}
+
+void Running::setHover(QPointF point, bool active)
+{
+	Q_D(Running);
+	Graphic *hit = nullptr;
+	if (active) {
+		d->lock.lockForRead();
+		for (Graphic *g : d->draw) {
+			if (g->currentRect().contains(point)) {
+				hit = g;
+				break;
+			}
+		}
+		d->lock.unlock();
+	}
+	if (hit == d->frozen) {
+		// 同一条：只续期，不刷日志
+		if (hit != nullptr && !d->pinned) {
+			hoverTimer->start();
+		}
+		return;
+	}
+	d->frozen = hit;
+	if (hit != nullptr) {
+		qWarning("hover: freeze \"%s\"", qPrintable(hit->getSource()->string));
+		if (!d->pinned) {
+			hoverTimer->start();
+		}
+	}
+	else {
+		qWarning("hover: release (left)");
+	}
+	lApp->findObject<ARender>()->draw();
+}
+
+void Running::pinHover(bool pin)
+{
+	Q_D(Running);
+	d->pinned = pin;
+	if (!pin && d->frozen != nullptr) {
+		// 菜单关闭后仍给一个过期窗口，光标动了会自然续期
+		hoverTimer->start();
+	}
 }

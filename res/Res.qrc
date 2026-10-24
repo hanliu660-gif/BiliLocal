@@ -11,4 +11,8 @@
         <file>COPYING</file>
         <file>THANKS</file>
     </qresource>
+    <qresource prefix="/Style">
+        <file alias="dark.qss">Style/dark.qss</file>
+        <file alias="light.qss">Style/light.qss</file>
+    </qresource>
 </RCC>

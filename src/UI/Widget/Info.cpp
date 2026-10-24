@@ -80,6 +80,35 @@ namespace
 		}
 		return QIcon(pm);
 	}
+
+	// 播放/暂停也用 QPainter 画：原来取 16x16 的 png，在 150%/200% 缩放下被拉伸发糊，
+	// 而且 QIcon::fromTheme 在 Windows 上没有图标主题、永远走 fallback。
+	// 按 dpr 逐档位原生绘制，任一级缩放都清晰
+	QIcon playIcon(bool pause)
+	{
+		QIcon icon;
+		for (double dpr : { 1.0, 1.5, 2.0, 3.0 }){
+			const int side = qRound(18 * dpr);
+			QPixmap pm(side, side);
+			pm.fill(Qt::transparent);
+			QPainter p(&pm);
+			p.setRenderHint(QPainter::Antialiasing);
+			p.scale(side / 16.0, side / 16.0);	// 统一按 16x16 坐标系画
+			p.setPen(Qt::NoPen);
+			p.setBrush(QColor(232, 232, 234));
+			if (pause){
+				p.drawRoundedRect(QRectF(4.0, 3.0, 3.0, 10.0), 0.8, 0.8);
+				p.drawRoundedRect(QRectF(9.0, 3.0, 3.0, 10.0), 0.8, 0.8);
+			}
+			else{
+				p.drawPolygon(QPolygonF() << QPointF(5.0, 3.0) << QPointF(13.0, 8.0) << QPointF(5.0, 13.0));
+			}
+			p.end();
+			pm.setDevicePixelRatio(dpr);
+			icon.addPixmap(pm);
+		}
+		return icon;
+	}
 }
 
 Info::Info(QWidget *parent) :
@@ -162,8 +191,8 @@ QWidget(parent)
 	}
 	listB->setToolTip(tr("Playlist"));
 	fullB->setToolTip(tr("Fullscreen toggle (F / F11 / double-click)"));
-	playI = QIcon::fromTheme("media-playback-start", QIcon(":/Picture/play.png"));
-	pausI = QIcon::fromTheme("media-playback-pause", QIcon(":/Picture/pause.png"));
+	playI = playIcon(false);
+	pausI = playIcon(true);
 	playB->setIcon(playI);
 	playA = new QAction(playI, tr("Play"), this);
 	playA->setObjectName("Play");

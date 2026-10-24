@@ -181,6 +181,11 @@ namespace
 int main(int argc, char *argv[])
 {
 	QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+	// Qt5 默认把缩放按整数倍取整：150% 的系统缩放会被抬到 200%，整个界面大 1/3；
+	// 改成跟随系统的小数缩放，和资源管理器/浏览器一致
+	QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+	// 位图图标（/Picture 下的 png、窗口图标）在高 DPI 下按 @2x 取图，避免被拉伸发糊
+	QGuiApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 	std::remove_pointer<decltype(qApp)>::type a(argc, argv);	// 配置/缓存的位置依赖这两个名字，必须在 Config::load() 之前定好
 	QCoreApplication::setOrganizationName("BiliLocal");
 	QCoreApplication::setApplicationName("BiliLocal");

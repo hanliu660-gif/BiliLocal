@@ -71,6 +71,16 @@ namespace
 		Q_UNUSED(dark);
 #endif
 	}
+	// 主题 QSS 外置到 res/Style/*.qss 并打包进 qrc：调配色不必重编译，
+	// 也不用把 65 行规则挤成一串 C++ 字面量
+	QString themeStyleSheet(bool dark)
+	{
+		QFile file(dark ? QStringLiteral(":/Style/dark.qss") : QStringLiteral(":/Style/light.qss"));
+		if (!file.open(QIODevice::ReadOnly)){
+			return QString();
+		}
+		return QString::fromUtf8(file.readAll());
+	}
 }
 
 // /Interface/Theme：0=浅色（默认） 1=深色 2=跟随系统
@@ -112,144 +122,8 @@ void Utils::applyTheme(int mode)
 	qApp->setPalette(palette);
 	QToolTip::setPalette(palette);
 
-	if (dark){
-		qApp->setStyleSheet(QStringLiteral(
-			"QWidget{color:#f0f0f0;font-family:'Segoe UI Variable Text','Segoe UI','Microsoft YaHei UI','Microsoft YaHei';}"
-			"QMainWindow,QDialog{background:#202020;}"
-			"QFrame#Card{background:#2b2b2b;border:1px solid #343434;border-radius:8px;}"
-			"QLabel#CardTitle{font-weight:bold;color:#f0f0f0;background:transparent;padding:2px 0;}"
-			"QLabel#CardNote{color:#9e9e9e;background:transparent;}"
-			"QFrame#SepLine{background:#383838;border:none;}"
-			"QListWidget#NavList{background:transparent;border:none;outline:none;}"
-			"QListWidget#NavList::item{border-radius:6px;padding:9px 12px;margin:1px 4px;color:#f0f0f0;}"
-			"QListWidget#NavList::item:selected{background:#2d3947;color:#ffffff;}"
-			"QListWidget#NavList::item:hover:!selected{background:#2a2a2a;}"
-			"QPushButton{background:#333333;border:1px solid #454545;border-radius:5px;padding:5px 16px;color:#f0f0f0;}"
-			"QPushButton:hover{background:#3a3a3a;border-color:#525252;}"
-			"QPushButton:pressed{background:#2e2e2e;}"
-			"QPushButton:disabled{color:#7a7a7a;border-color:#3a3a3a;background:#2e2e2e;}"
-			"QPushButton:focus{border-color:#4cc2ff;}"
-			"QLineEdit,QComboBox,QSpinBox,QDoubleSpinBox{background:#2f2f2f;border:1px solid #4a4a4a;border-radius:5px;padding:4px 8px;color:#f0f0f0;selection-background-color:#4cc2ff;selection-color:#000000;}"
-			"QLineEdit:focus,QComboBox:focus,QSpinBox:focus,QDoubleSpinBox:focus{border-color:#4cc2ff;}"
-			"QLineEdit:disabled,QComboBox:disabled,QSpinBox:disabled,QDoubleSpinBox:disabled{color:#7a7a7a;border-color:#3a3a3a;}"
-			"QComboBox::drop-down{border:none;width:22px;}"
-			"QComboBox QAbstractItemView{background:#2f2f2f;border:1px solid #4a4a4a;selection-background-color:#4cc2ff;selection-color:#000000;outline:none;}"
-			"QCheckBox,QRadioButton{spacing:7px;background:transparent;}"
-			"QCheckBox::indicator,QRadioButton::indicator{width:17px;height:17px;border:1px solid #5a5a5a;border-radius:4px;background:#2f2f2f;}"
-			"QRadioButton::indicator{border-radius:9px;}"
-			"QCheckBox::indicator:checked,QRadioButton::indicator:checked{background:#4cc2ff;border-color:#4cc2ff;}"
-			"QCheckBox::indicator:hover,QRadioButton::indicator:hover{border-color:#4cc2ff;}"
-			"QCheckBox::indicator:disabled,QRadioButton::indicator:disabled{border-color:#3f3f3f;background:#2a2a2a;}"
-			"QCheckBox:disabled{color:#7a7a7a;}"
-			"QSlider{background:transparent;}"
-			"QSlider::groove:horizontal{height:4px;background:#4a4a4a;border-radius:2px;}"
-			"QSlider::sub-page:horizontal{background:#4cc2ff;border-radius:2px;}"
-			"QSlider::handle:horizontal{width:14px;height:14px;margin:-6px 0;border-radius:7px;background:#e8e8ea;}"
-			"QSlider::handle:horizontal:hover{background:#ffffff;}"
-			"QSlider::groove:vertical{width:4px;background:#4a4a4a;border-radius:2px;}"
-			"QSlider::add-page:vertical{background:#4cc2ff;border-radius:2px;}"
-			"QSlider::handle:vertical{height:14px;width:14px;margin:0 -6px;border-radius:7px;background:#e8e8ea;}"
-			"QMenu{background:#2b2b2b;border:1px solid #3f3f3f;border-radius:8px;padding:6px 0;}"
-			"QMenu::item{padding:6px 26px 6px 18px;border-radius:5px;margin:0 4px;}"
-			"QMenu::item:selected{background:#4cc2ff;color:#000000;}"
-			"QMenu::item:disabled{color:#7a7a7a;}"
-			"QMenu::separator{height:1px;background:#3a3a3a;margin:5px 8px;}"
-			"QHeaderView::section{background:#2b2b2b;color:#c8c8cc;border:none;border-right:1px solid #3a3a3a;border-bottom:1px solid #3a3a3a;padding:5px 8px;}"
-			"QTreeView,QListView,QTableView{background:#262626;border:1px solid #383838;border-radius:6px;alternate-background-color:#2a2a2a;outline:none;selection-background-color:#4cc2ff;selection-color:#000000;}"
-			"QTreeView::item,QListView::item,QTableView::item{padding:4px 6px;border-radius:4px;}"
-			"QTreeView::item:selected,QListView::item:selected,QTableView::item:selected{background:#4cc2ff;color:#000000;}"
-			"QTreeView::item:hover,QListView::item:hover,QTableView::item:hover{background:#333338;}"
-			"QScrollBar:vertical{background:transparent;width:10px;margin:2px;}"
-			"QScrollBar::handle:vertical{background:#4a4a4a;border-radius:4px;min-height:30px;}"
-			"QScrollBar::handle:vertical:hover{background:#5a5a5a;}"
-			"QScrollBar::add-line,QScrollBar::sub-line{height:0;width:0;}"
-			"QScrollBar:horizontal{background:transparent;height:10px;margin:2px;}"
-			"QScrollBar::handle:horizontal{background:#4a4a4a;border-radius:4px;min-width:30px;}"
-			"QScrollBar::handle:horizontal:hover{background:#5a5a5a;}"
-			"QGroupBox{border:1px solid #383838;border-radius:7px;margin-top:9px;padding:7px 9px 5px 9px;font-weight:bold;background:transparent;}"
-			"QGroupBox::title{subcontrol-origin:margin;left:11px;padding:0 4px;color:#9e9e9e;}"
-			"QTabWidget::pane{border:1px solid #383838;border-radius:6px;top:-1px;}"
-			"QTabBar::tab{padding:7px 18px;border-top-left-radius:6px;border-top-right-radius:6px;margin-right:2px;background:transparent;color:#c8c8cc;}"
-			"QTabBar::tab:selected{color:#4cc2ff;border-bottom:2px solid #4cc2ff;}"
-			"QTabBar::tab:hover:!selected{color:#f0f0f0;}"
-			"QProgressBar{border:1px solid #4a4a4a;border-radius:5px;background:#2f2f2f;text-align:center;height:14px;color:#f0f0f0;}"
-			"QProgressBar::chunk{background:#4cc2ff;border-radius:4px;}"
-			"QToolTip{background:#2d2d2d;color:#f0f0f0;border:1px solid #4a4a4a;padding:4px 8px;border-radius:5px;}"
-			"QSplitter::handle{background:transparent;}"
-			"QScrollArea{border:none;background:transparent;}"
-			"QScrollArea>QWidget>QWidget{background:transparent;}"
-			"QFileDialog QTreeView,QFileDialog QListView{border:none;}"
-			));
-	}
-	else{
-		qApp->setStyleSheet(QStringLiteral(
-			"QWidget{color:#1b1b1b;font-family:'Segoe UI Variable Text','Segoe UI','Microsoft YaHei UI','Microsoft YaHei';}"
-			"QMainWindow,QDialog{background:#f3f3f3;}"
-			"QFrame#Card{background:#ffffff;border:1px solid #ebebeb;border-radius:8px;}"
-			"QLabel#CardTitle{font-weight:bold;color:#1b1b1b;background:transparent;padding:2px 0;}"
-			"QLabel#CardNote{color:#616161;background:transparent;}"
-			"QFrame#SepLine{background:#f0f0f0;border:none;}"
-			"QListWidget#NavList{background:transparent;border:none;outline:none;}"
-			"QListWidget#NavList::item{border-radius:6px;padding:9px 12px;margin:1px 4px;color:#1b1b1b;}"
-			"QListWidget#NavList::item:selected{background:#e9f2fb;color:#0067c0;font-weight:bold;}"
-			"QListWidget#NavList::item:hover:!selected{background:#ededed;}"
-			"QPushButton{background:#fdfdfd;border:1px solid #cfcfcf;border-radius:5px;padding:5px 16px;color:#1b1b1b;}"
-			"QPushButton:hover{background:#f7f7f7;border-color:#bdbdbd;}"
-			"QPushButton:pressed{background:#efefef;}"
-			"QPushButton:disabled{color:#9a9aa2;border-color:#dcdcdc;}"
-			"QPushButton:focus{border-color:#0067c0;}"
-			"QLineEdit,QComboBox,QSpinBox,QDoubleSpinBox{background:#ffffff;border:1px solid #cfcfcf;border-radius:5px;padding:4px 8px;color:#1b1b1b;selection-background-color:#0067c0;selection-color:#ffffff;}"
-			"QLineEdit:focus,QComboBox:focus,QSpinBox:focus,QDoubleSpinBox:focus{border-color:#0067c0;}"
-			"QLineEdit:disabled,QComboBox:disabled,QSpinBox:disabled,QDoubleSpinBox:disabled{color:#9a9aa2;border-color:#dcdcdc;}"
-			"QComboBox::drop-down{border:none;width:22px;}"
-			"QComboBox QAbstractItemView{background:#ffffff;border:1px solid #d0d0d0;selection-background-color:#0067c0;selection-color:#ffffff;outline:none;}"
-			"QCheckBox,QRadioButton{spacing:7px;background:transparent;}"
-			"QCheckBox::indicator,QRadioButton::indicator{width:17px;height:17px;border:1px solid #a0a0a0;border-radius:4px;background:#ffffff;}"
-			"QRadioButton::indicator{border-radius:9px;}"
-			"QCheckBox::indicator:checked,QRadioButton::indicator:checked{background:#0067c0;border-color:#0067c0;}"
-			"QCheckBox::indicator:hover,QRadioButton::indicator:hover{border-color:#0067c0;}"
-			"QCheckBox::indicator:disabled,QRadioButton::indicator:disabled{border-color:#dcdcdc;background:#f5f5f5;}"
-			"QCheckBox:disabled{color:#9a9aa2;}"
-			"QSlider{background:transparent;}"
-			"QSlider::groove:horizontal{height:4px;background:#d6d6d6;border-radius:2px;}"
-			"QSlider::sub-page:horizontal{background:#0067c0;border-radius:2px;}"
-			"QSlider::handle:horizontal{width:14px;height:14px;margin:-6px 0;border-radius:7px;background:#ffffff;border:1px solid #a0a0a0;}"
-			"QSlider::handle:horizontal:hover{border-color:#0067c0;}"
-			"QSlider::groove:vertical{width:4px;background:#d6d6d6;border-radius:2px;}"
-			"QSlider::add-page:vertical{background:#0067c0;border-radius:2px;}"
-			"QSlider::handle:vertical{height:14px;width:14px;margin:0 -6px;border-radius:7px;background:#ffffff;border:1px solid #a0a0a0;}"
-			"QMenu{background:#ffffff;border:1px solid #dcdcdc;border-radius:8px;padding:6px 0;}"
-			"QMenu::item{padding:6px 26px 6px 18px;border-radius:5px;margin:0 4px;}"
-			"QMenu::item:selected{background:#0067c0;color:#ffffff;}"
-			"QMenu::item:disabled{color:#9a9aa2;}"
-			"QMenu::separator{height:1px;background:#e8e8e8;margin:5px 8px;}"
-			"QHeaderView::section{background:#f5f5f5;color:#5a5a64;border:none;border-right:1px solid #e4e4e4;border-bottom:1px solid #e4e4e4;padding:5px 8px;}"
-			"QTreeView,QListView,QTableView{background:#ffffff;border:1px solid #e0e0e0;border-radius:6px;alternate-background-color:#f6f6f8;outline:none;selection-background-color:#0067c0;selection-color:#ffffff;}"
-			"QTreeView::item,QListView::item,QTableView::item{padding:4px 6px;border-radius:4px;}"
-			"QTreeView::item:selected,QListView::item:selected,QTableView::item:selected{background:#0067c0;color:#ffffff;}"
-			"QTreeView::item:hover,QListView::item:hover,QTableView::item:hover{background:#f0f6fc;}"
-			"QScrollBar:vertical{background:transparent;width:10px;margin:2px;}"
-			"QScrollBar::handle:vertical{background:#c8c8c8;border-radius:4px;min-height:30px;}"
-			"QScrollBar::handle:vertical:hover{background:#a8a8a8;}"
-			"QScrollBar::add-line,QScrollBar::sub-line{height:0;width:0;}"
-			"QScrollBar:horizontal{background:transparent;height:10px;margin:2px;}"
-			"QScrollBar::handle:horizontal{background:#c8c8c8;border-radius:4px;min-width:30px;}"
-			"QScrollBar::handle:horizontal:hover{background:#a8a8a8;}"
-			"QGroupBox{border:1px solid #e0e0e0;border-radius:7px;margin-top:9px;padding:7px 9px 5px 9px;font-weight:bold;background:transparent;}"
-			"QGroupBox::title{subcontrol-origin:margin;left:11px;padding:0 4px;color:#616161;}"
-			"QTabWidget::pane{border:1px solid #e0e0e0;border-radius:6px;top:-1px;background:#ffffff;}"
-			"QTabBar::tab{padding:7px 18px;border-top-left-radius:6px;border-top-right-radius:6px;margin-right:2px;background:transparent;color:#5a5a64;}"
-			"QTabBar::tab:selected{color:#1b1b1b;border-bottom:2px solid #0067c0;}"
-			"QTabBar::tab:hover:!selected{color:#1b1b1b;}"
-			"QProgressBar{border:1px solid #cfcfcf;border-radius:5px;background:#ffffff;text-align:center;height:14px;color:#1b1b1b;}"
-			"QProgressBar::chunk{background:#0067c0;border-radius:4px;}"
-			"QToolTip{background:#ffffff;color:#1b1b1b;border:1px solid #cfcfcf;padding:4px 8px;border-radius:5px;}"
-			"QSplitter::handle{background:transparent;}"
-			"QScrollArea{border:none;background:transparent;}"
-			"QScrollArea>QWidget>QWidget{background:transparent;}"
-			"QFileDialog QTreeView,QFileDialog QListView{border:none;}"
-			));
-	}
+	// 样式表内容见 res/Style/dark.qss 与 light.qss（随 qrc 打包）
+	qApp->setStyleSheet(themeStyleSheet(dark));
 
 	// 已存在的控件重新 polish 一遍，保证立即换色
 	QStyle *style = qApp->style();

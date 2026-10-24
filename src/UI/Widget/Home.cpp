@@ -895,8 +895,12 @@ void Home::showContextMenu(QPoint p)
 				Editor::exec(this, 2);
 			});
 			QAction *loadA = menu->findChild<QAction *>("Danm");
-			toggA->setChecked(lApp->findObject<Shield>()->contains(QString("m=%1").arg(Shield::Whole)));
-			dmk.addAction(toggA);
+			// 开关行显示为普通动作,文案随状态翻转(打开弹幕/关闭弹幕),
+			// 点击走 Togg 的完整逻辑——不用勾选行:QSS 下勾选列会把文字
+			// 顶出一条与其他行错位的怪缩进
+			const bool blockedNow = lApp->findObject<Shield>()->contains(QString("m=%1").arg(Shield::Whole));
+			dmk.addAction(blockedNow ? tr("Open Danmaku") : tr("Close Danmaku"),
+				toggA, SLOT(trigger()), toggA->shortcut());
 			dmk.addAction(tr("Load"), loadA, SLOT(trigger()), loadA->shortcut())->setEnabled(loadA->isEnabled());
 			top.addMenu(&dmk);
 

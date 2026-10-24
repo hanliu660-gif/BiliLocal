@@ -4,6 +4,9 @@ QT += \
     network \
     concurrent
 
+# network 只剩一个用途：QLocalSocket/QLocalServer 单实例机制（Qt5 里它们属
+# QtNetwork）。弹幕加载已收敛为纯本地文件，不再有网络栈。
+
 TARGET = BiliLocal
 
 TEMPLATE = app
@@ -36,11 +39,9 @@ SOURCES += \
     src/UI/Interface.cpp \
     src/Config.cpp \
     src/Local.cpp \
-    src/Plugin.cpp \
     src/Utils.cpp
 
 HEADERS += \
-    src/Access/AccessPrivate.h \
     src/Access/Load.h \
     src/Access/Parse.h \
     src/Graphic/Graphic.h \
@@ -65,7 +66,6 @@ HEADERS += \
     src/UI/InterfacePrivate.h \
     src/Config.h \
     src/Local.h \
-    src/Plugin.h \
     src/Utils.h
 
 INCLUDEPATH += \

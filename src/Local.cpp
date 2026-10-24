@@ -31,8 +31,8 @@
 #	include <shellapi.h>
 #endif
 #include "Config.h"
-#include "Plugin.h"
 #include "Utils.h"
+#include <QtNetwork>	// QLocalSocket/QLocalServer：单实例机制（Qt5 里属 QtNetwork）
 #include "Access/Load.h"
 #include "Model/Danmaku.h"
 #include "Model/Running.h"
@@ -120,7 +120,7 @@ namespace
 	{
 		QString def = Utils::defaultFont();
 		QFontInfo i(qApp->font());
-		if (!QFontDatabase().families().contains(def)){
+		if (!Utils::fontFamilies().contains(def)){
 			def = i.family();
 		}
 		double p = i.pointSizeF();
@@ -215,7 +215,6 @@ int main(int argc, char *argv[])
 	loadTranslator();
 	setDefaultFont();
 	new Local(&a);
-	Plugin::load();
 	lApp->findObject<Interface>()->show();
 	const QStringList &args = commandLineArguments();
 	for (const QString iter : args) {
@@ -240,7 +239,8 @@ int main(int argc, char *argv[])
 		}
 		QObject::connect(server, &QLocalServer::newConnection, [=](){
 			QLocalSocket *r = server->nextPendingConnection();
-			r->waitForReadyRead();
+			// 显式短超时：对端异常时不让主线程白等默认的 30 秒
+			r->waitForReadyRead(500);
 			QDataStream s(r);
 			QStringList args;
 			s >> args;

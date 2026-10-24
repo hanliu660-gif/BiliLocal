@@ -30,7 +30,6 @@
 #include "../Interface.h"
 #include "../../Config.h"
 #include "../../Local.h"
-#include "../../Plugin.h"
 #include "../../Utils.h"
 #include "../../Model/Danmaku.h"
 #include "../../Model/Shield.h"
@@ -63,8 +62,7 @@ QHash<QString, QVariant> Prefer::getRestart()
 		"/Interface/Frameless" <<
 		"/Interface/Single" <<
 		"/Interface/Version" <<
-		"/Interface/Locale" <<
-		"/Plugin";
+		"/Interface/Locale";
 	QHash<QString, QVariant> data;
 	for (QString iter : path){
 		data[iter] = Config::getValue<QVariant>(iter);
@@ -364,7 +362,7 @@ QDialog(parent)
 		addSep(look);
 
 		dmfont = new QComboBox(page[0]);
-		dmfont->addItems(QFontDatabase().families());
+		dmfont->addItems(Utils::fontFamilies());
 		dmfont->setCurrentText(Config::getValue("/Danmaku/Font", QFont().family()));
 		connect(dmfont, &QComboBox::currentTextChanged, [](QString _font){
 			Config::setValue("/Danmaku/Font", _font);
@@ -480,7 +478,7 @@ QDialog(parent)
 		addSep(look);
 
 		font = new QComboBox(page[1]);
-		font->addItems(QFontDatabase().families());
+		font->addItems(Utils::fontFamilies());
 		font->setCurrentText(Config::getValue("/Interface/Font/Family", QFont().family()));
 		connect(font, &QComboBox::currentTextChanged, [=](QString _font){
 			Config::setValue("/Interface/Font/Family", _font);

@@ -45,9 +45,6 @@ private:
 	RunningPrivate *d_ptr;
 	Q_DECLARE_PRIVATE(Running);
 
-signals:
-	void unrecognizedComment(const Comment *);
-
 public slots:
 	void clear(bool soft = false);
 	void insert(Graphic *graphic, int index = -1);

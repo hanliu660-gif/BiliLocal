@@ -369,8 +369,7 @@ namespace
 					slot[CreateMeta(graphic)].append(graphic);
 				}
 				catch (const Graphic::format_unrecognized &) {
-					//自带弹幕系统未识别，通知插件处理
-					emit lApp->findObject<Running>()->unrecognizedComment(iter);
+					//高级弹幕类型不支持：历史上交给插件兜底，插件机制移除后直接跳过
 				}
 				catch (const Graphic::args_prasing_error &) {
 				}

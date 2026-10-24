@@ -120,7 +120,8 @@ Home::Home(QWidget *parent)
 	});
 
 	connect(danmaku, &Danmaku::modelAppend, this, [this]() {
-		if (danmaku->getPool().size() >= 2 && load->getHead() == nullptr) {
+		qWarning("modelAppend: pool=%d busy=%d", danmaku->getPool().size(), load->busy());
+		if (danmaku->getPool().size() >= 2 && !load->busy()) {
 			UI::Editor::exec(this);
 		}
 	}, Qt::QueuedConnection);

@@ -760,8 +760,12 @@ void Home::setGeometry(QSize size, bool center)
 
 void Home::setWindowFlags()
 {
+	// /Interface/Top 是三态：0=从不置顶、1=只在播放时置顶、2=始终置顶。
+	// 旧写法把三态压成">=2"，1 这一档等于 0，设置页选了"playing"也没用。
+	const int mode = Config::getValue("/Interface/Top", 0);
+	const bool onTop = (mode >= 2) || (mode == 1 && aplayer->getState() == APlayer::Play);
 	Qt::WindowFlags flags = windowFlags();
-	if ((Config::getValue("/Interface/Top", 0) + (aplayer->getState() == APlayer::Play)) >= 2) {
+	if (onTop) {
 		flags |= Qt::WindowStaysOnTopHint;
 	}
 	else {
@@ -769,10 +773,12 @@ void Home::setWindowFlags()
 	}
 	if (!testAttribute(Qt::WA_WState_Created)) {
 		QWidget::setWindowFlags(flags);
+		return;
 	}
-	else {
-		emit lApp->findObject<Interface>()->flagsChanged(flags);
-	}
+	// 窗口已经建出来了：再调 QWidget::setWindowFlags 会重建原生窗口，画面会闪一下，
+	// 而播放/暂停每次都会走到这个槽。置顶其实只是改 Z 序，直接让系统改，别重建。
+	const HWND hwnd = (HWND)winId();
+	::SetWindowPos(hwnd, onTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 }
 
 

@@ -140,7 +140,16 @@ QObject(parent), d_ptr(new ShieldPrivate)
 		d->shieldS.insert(item.toString());
 	}
 	for (const QJsonValue &item : r){
-		d->shieldR.append(QRegularExpression(item.toString()));
+		// 配置文件里的正则不可信：空串会匹配一切（= 所有弹幕都被屏蔽，界面看着像死了），
+		// 语法错的 QRegularExpression 则恒不匹配（那条规则静默失效）。两种都跳过。
+		const QString pattern = item.toString();
+		if (pattern.isEmpty()){
+			continue;
+		}
+		const QRegularExpression re(pattern);
+		if (re.isValid()){
+			d->shieldR.append(re);
+		}
 	}
 	int group = Config::getValue("/Shield/Group", 0);
 	for (int i = 7; i >= 0; --i){

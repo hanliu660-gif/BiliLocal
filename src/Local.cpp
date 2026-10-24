@@ -186,6 +186,13 @@ int main(int argc, char *argv[])
 	QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 	// 位图图标（/Picture 下的 png、窗口图标）在高 DPI 下按 @2x 取图，避免被拉伸发糊
 	QGuiApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+	// 老显卡的 ANGLE（D3D9→GLES）兜底：必须在 QGuiApplication 构造之前设，
+	// 否则是空操作——旧代码把 a.setAttribute(AA_UseOpenGLES) 写在构造之后，从没生效过。
+	// 默认不开：弹幕层是透明 QOpenGLWindow 叠加，ANGLE 下没实测过；需要时临时试
+	// BILILOCAL_GL=angle 启动。
+	if (qEnvironmentVariable("BILILOCAL_GL") == QLatin1String("angle")) {
+		QGuiApplication::setAttribute(Qt::AA_UseOpenGLES);
+	}
 	std::remove_pointer<decltype(qApp)>::type a(argc, argv);	// 配置/缓存的位置依赖这两个名字，必须在 Config::load() 之前定好
 	QCoreApplication::setOrganizationName("BiliLocal");
 	QCoreApplication::setApplicationName("BiliLocal");
@@ -214,7 +221,6 @@ int main(int argc, char *argv[])
 			return 0;
 		}
 	}
-	a.setAttribute(Qt::AA_UseOpenGLES);
 #endif
 	qThreadPool->setMaxThreadCount(Config::getValue("/Danmaku/Thread", QThread::idealThreadCount()));
 	loadTranslator();

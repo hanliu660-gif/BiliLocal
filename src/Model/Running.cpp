@@ -131,6 +131,11 @@ void Running::setup()
 		qThreadPool->clear();
 		qThreadPool->waitForDone();
 		d->lock.lockForWrite();
+		// 屏障之后不该有任何在途弹幕，把预占计数归零：
+		// clear() 会丢掉还没启动的 Prepare，而那条任务的 --d->wait 永远不会跑，
+		// 泄漏几次之后 d->wait + d->draw.size() 就恒 >= /Shield/Amount/Screen，
+		// 表现是"新弹幕再也不出现"。
+		d->wait = 0;
 		for (auto iter = d->draw.begin(); iter != d->draw.end();) {
 			const Comment *cur = (*iter)->getSource();
 			if (cur && cur->blocked) {
@@ -167,6 +172,8 @@ void Running::clear(bool soft)
 	qThreadPool->clear();
 	qThreadPool->waitForDone();
 	d->lock.lockForWrite();
+	// 同上：clear() 丢掉的 Prepare 不会再执行它的 --d->wait，屏障后归零
+	d->wait = 0;
 	for (auto iter = d->draw.begin(); iter != d->draw.end();) {
 		Graphic *g = *iter;
 		if (soft && g->stay()) {

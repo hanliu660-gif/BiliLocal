@@ -726,7 +726,7 @@ QDialog(parent)
 		}
 		// 双列各自编辑器:输入框/添加/删除/列表同列,目标一目了然——
 		// 不再绕"下拉选类型 + 共享输入框 + 焦点决定删除对象"的三段式
-		auto makeColumn = [&](const QString &title, QStringListModel *model, QListView *list){
+		auto makeColumn = [&](const QString &title, QStringListModel *model, QListView *list, bool regexpColumn){
 			QLineEdit *edit = new QLineEdit(page[2]);
 			auto box = new QWidget(page[2]);
 			auto v = new QVBoxLayout(box);
@@ -746,15 +746,23 @@ QDialog(parent)
 			h->addWidget(delBtn);
 			v->addWidget(bar);
 			v->addWidget(list, 1);
-			auto addEntry = [edit, model](){
-				if (!edit->text().isEmpty()){
-					model->insertRow(model->rowCount());
-					model->setData(model->index(model->rowCount() - 1), edit->text());
-					edit->clear();
-				}
-				else{
+			auto addEntry = [edit, model, regexpColumn](){
+				const QString text = edit->text().trimmed();
+				if (text.isEmpty()){
 					edit->setFocus();
+					return;
 				}
+				// 非法正则以前是"静默消失"：Shield::add 里 isValid() 不过就干脆不 append，
+				// 关掉设置页再进来规则已经没了。这里当场拦下来，标红 + 提示，不写进列表。
+				if (regexpColumn && !QRegularExpression(text).isValid()){
+					edit->setStyleSheet("border: 1px solid #e06c75;");
+					QToolTip::showText(edit->mapToGlobal(QPoint(0, edit->height())), tr("Invalid regular expression"));
+					return;
+				}
+				edit->setStyleSheet(QString());
+				model->insertRow(model->rowCount());
+				model->setData(model->index(model->rowCount() - 1), text);
+				edit->clear();
 			};
 			connect(addBtn, &QPushButton::clicked, box, addEntry);
 			connect(edit, &QLineEdit::returnPressed, box, addEntry);
@@ -767,8 +775,8 @@ QDialog(parent)
 		auto g = new QHBoxLayout(columns);
 		g->setContentsMargins(0, 4, 0, 4);
 		g->setSpacing(10);
-		g->addWidget(makeColumn(tr("Text"), rm, regexp), 1);
-		g->addWidget(makeColumn(tr("User"), sm, sender), 1);
+		g->addWidget(makeColumn(tr("Text"), rm, regexp, true), 1);
+		g->addWidget(makeColumn(tr("User"), sm, sender, false), 1);
 		rules->addWidget(columns, 1);
 		auto ioBar = new QWidget(page[2]);
 		auto io = new QHBoxLayout(ioBar);
@@ -830,7 +838,14 @@ QDialog(parent)
 		hotkey->header()->setSectionResizeMode(0, QHeaderView::Stretch);
 		hotkey->setColumnWidth(1, 1.2*logicalDpiX());
 		hotkey->setEditTriggers(QAbstractItemView::NoEditTriggers);
-		for (QAction *iter : lApp->findObject<Interface>()->widget()->findChildren<QAction *>(QRegularExpression(".{4}"))){
+		// 用"有没有 objectName"筛可改键的动作。旧写法是 findChildren 传
+		// QRegularExpression(".{4}") 当长度过滤，可 QRegularExpression 是子串匹配、
+		// 不是整串匹配：3 个字符的置顶动作(Top)被漏在外面，改不了键；
+		// 而菜单里那些没名字的动作(×1.0、Speed……)反倒有混进来的风险。
+		for (QAction *iter : lApp->findObject<Interface>()->widget()->findChildren<QAction *>()){
+			if (iter->objectName().isEmpty()) {
+				continue;
+			}
 			QTreeWidgetItem *item = new QTreeWidgetItem;
 			item->setData(0, Qt::DisplayRole, iter->text());
 			item->setData(1, Qt::DisplayRole, iter->shortcut().toString());
@@ -869,6 +884,10 @@ QDialog(parent)
 			connect(btn, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
 			connect(btn->button(QDialogButtonBox::Reset), &QPushButton::clicked, edit, &QKeySequenceEdit::clear);
 			dlg.exec();
+			// 取消/直接关掉都不该改键：旧代码不看 exec() 的返回值，Esc 也照样写盘
+			if (dlg.result() != QDialog::Accepted) {
+				return;
+			}
 			const QKeySequence ns = edit->keySequence();
 			if (ns != a->shortcut()){
 				const QString text = ns.toString(QKeySequence::NativeText);

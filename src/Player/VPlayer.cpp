@@ -27,7 +27,7 @@ namespace
 
 	void sta(const libvlc_event_t *, void *)
 	{
-		QMetaObject::invokeMethod(cbAPlayer(), "event", Q_ARG(int, VPlayer::Init));
+		QMetaObject::invokeMethod(cbAPlayer(), "event", Q_ARG(APlayer::Event, APlayer::Event::Init));
 	}
 
 	void mid(const libvlc_event_t *, void *)
@@ -42,17 +42,17 @@ namespace
 
 	void hal(const libvlc_event_t *, void *)
 	{
-		QMetaObject::invokeMethod(cbAPlayer(), "event", Q_ARG(int, VPlayer::Wait));
+		QMetaObject::invokeMethod(cbAPlayer(), "event", Q_ARG(APlayer::Event, APlayer::Event::Wait));
 	}
 
 	void end(const libvlc_event_t *, void *)
 	{
-		QMetaObject::invokeMethod(cbAPlayer(), "event", Q_ARG(int, VPlayer::Free));
+		QMetaObject::invokeMethod(cbAPlayer(), "event", Q_ARG(APlayer::Event, APlayer::Event::Free));
 	}
 
 	void err(const libvlc_event_t *, void *)
 	{
-		QMetaObject::invokeMethod(cbAPlayer(), "event", Q_ARG(int, VPlayer::Fail));
+		QMetaObject::invokeMethod(cbAPlayer(), "event", Q_ARG(APlayer::Event, APlayer::Event::Fail));
 	}
 }
 
@@ -465,19 +465,19 @@ void VPlayer::addSubtitle(QString file)
 	}
 }
 
-void VPlayer::event(int type)
+void VPlayer::event(APlayer::Event type)
 {
 	switch (type){
-	case Init:
+	case APlayer::Event::Init:
 		init();
 		break;
-	case Wait:
+	case APlayer::Event::Wait:
 		wait();
 		break;
-	case Free:
+	case APlayer::Event::Free:
 		free();
 		break;
-	case Fail:
+	case APlayer::Event::Fail:
 		emit errorOccurred(UnknownError);
 		break;
 	}

@@ -55,6 +55,16 @@ public:
 	};
 	Q_ENUM(Error);
 
+	// 后端内部事件（VLC 回调线程经 invokeMethod 投递到所属线程）
+	enum class Event
+	{
+		Init,
+		Wait,
+		Free,
+		Fail
+	};
+	Q_ENUM(Event);
+
 	static APlayer *create(QObject *parent = nullptr, QString name = QString());
 
 	Q_PROPERTY(int state READ getState NOTIFY stateChanged);
@@ -107,5 +117,5 @@ public slots:
 
 	virtual void    addSubtitle(QString file);
 
-	virtual void    event(int type);
+	virtual void    event(Event type);
 };

@@ -35,6 +35,51 @@
 
 using namespace UI;
 
+namespace
+{
+	// 底栏恒为深色，图标统一浅灰；QPainter 矢量绘制（2x pixmap 供高分屏取用）
+	QIcon barIcon(int kind)
+	{
+		QPixmap pm(32, 32);
+		pm.fill(Qt::transparent);
+		QPainter p(&pm);
+		p.setRenderHint(QPainter::Antialiasing);
+		QPen pen(QColor(232, 232, 234), 1.7);
+		p.setPen(pen);
+		p.setBrush(Qt::NoBrush);
+		p.scale(2, 2);
+		switch (kind) {
+		case 0:	// open：文件夹
+			p.drawPolyline(QPolygon() << QPoint(2, 5) << QPoint(6, 5) << QPoint(8, 7) << QPoint(14, 7));
+			p.drawRect(QRect(2, 7, 12, 6));
+			break;
+		case 1:	// settings：调节杆
+			p.drawLine(3, 4, 13, 4);
+			p.drawLine(3, 8, 13, 8);
+			p.drawLine(3, 12, 13, 12);
+			pen.setWidthF(3.4);
+			p.setPen(pen);
+			p.drawPoint(10.5, 4);
+			p.drawPoint(5.5, 8);
+			p.drawPoint(9, 12);
+			break;
+		case 2:	// fullscreen：四角
+			p.drawPolyline(QPolygon() << QPoint(3, 6) << QPoint(3, 3) << QPoint(6, 3));
+			p.drawPolyline(QPolygon() << QPoint(10, 3) << QPoint(13, 3) << QPoint(13, 6));
+			p.drawPolyline(QPolygon() << QPoint(13, 10) << QPoint(13, 13) << QPoint(10, 13));
+			p.drawPolyline(QPolygon() << QPoint(6, 13) << QPoint(3, 13) << QPoint(3, 10));
+			break;
+		case 3:	// playlist：三行
+		default:
+			p.drawLine(3, 4, 13, 4);
+			p.drawLine(3, 8, 11, 8);
+			p.drawLine(3, 12, 13, 12);
+			break;
+		}
+		return QIcon(pm);
+	}
+}
+
 Info::Info(QWidget *parent) :
 QWidget(parent)
 {
@@ -92,14 +137,26 @@ QWidget(parent)
 	});
 	playB = new QPushButton(this);
 	listB = new QPushButton(tr("Playlist"), this);
+	listB->setIcon(barIcon(3));
 	openB = new QPushButton(tr("Open"), this);
+	openB->setIcon(barIcon(0));
 	danmB = new QPushButton(tr("Danmaku On"), this);
 	rateB = new QPushButton(QStringLiteral("1.0x"), this);
 	prefB = new QPushButton(tr("Settings"), this);
+	prefB->setIcon(barIcon(1));
 	fullB = new QPushButton(tr("Fullscreen"), this);
+	fullB->setIcon(barIcon(2));
+	// 图标承担识别后文字隐藏（tooltip 保留说明），弹幕开关与倍速仍是文字按钮
+	openB->setToolTip(tr("Open"));
+	prefB->setToolTip(tr("Settings"));
+	openB->setText(QString());
+	prefB->setText(QString());
+	fullB->setText(QString());
+	listB->setText(QString());
 	for (QPushButton *b : { openB, danmB, rateB, prefB, fullB, listB }){
 		b->setFocusPolicy(Qt::NoFocus);
 		b->setCursor(Qt::PointingHandCursor);
+		b->setIconSize(QSize(18, 18));
 	}
 	listB->setToolTip(tr("Playlist"));
 	fullB->setToolTip(tr("Fullscreen toggle (F / F11 / double-click)"));
@@ -155,16 +212,18 @@ QWidget(parent)
 	auto syncRate = [this](double r){ rateB->setText(QString("%1x").arg(r < 0.05 ? 1.0 : r, 0, 'f', 1)); };
 	connect(ap, &APlayer::rateChanged, this, syncRate);
 	syncRate(ap->getRate());
+	// 倍速按钮：单击在常用档位间循环（精细档位仍可从右键菜单 Video>Speed 选）
 	connect(rateB, &QPushButton::clicked, [this](){
-		QMenu menu(this);
-		for (double r : { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0 }){
-			QAction *a = menu.addAction(QString("%1x").arg(r, 0, 'f', 1));
-			a->setData(r);
+		static const double rates[] = { 1.0, 1.25, 1.5, 2.0, 3.0 };
+		const double cur = lApp->findObject<APlayer>()->getRate();
+		double next = rates[0];
+		for (double r : rates){
+			if (cur < r - 0.01){
+				next = r;
+				break;
+			}
 		}
-		QAction *picked = menu.exec(rateB->mapToGlobal(rateB->rect().bottomLeft()));
-		if (picked){
-			lApp->findObject<APlayer>()->setRate(picked->data().toDouble());
-		}
+		lApp->findObject<APlayer>()->setRate(next);
 	});
 	animation = new QPropertyAnimation(this, "pos", this);
 	animation->setDuration(200);
@@ -320,14 +379,18 @@ void Info::resizeEvent(QResizeEvent *e)
 void Info::updateTimeText(qint64 _time)
 {
 	qint64 dur = duration > 0 ? duration : 0;
-	int c = int(_time / 1000);
-	int s = int(dur / 1000);
-	auto to = [](int num){
-		QString res = QString::number(num);
-		res.prepend(QString(qMax(2 - res.length(), 0), '0'));
-		return res;
+	// 长录播动辄数小时：总分钟数显示（1400:20）没人读得懂，超 1 小时用 h:mm:ss
+	auto fmt = [](qint64 ms){
+		qint64 sec = ms / 1000;
+		const QString sign = sec < 0 ? "-" : "";
+		sec = qAbs(sec);
+		const qint64 h = sec / 3600, m = sec % 3600 / 60, s = sec % 60;
+		auto two = [](qint64 n){ return QString("%1").arg(n, 2, 10, QChar('0')); };
+		return h > 0
+			? sign + QString::number(h) + ':' + two(m) + ':' + two(s)
+			: sign + two(m) + ':' + two(s);
 	};
-	timeT->setText(to(c / 60) + ':' + to(c % 60) + " / " + to(s / 60) + ':' + to(s % 60));
+	timeT->setText(fmt(_time) + " / " + fmt(dur));
 }
 
 void Info::setTime(qint64 _time)

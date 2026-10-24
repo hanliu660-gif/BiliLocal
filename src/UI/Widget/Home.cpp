@@ -67,10 +67,8 @@ namespace
 Home::Home(QWidget *parent)
 	: QWidget(parent)
 {
-	QPalette palette = qApp->setStyle("Fusion")->standardPalette();
-	palette.setColor(QPalette::Inactive, QPalette::ToolTipBase, Qt::white);
-	qApp->setPalette(palette);
-	QToolTip::setPalette(palette);
+	qApp->setStyle("Fusion");
+	Utils::applyTheme(Config::getValue("/Interface/Theme", 0));
 
 	setMouseTracking(true);
 	setAcceptDrops(true);
@@ -645,14 +643,21 @@ void Home::mouseReleaseEvent(QMouseEvent * e)
 	QWidget::mouseReleaseEvent(e);
 }
 
-// 滚轮：直接调音量（现代播放器惯例），光标处带数字提示
+// 滚轮：直接调音量（现代播放器惯例），光标处带数字提示；Ctrl+滚轮调弹幕不透明度
 void Home::wheelEvent(QWheelEvent * e)
 {
 	const int dy = e->angleDelta().y();
 	if (dy != 0){
-		const int vol = qBound(0, aplayer->getVolume() + (dy > 0 ? 5 : -5), 100);
-		aplayer->setVolume(vol);
-		QToolTip::showText(e->globalPos(), QString::number(vol));
+		if (e->modifiers() & Qt::ControlModifier){
+			const int alpha = qBound(0, Config::getValue("/Danmaku/Alpha", 80) + (dy > 0 ? 5 : -5), 100);
+			Config::setValue("/Danmaku/Alpha", alpha);
+			QToolTip::showText(e->globalPos(), tr("Danmaku alpha %1%").arg(alpha));
+		}
+		else{
+			const int vol = qBound(0, aplayer->getVolume() + (dy > 0 ? 5 : -5), 100);
+			aplayer->setVolume(vol);
+			QToolTip::showText(e->globalPos(), QString::number(vol));
+		}
 	}
 	QWidget::wheelEvent(e);
 }
@@ -662,12 +667,7 @@ void Home::resizeEvent(QResizeEvent * e)
 	const QSize size = e->size();
 	arender->resize(size);
 	int w = size.width(), h = size.height();
-	menu->terminate();
 	info->terminate();
-	int l = Config::getValue("/Interface/Popup/Width", 24 * font().pointSizeF())*logicalDpiX() / 72;
-	if (!menu->isWindow()) {
-		menu->setGeometry(menu->isShown() ? 0 : 0 - l, 0, l, h);
-	}
 	int ih = int(4.2 * logicalDpiY() * font().pointSizeF() / 72);
 	info->setGeometry(0, h - ih, w, ih);
 	info->raise();

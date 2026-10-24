@@ -41,6 +41,8 @@ APlayer::APlayer(QObject *parent)
 	: QObject(parent)
 {
 	setObjectName("APlayer");
+	// Event 枚举走跨线程 invokeMethod（queued），需要注册元类型
+	qRegisterMetaType<Event>("APlayer::Event");
 }
 
 void APlayer::setRate(double)
@@ -79,6 +81,6 @@ void APlayer::addSubtitle(QString)
 {
 }
 
-void APlayer::event(int)
+void APlayer::event(Event)
 {
 }

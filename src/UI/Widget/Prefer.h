@@ -52,7 +52,7 @@ namespace UI
 		QLineEdit *play[2];
 
 		//Interface
-		QGroupBox *ui[7];
+		QGroupBox *ui[8];
 		QComboBox *font;
 		QComboBox *reop;
 		QCheckBox *vers;
@@ -60,6 +60,7 @@ namespace UI
 		QCheckBox *less;
 		QComboBox *loca;
 		QComboBox *stay;
+		QComboBox *theme;
 		QLineEdit *jump;
 		QLineEdit *size;
 

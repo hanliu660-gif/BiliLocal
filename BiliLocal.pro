@@ -8,7 +8,7 @@ TARGET = BiliLocal
 
 TEMPLATE = app
 
-CONFIG += c++11
+CONFIG += c++17
 
 # 2026-10-24 单平台化：本工程现在只面向 Windows + VLC 后端 + OpenGL/Embed 输出。
 # 跨平台配置（linux/macx/android、QMM/NIL 后端、Raster/Quick2/vmem 输出）已删除，

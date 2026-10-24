@@ -351,18 +351,33 @@ QDialog(parent)
 		stay = new QComboBox(widget[1]);
 		stay->addItems({ tr("never"), tr("playing"), tr("always") });
 		stay->setCurrentIndex(Config::getValue("/Interface/Top", 0));
-		connect<void(QComboBox::*)(int)>(stay, &QComboBox::currentIndexChanged, [this](int i){
+		connect<void (QComboBox::*)(int)>(stay, &QComboBox::currentIndexChanged, [this](int i){
 			Config::setValue("/Interface/Top", i);
 			QMetaObject::invokeMethod(lApp->findObject<Interface>()->widget(), "setWindowFlags");
 		});
 		m->addWidget(stay);
-		ui[6] = new QGroupBox(tr("stay on top"));
+		ui[6] = new QGroupBox(tr("stay on top"), widget[1]);
 		ui[6]->setLayout(m);
+
+		auto th = new QHBoxLayout;
+		theme = new QComboBox(widget[1]);
+		theme->addItems({ tr("light"), tr("dark"), tr("follow system") });
+		theme->setCurrentIndex(Config::getValue("/Interface/Theme", 0));
+		connect<void (QComboBox::*)(int)>(theme, &QComboBox::currentIndexChanged, [](int i){
+			Config::setValue("/Interface/Theme", i);
+			Utils::applyTheme(i);
+		});
+		th->addWidget(theme);
+		ui[7] = new QGroupBox(tr("theme"), widget[1]);
+		ui[7]->setLayout(th);
 
 		auto n = new QHBoxLayout;
 		n->addWidget(ui[5]);
 		n->addWidget(ui[6]);
 		list->addLayout(n);
+		auto n2 = new QHBoxLayout;
+		n2->addWidget(ui[7]);
+		list->addLayout(n2);
 
 		list->addStretch(10);
 		tab->addTab(widget[1], tr("Interface"));
@@ -647,20 +662,38 @@ QDialog(parent)
 			connect(hotkey, &QTreeWidget::currentItemChanged, [this](){
 				hotkey->setCurrentItem(nullptr);
 			});
+			// 点击快捷键列弹出按键捕获框：按下即录（QKeySequenceEdit），
+			// 代替旧版"手打 Ctrl+X 文本再回车"
 			connect(hotkey, &QTreeWidget::itemClicked, [=](QTreeWidgetItem *item, int column){
-				if (column == 1){
-					hotkey->editItem(item, 1);
+				if (column != 1){
+					return;
 				}
-			});
-			connect(hotkey, &QTreeWidget::itemChanged, [=](QTreeWidgetItem *item, int column){
-				if (column == 1){
-					QVariant v = item->data(1, Qt::UserRole);
-					if (v.isValid()){
-						QAction *a = lApp->findObject<Interface>()->widget()->findChild<QAction *>(v.toString());
-						QString ns = item->text(1);
-						a->setShortcut(ns);
-						Config::setValue("/Shortcut/" + a->objectName(), ns);
-					}
+				const QVariant v = item->data(1, Qt::UserRole);
+				if (!v.isValid()){
+					return;
+				}
+				QAction *a = lApp->findObject<Interface>()->widget()->findChild<QAction *>(v.toString());
+				if (!a){
+					return;
+				}
+				QDialog dlg(this);
+				dlg.setWindowTitle(tr("Shortcut: %1").arg(a->text()));
+				auto box = new QVBoxLayout(&dlg);
+				auto edit = new QKeySequenceEdit(&dlg);
+				edit->setKeySequence(a->shortcut());
+				box->addWidget(edit);
+				auto btn = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::Reset, &dlg);
+				box->addWidget(btn);
+				connect(btn, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+				connect(btn, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+				connect(btn->button(QDialogButtonBox::Reset), &QPushButton::clicked, edit, &QKeySequenceEdit::clear);
+				dlg.exec();
+				const QKeySequence ns = edit->keySequence();
+				if (ns != a->shortcut()){
+					const QString text = ns.toString(QKeySequence::NativeText);
+					a->setShortcut(text);
+					item->setText(1, text);
+					Config::setValue("/Shortcut/" + a->objectName(), text);
 				}
 			});
 			tab->addTab(widget[3], tr("Shortcut"));

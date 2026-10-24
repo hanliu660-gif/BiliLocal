@@ -16,10 +16,10 @@ QSize GraphicPrivate::getSize(QString string, QFont font)
 {
 	QString fixed;
 	fixed.reserve(string.length());
-	QVectorIterator<QStringRef> iter(string.splitRef(u'\n'));
+	QListIterator<QString> iter(string.split(u'\n'));
 	Q_ASSERT(iter.hasNext());
 	for (;;) {
-		const QStringRef &l = iter.next();
+		const QString &l = iter.next();
 		int i = l.size() - 1;
 		for (; i >= 0; --i) {
 			const QChar &c = l.at(i);

@@ -66,6 +66,7 @@ namespace Utils
 
 	QString defaultFont(bool monospace = false);
 	QString localPath(Path path);
+	void applyTheme(int mode);
 	QString decodeTxt(QString &&txt);
 	QString decodeXml(QString &&xml, bool fast = false);
 	QStringList getSuffix(int type, QString format = QString());

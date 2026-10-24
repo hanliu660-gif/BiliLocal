@@ -12,14 +12,6 @@ extern "C"
 class VPlayer :public APlayer
 {
 public:
-	enum Event
-	{
-		Init,
-		Wait,
-		Free,
-		Fail
-	};
-
 	explicit VPlayer(QObject *parent = 0);
 	virtual ~VPlayer();
 
@@ -48,33 +40,32 @@ private:
 	void    parseTracks(Utils::Type type);
 
 public slots:
-	void    play();
-	void    stop(bool manually = true);
-	int     getState(){ return state; }
+	void    play() override;
+	void    stop(bool manually = true) override;
+	int     getState() override { return state; }
 
-	void    setTime(qint64 time);
-	qint64  getTime();
+	void    setTime(qint64 time) override;
+	qint64  getTime() override;
 
-	void    setMedia(QString file);
-	QString getMedia();
+	void    setMedia(QString file) override;
+	QString getMedia() override;
 
-	qint64  getDuration();
+	qint64  getDuration() override;
 
-	void    setVolume(int volume);
-	int     getVolume();
+	void    setVolume(int volume) override;
+	int     getVolume() override;
 
-	void    setRate(double rate);
-	double  getRate();
+	void    setRate(double rate) override;
+	double  getRate() override;
 
-	qint64  getDelay(int type);
-	void    setDelay(int type, qint64 delay);
+	qint64  getDelay(int type) override;
+	void    setDelay(int type, qint64 delay) override;
 
-	int     getTrack(int type);
-	void    setTrack(int type, int index);
-	QStringList getTracks(int type);
+	int     getTrack(int type) override;
+	void    setTrack(int type, int index) override;
+	QStringList getTracks(int type) override;
 
+	void    addSubtitle(QString file) override;
 
-	void    addSubtitle(QString file);
-
-	void    event(int type);
+	void    event(APlayer::Event type) override;
 };

@@ -182,14 +182,14 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 			auto map = [](const QJsonValue &item) {
 				QJsonObject o = item.toObject();
 				const QString &c = o["c"].toString();
-				const QVector<QStringRef> &args = c.splitRef(',');
+				const QStringList args = c.split(',');
 				Comment comment;
 				if (args.size() > 5) {
 					comment.time = args[0].toDouble() * 1000 + 0.5;
 					comment.color = args[1].toInt();
 					comment.mode = args[2].toInt();
 					comment.font = args[3].toInt();
-					comment.sender = args[4].toString();
+					comment.sender = args[4];
 					comment.date = args[5].toInt();
 					comment.string = o["m"].toString();
 				}
@@ -214,15 +214,15 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 	}
 	case Utils::AcfunLocalizer:
 	{
-		QVector<QStringRef> items = decodeBytes(data).splitRef("<l i=\"");
+		QStringList items = decodeBytes(data).split("<l i=\"");
 		if (items.isEmpty()) {
 			return ResultDelegate();
 		}
 		items.removeFirst();
 		QVector<Comment> list;
 		list.reserve(items.size());
-		for (const QStringRef &item : items){
-			const QVector<QStringRef> &args = item.left(item.indexOf("\"")).split(',');
+		for (const QString &item : items){
+			const QStringList args = item.left(item.indexOf("\"")).split(',');
 			if (args.size() < 6){
 				continue;
 			}
@@ -232,24 +232,24 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 			comment.mode = 1;
 			comment.font = 25;
 			comment.color = args[2].toInt();
-			comment.sender = args[4].toString();
+			comment.sender = args[4];
 			int sta = item.indexOf("<![CDATA[") + 9;
 			int len = item.indexOf("]]>", sta) - sta;
-			comment.string = Utils::decodeXml(item.mid(sta, len).toString(), true);
+			comment.string = Utils::decodeXml(item.mid(sta, len), true);
 			list.append(comment);
 		}
 		return ResultDelegate(new VectorRecord(list));
 	}
 	case Utils::Niconico:
 	{
-		QVector<QStringRef> items = decodeBytes(data).splitRef("<chat ");
+		QStringList items = decodeBytes(data).split("<chat ");
 		if (items.isEmpty()) {
 			return ResultDelegate();
 		}
 		items.removeFirst();
 		QVector<Comment> list;
 		list.reserve(items.size());
-		for (const QStringRef &item : items){
+		for (const QString &item : items){
 			Comment comment;
 			QString key, val;
 			/* 0 wait for key
@@ -324,14 +324,14 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 		int pos = 0, len;
 		pos = xml.indexOf("PlayResY:") + 9;
 		len = xml.indexOf('\n', pos) + 1 - pos;
-		int vertical = xml.midRef(pos, len).trimmed().toInt();
-		QVector<QStringRef> ref;
+		int vertical = xml.mid(pos, len).trimmed().toInt();
+		QStringList ref;
 		pos = xml.indexOf("Format:", pos) + 7;
 		len = xml.indexOf('\n', pos) + 1 - pos;
-		ref = xml.midRef(pos, len).split(',');
+		ref = xml.mid(pos, len).split(',');
 		int name = -1, size = -1;
 		for (int i = 0; i < ref.size(); ++i){
-			const QStringRef &item = ref[i].trimmed();
+			const QString item = ref[i].trimmed();
 			if (item == "Name"){
 				name = i;
 			}
@@ -344,19 +344,19 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 		}
 		pos += len;
 		len = xml.indexOf("Format:", pos) - pos;
-		ref = xml.midRef(pos, len).split("Style:", Qt::SkipEmptyParts);
+		ref = xml.mid(pos, len).split("Style:", Qt::SkipEmptyParts);
 		QMap<QString, int> style;
-		for (const QStringRef &item : ref){
+		for (const QString &item : ref){
 			const auto &args = item.split(',');
-			style[args[name].trimmed().toString()] = args[size].toInt();
+			style[args[name].trimmed()] = args[size].toInt();
 		}
 		pos += len;
 		pos = xml.indexOf("Format:", pos) + 7;
 		len = xml.indexOf("\n", pos) + 1 - pos;
-		ref = xml.midRef(pos, len).split(',');
+		ref = xml.mid(pos, len).split(',');
 		int text = -1, font = -1, time = -1;
 		for (int i = 0; i < ref.size(); ++i){
-			const QStringRef &item = ref[i].trimmed();
+			const QString item = ref[i].trimmed();
 			if (item == "Text"){
 				text = i;
 			}
@@ -372,28 +372,43 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 		}
 		qint64 dat = QDateTime::currentDateTime().toSecsSinceEpoch();
 		pos += len;
-		ref = xml.midRef(pos).split("Dialogue:",Qt::SkipEmptyParts);
+		ref = xml.mid(pos).split("Dialogue:", Qt::SkipEmptyParts);
 		QVector<Comment> list;
 		list.reserve(ref.size());
-		for (const QStringRef &item : ref){
+		for (const QString &item : ref){
 			const auto &args = item.split(',');
 			Comment comment;
 			comment.date = dat;
 			QString t;
-			t = args[time].trimmed().toString();
+			t = args[time].trimmed();
 			comment.time = 1000 * Utils::evaluate(t);
-			t = args[font].trimmed().toString();
+			t = args[font].trimmed();
 			comment.font = style[t];
-			t = item.mid(args[text].position()-item.position()).trimmed().toString();
+			// ASS 的 Text 是最后一个字段、可含逗号：从第 text 个逗号之后截到结尾
+			int cut = 0;
+			for (int i = 0; i < text; ++i){
+				cut = item.indexOf(',', cut) + 1;
+			}
+			t = item.mid(cut).trimmed();
 			int split = t.indexOf("}") + 1;
-			comment.string = t.midRef(split).trimmed().toString();
-			const auto &m = t.midRef(1, split - 2).split('\\', Qt::SkipEmptyParts);
-			for (const QStringRef &i : m){
+			comment.string = t.mid(split).trimmed();
+			const QStringList m = t.mid(1, split - 2).split('\\', Qt::SkipEmptyParts);
+			for (const QString &i : m){
 				if (i.startsWith("fs")){
 					comment.font = i.mid(2).toInt();
 				}
 				else if (i.startsWith("c&H", Qt::CaseSensitive)){
-					comment.color = i.mid(3).toInt(nullptr, 16);
+					// ASS 颜色写作 &HBBGGRR&：原实现 toInt 直接吃进尾部 '&' 得 0，
+					// 带颜色标签的 ASS 弹幕因此全部被"color==0"过滤丢弃（单测逮住的上游 bug）
+					QString hex = i.mid(3);
+					if (hex.endsWith('&')){
+						hex.chop(1);
+					}
+					bool ok = false;
+					const uint bgr = hex.toUInt(&ok, 16);
+					if (ok){
+						comment.color = ((bgr & 0xFF) << 16) | (bgr & 0xFF00) | ((bgr >> 16) & 0xFF);
+					}
 				}
 				else if (i.startsWith("c")){
 					comment.color = i.mid(1).toInt();

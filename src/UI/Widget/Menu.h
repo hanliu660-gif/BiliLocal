@@ -32,6 +32,11 @@
 
 namespace UI
 {
+	// 「文件与弹幕」悬浮面板：最近播放列表 + 搜索 + 双击即播。
+	// 2026-10-24 重做（原为 2015 年的文件补全器布局）。
+	class RecentProxy;
+	class SearchProxy;
+
 	class Menu :public QWidget
 	{
 		Q_OBJECT
@@ -45,26 +50,22 @@ namespace UI
 
 	private:
 		bool isPoped;
-		QLineEdit *fileL;
-		QCompleter *fileC;
-		QPushButton *fileB;
+		RecentProxy *recent;
+		SearchProxy *filtered;
+		QLineEdit *search;
+		QListView *view;
+		QPushButton *openB;
 		QPushButton *danmB;
 		QAction *fileA;
 		QAction *danmA;
 		QLabel *alphaT;
 		QSlider *alphaS;
-		QLabel *subT;
 		QCheckBox *subC;
-		QLabel *loopT;
 		QCheckBox *loopC;
-		QPropertyAnimation *animation;
-		void resizeEvent(QResizeEvent *e);
-		bool eventFilter(QObject *o, QEvent *e);
 
 	public slots:
 		void pop();
 		void push(bool force = false);
 		void terminate();
-
 	};
 }

@@ -49,6 +49,21 @@ private slots:
 		QCOMPARE(QVector<Comment>(parseComment(xml.mid(3), Utils::Bilibili)).size(), 1);
 	}
 
+	// 录播姬 2.x 写毫秒时间戳(13 位):不得被 32 位 strtol 饱和成
+	// INT32_MAX(=2038-01-19),须归一为秒。旧格式秒级原样保留
+	void bilibiliMillisecondDate()
+	{
+		QByteArray xml =
+			"<?xml version=\"1.0\" encoding=\"UTF-8\"?><i>"
+			"<d p=\"1.5,1,25,16777215,1792731812763,0,UID,0\">ms</d>"
+			"<d p=\"2.5,1,25,16777215,1792731812,0,UID,0\">sec</d>"
+			"</i>";
+		QVector<Comment> r = parseComment(xml, Utils::Bilibili);
+		QCOMPARE(r.size(), 2);
+		QCOMPARE(r[0].date, qint64(1792731812));
+		QCOMPARE(r[1].date, qint64(1792731812));
+	}
+
 	// ASS：覆盖标签（\fs、\c&H…&、\pos）驱动字号/颜色/模式，正文剥标签；
 	// 颜色是 &HBBGGRR& 字节序（原实现吞 '&' 得 0 丢弹幕，已修）
 	void ass()

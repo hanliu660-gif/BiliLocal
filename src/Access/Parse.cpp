@@ -120,7 +120,12 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 				if (*(arg++) != ',') return comment;
 				int colo = std::strtol(arg, &arg, 10);
 				if (*(arg++) != ',') return comment;
-				int date = std::strtol(arg, &arg, 10);
+				// 录播姬 2.x 写的是毫秒时间戳(13 位),旧 B 站格式是秒(10 位)。
+				// 用 32 位 strtol 读毫秒会饱和到 INT32_MAX(=2038-01-19)。
+				long long date = std::strtoll(arg, &arg, 10);
+				if (date > 10000000000LL) {
+					date /= 1000;	// 阈值 1e11 秒:秒级时间戳永达不到,毫秒级必超过
+				}
 				comment.mode = mode;
 				comment.font = font;
 				comment.color = colo;

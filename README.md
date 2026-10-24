@@ -52,6 +52,29 @@ danmaku XML (`*.xml`) that recorder tools drop next to the video.
   limits; shielding by type / sender / regex; per-source delay calibration
   with a visual density track editor
 
+## Usage
+
+- Launch the executable and drop `*.flv` / `*.mp4` onto the window (or pass
+  paths on the command line); a same-name `*.xml` / `*.json` next to the
+  video is mounted as its danmaku track automatically
+- Move the mouse to reveal the single bottom bar; it hides after 2 s idle.
+  Left to right: play/pause, time (h:mm:ss past one hour), seek strip
+  (click-to-jump, draggable), danmaku on/off, speed cycler (1.0 → 3.0),
+  volume, and four icon buttons (open, settings, fullscreen, playlist)
+- The playlist panel never steals keyboard focus
+- Shortcuts: click video = pause/resume (250 ms disambiguation against
+  double-click, `/Interface/Sensitive` toggles it); wheel = volume;
+  Ctrl+wheel = danmaku opacity; 0–9 = percentage jump; Shift+←/→ = ±60 s;
+  ←/→ = ±10 s; ↑/↓ = volume; M = mute; T = always-on-top; F / F11 /
+  double-click = fullscreen; Esc = leave fullscreen; Ctrl+←/→ = danmaku
+  delay; hold right button = 3× speed (release restores; a short right
+  click opens the menu)
+- Resume: closing remembers the position; reopening jumps back when more
+  than 10 s was watched and the end was not reached (`Player/Resume=false`
+  disables). A bare launch auto-plays the most recent unfinished media
+  (`Player/AutoResume`); the open dialogs share one last-directory memory
+  (`Interface/OpenDir`)
+
 ## Build (Windows x64)
 
 Toolchain used by this fork:
@@ -69,8 +92,8 @@ mingw32-make -j8 release
 
 Sources with Chinese string literals must stay UTF-8 with BOM. Runtime needs
 Qt5 Core/Gui/Widgets/Network/Concurrent, the VLC runtime, the VC runtime
-(vcruntime140 etc.), and `locale/<lang>/bililocal.qm` for translations
-(regenerate with `lupdate` / `lrelease` after changing UI strings).
+(vcruntime140 etc.), and `locale/<lang>/bililocal.qm` for translations —
+the BOM/i18n housekeeping workflow lives in [docs/HANDOVER.md](docs/HANDOVER.md).
 
 ## Tests
 

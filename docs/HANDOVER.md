@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> **更新时间**：2026-10-26（**第二十一版：Phase 2 Qt 6.8 LTS 落地**——源码全面切到 Qt 6.8.3（shader 330 core、QTextCodec 走 Core5Compat、事件坐标/setCodec/desktop/AA_* 全清）、qmake 遗留全删（.pro×6 + 树×7）、run-tests.ps1 改 ctest、CI 换 Qt6 单 job（坑 52–54）。**机器侧全绿（0 警告/41 例/hook-gate/DPI 探针 1.50），等 Phase 3 人眼清单**。前情：第二十版 Phase 1（MSVC 编译器）已由千夏验收结案））
+> **更新时间**：2026-10-26（**第二十二版：Phase 3 首轮验收反馈修复落地（坑 55）**——千夏过完功能清单：**基本功能全部没问题**，但反应变慢 + 关闭长卡顿；他自己会话产生的 4 份 WER 转储把问题钉死在图集析构链的退出 GL 删除（2 份挂起 + 2 份真崩溃），修法 = 退出路径零 GL 调用 + collect 批量删除。实测关闭 2.0–2.1s（修复前 2.0–8.1s，Qt5 基线 2.0s）、播放 CPU 7.1%/核（Qt5 9.7%）。**等千夏复验反应速度与关闭体验，全过即 dist 对调定稿收尾**。前情：第二十一版 Phase 2（Qt 6.8.3）机器侧全绿））
 >
 > **这份文档写给谁**：写给"下一会话接手这个工程的人/AI"。先读 §0 约束，再看 §2 当前状态，动手前看 §6 坑。
 >
@@ -40,7 +40,7 @@
 | `build-cmake\` | CMake 影子构建（**MinGW/Qt5，已死线**：源码已是 Qt6，此树不再可编；dist\ 的现行产物出自这里，Phase 3 清理候选） |
 | `build-cmake-msvc\` | CMake 影子构建（**MSVC/Qt5.15，已死线**：Phase 1 的验收树，同上清理候选） |
 | `build-cmake6\` | **CMake 影子构建（现役）**：Qt 6.8.3 msvc2022_64 + VS 生成器 → `Release\BiliLocal.exe` + 5 个测试 exe + `zh_CN.qm`/`zh_TW.qm`；构建命令见 §4 |
-| `dist-msvc\` | **Qt6 线成品（Phase 3 验收用）**：Qt6 exe + Qt6 DLL/插件 + 原 VLC 运行库；等千夏过人眼清单 |
+| `dist-msvc\` | **Qt6 线成品（Phase 3 验收用）**：Qt6 exe + Qt6 DLL/插件 + 原 VLC 运行库。首轮功能清单已过（2026-10-26）；性能回归已修（坑 55），**等千夏复验反应速度与关闭体验**，过后与 dist 对调定稿 |
 | `src\test\*.cpp` | 5 个测试目标 41 例（parse 9 / config 7 / shield 9 / load 12 / list 4），构建与运行全走 `build-cmake6` + ctest（`tools\run-tests.ps1` 一键；负向对照与测试约束的说明在 §2/§8） |
 | `deps\archive\` | 依赖归档：`vlc-sdk-3.0.24-win64.zip`（= `deps\thirdparty` 现快照，SHA256 `7BD12CD7…`；只有头文件+再生 MinGW 库，**无官方 .lib**）+ 旧 `vlc-sdk-3.0.21-win64.zip`（SHA256 `857CE77B…`）；来源与再生途径见 §9 |
 | `dist\` | **可直接运行的成品（日常在用）**：exe + Qt5 + VLC 3.0.24（FFmpeg 8.1.2）+ 插件 + 翻译。**Qt6 版在 dist-msvc\，Phase 3 全过后两者对调** |
@@ -60,7 +60,7 @@
 
 **Phase 1+2 迁移状态（2026-10-26 实测）**（下文其余 bullet 是 MinGW/Qt5 主线的既有事实——`dist\` 仍日常在用）：
 
-- **源码**：`master` = `8bb173f`（**Phase 2 提交**：Qt 6.8.3 移植 + qmake 删除 + CI 换 6.8）← `599dc95`（Phase 1 结案）← `f81e6ee`（Phase 1：MSVC 工具链）← `74a7569`（文档 19 版）。远端已同步。
+- **源码**：`master` = `8f15d86`（**坑 55 修复**：atlas 退出路径零 GL 调用 + collect 批量删除）← `d5b6383`（文档清扫）← `8bb173f`（**Phase 2 提交**：Qt 6.8.3 移植 + qmake 删除 + CI 换 6.8）← `599dc95`（Phase 1 结案）← `f81e6ee`（Phase 1：MSVC 工具链）← `74a7569`（文档 19 版）。远端已同步。
 - **Qt6 产物**：`dist-msvc\BiliLocal.exe` **978,432 B / SHA256 `2b042f41…`**（构建树 `build-cmake6\`，Qt 6.8.3 msvc2022_64 + VS 生成器；qm 首次由 CMake 真编并部署）。**等 Phase 3 人眼清单**，全过后与 `dist\`（MinGW/Qt5，`6C55F692…`）对调定稿。
 - **Qt6 门禁实测（2026-10-26）**：构建 **0 警告**；ctest **5/5 目标 = 41/41**（9+7+9+12+4，Totals 原文已核）；hook-gate 对 dist-msvc **PASS**（三标记全中、`Load: processed … pool=1`、`Program Link Failed`+`syntax error` 计数 0）；**DPI 探针（Qt6 无窗口程序，150% 屏）：dpr=1.50 / logical 1707×960 / physical 2560×1440**——d98327b 的成果在 Qt6 恒开高 DPI 下无回退。
 - **qmake 遗留已删（Phase 2）**：`.pro`×6（主 + 5 测试）、`build\` + 6 个 qmake 测试树；`tools\run-tests.ps1`（pre-push 门禁）改 `cmake --build build-cmake6 + ctest`，实测走通（"100% tests passed out of 5"）。
@@ -120,6 +120,8 @@
 | `f81e6ee` / `25e3751` | **Phase 1**：MSVC 工具链（官方 .lib 入 thirdparty/lib/msvc、全局 /utf-8、fixture 反斜杠真修——坑 49/50）；CI 加 msvc job、不钉生成器（坑 51） |
 | `599dc95` | Phase 1 结案：千夏开关 `dist-msvc` 验收通过 |
 | `8bb173f` / `f630a70` | **Phase 2**：Qt 6.8.3 全面落地（shader 330 core、Core5Compat、事件坐标/desktop/setCodec/AA_* 全清）+ qmake 遗留删除 + run-tests 改 ctest + CI 换 Qt6 单 job（坑 52–54）；文档 21 版 |
+| `d5b6383` | 文档清扫：README 构建/测试段换 Qt6、沿革补全、全部失效句清理 |
+| `8f15d86` | **坑 55 修复**：atlas 退出零 GL 调用 + collect 批量删（关闭 2.0–8.1s → 2.0–2.1s；4 份 WER 转储取证法入档） |
 
 ---
 
@@ -333,6 +335,12 @@ Copy-Item C:\DSH\APP\BiliLocal\build-cmake6\Release\BiliLocal.exe C:\DSH\APP\Bil
 
 **Phase 3 · 用户验收（人眼清单）**
 弹幕可见/颜色/描边/滚动速度、悬停冻结（高密度段，`hook-gate.ps1` 先跑）、**右键弹幕数据块（用户专属动作）**、全屏进出、断点续播、双主题、Prefer 五页、屏蔽规则生效。全过后 dist 定稿、清理旧构建树。
+
+> **Phase 3 实况（2026-10-26）**：首轮验收完成——**功能清单全过**（千夏："基本功能没问题"）；性能两项不达标
+> （反应变慢、关闭长卡顿），经他自己会话产生的 4 份 WER 转储定位为图集析构链的退出 GL 删除（坑 55，含两次
+> 真崩溃），已修复实测（关闭 2.0–2.1s、播放 CPU 7.1%/核）。**待办 = 千夏复验这两项 → 全过后的收尾清单**：
+> dist 对调定稿（Qt6 转正当班）→ 清死树（`build-cmake\`、`build-cmake-msvc\`）→ deps 裁决（Qt5×2 + MinGW
+> 共 1.4G 去留，默认倾向留）→ Qt5 杂项对账（`qt.qm`、`d3dcompiler_47`、MinGW 三件套）。
 
 **Phase 4 · VLC 4（独立会话，等上游 4.0 final）**
 与 Qt 解耦。必改点已知：`libvlc_video_set_subtitle_file`（现存的 2 条警告在 4.x 头文件里会变硬错误）。可先做纸面差异清单，把考古变成核对。

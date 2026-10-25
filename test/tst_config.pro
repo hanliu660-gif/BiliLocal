@@ -13,4 +13,5 @@ SOURCES += \
     ../src/Config.cpp
 
 HEADERS += \
-    ../src/Config.h
+    ../src/Config.h \
+    ../src/Local.h

@@ -215,7 +215,7 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 44. **QtTest 的 `QVERIFY`/`QFAIL` 宏展开成 `return;`，只能用在 void 函数**：放进返回 QString/bool 的辅助函数直接编译错（`qtestcase.h:66`）。测试辅助函数一律 void + 出参
 45. **弹幕 lane 自顶向下填充，稀疏弹幕永远到不了屏幕中部**：Running 的"最空 lane"算法按 y=0,10,20… 顺序占位，(600,320) 这类中部锚点只在并发弹幕多到把 lane 填过 320（约 130 条在屏）时才有图形可冻结——探针实锤：稀疏 fixture 的矩形范围 y[0..275]→y[0..75]，"悬停冻结"验证静默不报错。**hook-gate 的 fixture 必须 0.05s 间隔**；据此推断真机日常录播（高密度）才会触发悬停冻结，低密度直播场景该功能可能"看似没反应"
 46. **build 树的 exe 直接跑不起来**：加载器不认 PATH 兜底（裸跑退出码 `0xC0000135`，或静默卡在加载器错误框上进程活着但零日志）。要在 build 树调试：`cp dist/*.dll build/release/` + `mklink /J build\release\plugins dist\plugins`，诊断完 `rm *.dll` + `rmdir plugins`（**junction 只能 rmdir，rm -rf 会穿透删掉 dist\plugins**）。hook-gate 已内置 `QT_QPA_PLATFORM_PLUGIN_PATH`/`VLC_PLUGIN_PATH`/PATH 三个环境变量，但实测仍需 DLL 在 exe 旁——**现脚本对非 dist 的 exe 自动 stage**（见 §8）
-47. **AUTOMOC 会 moc include 链里所有含 Q_OBJECT 的头**：qmake 的 moc 面由 HEADERS 列表决定，CMake 的 AUTOMOC 扫源码 include——`tst_config.cpp` 没 HEADERS 列 Local.h 也被 moc 出来（`mocs_compilation.cpp` 引用 ctor/dtor/槽符号）。CMake 化时按链接错误补桩，别按 qmake 的 HEADERS 直觉
+47. **AUTOMOC 会 moc include 链里所有含 Q_OBJECT 的头**：qmake 的 moc 面由 HEADERS 列表决定，CMake 的 AUTOMOC 扫源码 include——`tst_config.cpp` 没 HEADERS 列 Local.h 也被 moc 出来（`mocs_compilation.cpp` 引用 ctor/dtor/槽符号）。CMake 化时按链接错误补桩，别按 qmake 的 HEADERS 直觉；**两套构建并存时反过来也成立**——补了 ctor/dtor 桩的 TU 会发射 vtable，qmake 侧 HEADERS 必须补列同一个头（`tst_config.pro` 加 Local.h），否则 vtable/metaObject 无着色
 
 ---
 

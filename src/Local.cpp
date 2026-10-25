@@ -251,7 +251,9 @@ int main(int argc, char *argv[])
 		QObject::connect(server, &QLocalServer::newConnection, [=](){
 			QLocalSocket *r = server->nextPendingConnection();
 			// 显式短超时：对端异常时不让主线程白等默认的 30 秒
-			r->waitForReadyRead(500);
+			// 只等一次可能只收到一半：多文件/长路径转发会被截断，反序列化静默得到空列表
+			while (r->waitForReadyRead(500)){
+			}
 			QDataStream s(r);
 			QStringList args;
 			s >> args;

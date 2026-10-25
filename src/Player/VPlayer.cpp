@@ -279,7 +279,21 @@ void VPlayer::setMedia(QString file)
 		return;
 	}
 	if (mp){
+		// VLC 的回调线程可能正拿着这个 mp 调 getTime()：先挡住（mid() 用 tryLock，
+		// 不会反过来卡住这里），再摘事件，最后才释放。以前这里既不 detach 也不加锁，
+		// 换片瞬间回调可能对已释放的 mp 调 API。
+		timeMutex.lock();
+		libvlc_event_manager_t *old = libvlc_media_player_event_manager(mp);
+		if (old){
+			libvlc_event_detach(old, libvlc_MediaPlayerPlaying, sta, nullptr);
+			libvlc_event_detach(old, libvlc_MediaPlayerTimeChanged, mid, nullptr);
+			libvlc_event_detach(old, libvlc_MediaPlayerPaused, hal, nullptr);
+			libvlc_event_detach(old, libvlc_MediaPlayerEndReached, end, nullptr);
+			libvlc_event_detach(old, libvlc_MediaPlayerEncounteredError, err, nullptr);
+		}
 		libvlc_media_player_release(mp);
+		mp = nullptr;
+		timeMutex.unlock();
 	}
 	mp = libvlc_media_player_new_from_media(m);
 	libvlc_media_release(m);

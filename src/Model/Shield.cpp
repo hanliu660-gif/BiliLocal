@@ -99,7 +99,9 @@ public:
 
 	void remove(const QString &shield)
 	{
-		if (shield.length() <= 2){
+		// 线格式是 "<tag><内容>"，最短是 "m<0>"(3 字节)；旧规则 "t="（空正则）长度正好 2，
+		// 用 <= 2 就永远删不掉这条残留规则
+		if (shield.length() < 2){
 			return;
 		}
 		QString content = shield.mid(2);

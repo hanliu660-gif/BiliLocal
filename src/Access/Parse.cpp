@@ -112,7 +112,9 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 				Comment comment;
 				//strtof/strtoi need char * ?!
 				char *arg = const_cast<char *>(raw.first) + 6;
-				int time = std::strtod(arg, &arg) * 1000 + 0.5;
+				// strtod 溢出会返回 inf，直接乘 1000 再转 int 是 UB（畸形 xml 能触发）
+				const double sec = std::strtod(arg, &arg);
+				int time = qIsFinite(sec) ? int(sec * 1000 + 0.5) : 0;
 				if (*(arg++) != ',') return comment;
 				int mode = std::strtol(arg, &arg, 10);
 				if (*(arg++) != ',') return comment;
@@ -216,7 +218,9 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 					comment.mode = args[2].toInt();
 					comment.font = args[3].toInt();
 					comment.sender = args[4];
-					comment.date = args[5].toInt();
+					// 录播姬 2.x 写的是 13 位毫秒时间戳，toInt 会溢出成 0（屏蔽/历史限制随之失效）
+					const qint64 date = args[5].toLongLong();
+					comment.date = date > 10000000000LL ? date / 1000 : date;
 					comment.string = o["m"].toString();
 				}
 				return comment;
@@ -254,7 +258,9 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 			}
 			Comment comment;
 			comment.time = args[0].toDouble() * 1000 + 0.5;
-			comment.date = args[5].toInt();
+			// 同 AcFun JSON：13 位毫秒直接用 toInt 会溢出成 0
+			const qint64 date = args[5].toLongLong();
+			comment.date = date > 10000000000LL ? date / 1000 : date;
 			comment.mode = 1;
 			comment.font = 25;
 			comment.color = args[2].toInt();
@@ -403,6 +409,10 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 		list.reserve(ref.size());
 		for (const QString &item : ref){
 			const auto &args = item.split(',');
+			// Format 头里有几列不代表每一行都凑够几列：畸形/被截断的 ass 会在这里越界
+			if (args.size() <= qMax(time, qMax(font, text))){
+				continue;
+			}
 			Comment comment;
 			comment.date = dat;
 			QString t;

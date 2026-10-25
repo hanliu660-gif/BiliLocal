@@ -277,12 +277,14 @@ void Danmaku::append(Record &&record)
 		QSet<CommentPointer> s;
 		auto &l = append->danmaku;
 		int total = l.size() + a;
+		beginResetModel();
+		// 必须先扩容再取地址：reserve() 会让 QList 重新分配，先取的 &c 全部悬空，
+		// 下面拿这些地址做 ==/qHash 就是读已释放的内存（同一视频追加第二份 xml 时触发）。
+		l.reserve(total);
 		s.reserve(total);
 		for (const Comment &c : l) {
 			s.insert(&c);
 		}
-		beginResetModel();
-		l.reserve(total);
 		for (const Comment &i : record.danmaku) {
 			l.append(i);
 			Comment &c = l.last();

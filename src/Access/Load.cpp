@@ -91,21 +91,25 @@ void Load::processNext()
 	}
 
 	Parse::ResultDelegate result;
-	QByteArray head = data.left(512);
+	// 前面有空行/空白的 xml 以前会被当成 AcFun JSON（结果是 0 条弹幕），
+	// 所以先 trim 再判类型；判不出来的仍走 AcFun 兜底，与原来的行为一致。
+	const QByteArray head = data.left(512).trimmed();
 	if (head.startsWith("[Script Info]")){
 		result = Parse::parseComment(data, Utils::ASS);
 	}
-	else if (!head.startsWith("<?xml")){
+	else if (head.startsWith('<')){
+		if (head.indexOf("<packet>") != -1){
+			result = Parse::parseComment(data, Utils::Niconico);
+		}
+		else if (head.indexOf("<i>") != -1){
+			result = Parse::parseComment(data, Utils::Bilibili);
+		}
+		else if (head.indexOf("<c>") != -1){
+			result = Parse::parseComment(data, Utils::AcfunLocalizer);
+		}
+	}
+	else {
 		result = Parse::parseComment(data, Utils::AcFun);
-	}
-	else if (head.indexOf("<packet>") != -1){
-		result = Parse::parseComment(data, Utils::Niconico);
-	}
-	else if (head.indexOf("<i>") != -1){
-		result = Parse::parseComment(data, Utils::Bilibili);
-	}
-	else if (head.indexOf("<c>") != -1){
-		result = Parse::parseComment(data, Utils::AcfunLocalizer);
 	}
 
 	Record load;

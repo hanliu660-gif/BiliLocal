@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> **更新时间**：2026-10-25（**第十七版：模型层单测**——tst_shield/tst_load 共 21 例入库+负向对照、一键测试门禁 run-tests.ps1、钩子注释纠偏、VC 运行库入 dist、deps 归档与来源记录、Qt 6 纸面预案（仅备案未启动）；代码事实按 2026-10-25 20:09 前后实测。同日修订：验证分工表述按用户澄清收窄——"只能人眼验证"实为"仅真实右键到弹幕这一个动作需要本人"，见 §2/§3/§6-14，源码头注同步纠偏 `5ecd888`）
+> **更新时间**：2026-10-25（**第十七版：模型层单测**——tst_shield/tst_load 共 21 例入库+负向对照、一键测试门禁 run-tests.ps1、钩子注释纠偏、VC 运行库入 dist、deps 归档与来源记录、Qt 6 纸面预案（仅备案未启动）；代码事实按 2026-10-25 20:09 前后实测。同日修订：验证分工表述按用户澄清收窄——"只能人眼验证"实为"仅真实右键到弹幕这一个动作需要本人"，见 §2/§3/§6-14，源码头注同步纠偏 `5ecd888`；GUI 钩子门禁 hook-gate + 本地 fixture + pre-push 门禁落地（见 §8，坑 45/46））
 >
 > **这份文档写给谁**：写给"下一会话接手这个工程的人/AI"。先读 §0 约束，再看 §2 当前状态，动手前看 §6 坑。
 >
@@ -48,7 +48,7 @@
 | `dist\` | **可直接运行的成品**：exe + Qt5 + VLC 3.0.24（FFmpeg 8.1.2）+ 插件 + 翻译 |
 | `deps\` | 工具链：Qt 5.15.2 (mingw81_64)、MinGW 8.1.0、VLC SDK 头文件/导入库（在 `deps\thirdparty`）。VLC 运行库只存在于 dist；`deps\dl` 仅剩 `vlc-2.2.8-win64.zip`（vmem 考古用） |
 | `tools\` | 调试/测试脚本（14 个，见 §8） |
-| `test\` | `embed.xml` = 测试弹幕 fixture；`rec.xml` + `rec.flv` 是指向 Z: 真实录播的**符号链接**（Z: 未挂载时悬空，单测不依赖） |
+| `test\` | 已清空（2026-10-25 清点：`embed.xml` 与 `rec.*` 符号链接均已不存在）。hook-gate 的弹幕 fixture 与本地视频由 `tools\gen-media.py` 按需生成到 `tools\.media\`（不入 git，见 §8） |
 | `%LOCALAPPDATA%\BiliLocal\Config.txt` | 运行时配置（JSON） |
 | `%LOCALAPPDATA%\BiliLocal\cache\msg.log` | 日志（超 10MB 自动轮转成 `.old`） |
 
@@ -62,7 +62,7 @@
 
 - **exe**：`dist\BiliLocal.exe` = **931,840 字节**，SHA256 **`2C0005D3…`**（构建自 `0f25480`，20:00 前后部署；该提交只改注释，exe 与 `build\release\BiliLocal.exe` 逐字节一致）。**构建可复现性（2026-10-25 18:46 实测三组）**：①`dist` 与 `build\release` 逐字节相同（每次部署都 sha256 校验）；②同一构建树连续两次全量 clean 重建：931,840 B，只差 **4 字节**（offset 137/138、217/218 = PE 时间戳/校验和）；③把 `git archive HEAD` 导到**另一个目录**重建：尺寸同为 931,840 B，但差 **2,692 字节**（4 字节 PE 头 + 2,688 字节在代码/数据区），成因未定。⇒ **尺寸可复现、字节不完全可复现：判断"是不是同一份源码"只能看 git 提交号，别比哈希。**
 - **源码**：`master` = 最新提交（**从 05:30 起改为不写死文档哈希**——写死的值在提交瞬间就过期，当前值用 `git log -1 --oneline` 取）；**最后一个代码提交 = `5ecd888`**（tst_parse 头注纠偏，纯注释）← `0f25480`（钩子注释纠偏，纯注释）← `0c74654`（tst_shield/tst_load 新单测）← `7bf39d2`（同一视频只加载一份弹幕）← `30466b0`（弹幕 shader 修好、白方块消失）← `600b369`（审计第 5 批）← `9edac7c`（审计第 4 批）← `1b10dc0`（审计第 3 批）← `2f8a1d1`（审计第 2 批）← `cd3b0fe`（审计第 1 批）← `d98327b`（UI/DPI）← `81aab8f` ← `a5f95fe` ← `a9fbcb3` ← `63f9a4b` ← `8d9c8ec` ← `44fbb3e` ← `7f8685a` ← `473ba62` ← `3f86f74` ← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`。上游 `9d1cb05`；回滚 tag `v0.5.0-vmem` = `46b68b9`；远端 `github` = `github.com/hanliu660-gif/BiliLocal`。
-- **单测**：四个目标共 **37 例全绿**（2026-10-25，`tools\run-tests.ps1` 一键复跑）：`tst_parse` **9/9**、`tst_config` **7/7**、`tst_shield` **9/9**、`tst_load` **12/12**。**负向对照做了两个**：①把 `tst_config` 两处 `QWriteLocker locker(&lock);` 注释掉重建，`concurrentWriters` 直接 SIGSEGV（`rc=139`）；②把 `Load.cpp` 嗅探的 `.trimmed()` 去掉重建，`blankLineBeforeXml` 变红（0 条弹幕）、其余 11 例不受影响 ⇒ 用例不是空跑。List 与 Danmaku 本体因依赖整套服务定位器 + APlayer（会拖进 VPlayer/libvlc）暂不独立成测（见 §10-4）。
+- **单测**：四个目标共 **37 例全绿**（2026-10-25，`tools\run-tests.ps1` 一键复跑）：`tst_parse` **9/9**、`tst_config` **7/7**、`tst_shield` **9/9**、`tst_load` **12/12**。**负向对照做了两个**：①把 `tst_config` 两处 `QWriteLocker locker(&lock);` 注释掉重建，`concurrentWriters` 直接 SIGSEGV（`rc=139`）；②把 `Load.cpp` 嗅探的 `.trimmed()` 去掉重建，`blankLineBeforeXml` 变红（0 条弹幕）、其余 11 例不受影响 ⇒ 用例不是空跑。GUI 钩子剧本另有 `tools\hook-gate.ps1` 断言三个日志标记（见 §8）。List 与 Danmaku 本体因依赖整套服务定位器 + APlayer（会拖进 VPlayer/libvlc）暂不独立成测（见 §10-4）。
 - **编译警告**：**42 → 3**（连清两轮：`a5f95fe` 清 6 个位置，`81aab8f` 清最后 1 个；`0c74654` 新增的两个测试目标构建 **0 警告**）。剩下 3 条是**刻意留的**：`-Wimplicit-fallthrough` 1 条（`src\src\Model\Running.cpp:283` 的 `case 1` 落到 `case 0`，入队本来就该两模式同路）、`libvlc_video_set_subtitle_file` 2 条（`src\src\Player\VPlayer.cpp:476`，VLC 3 标弃用但照常可用，换 VLC 4 才必须改）。
 - **i18n**：源码全英文串，中文走 `dist\locale\zh_CN\bililocal.qm`（187/187 全译，含繁体）。改 UI 文案后：lupdate → 补译 → lrelease → 部署 qm。
 - **运行库**：VLC **3.0.24**（d3d11 直出）；`dist\plugins` 里**混住着 Qt 的四个插件目录**（`platforms\` `imageformats\` `mediaservice\` `styles\`），整目录替换 VLC 时必须把它们合并到顶层，否则 Qt 起不来（流程见 §9）。dist 只带 exe 实际导入的 5 个 Qt DLL（Concurrent/Core/Gui/Network/Widgets）。
@@ -195,6 +195,8 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 42. **别用 exe 的 SHA256 判断"是不是同一份源码编的"**：同一构建树重复 clean 重建只差 4 字节（PE 时间戳/校验和），但把同样的源码导到另一个目录重建，尺寸一模一样（931,840 B）却有 2,692 字节不同（代码/数据区 2,688），成因未定。要证明源码同源，认 git 提交号。
 43. **Load 的 xml 嗅探只认 `<packet>`/`<i>`/`<c>` 三种头**：裸 `<l i=` 内容（AcFunLocalizer 真文件必有 `<c>` 包裹）三个分支全不命中 ⇒ 默认构造的 `ResultDelegate` ⇒ **静默 0 条弹幕**。给 `tst_load` 写 fixture 时踩到；"能被认出"本身就是格式契约的一部分
 44. **QtTest 的 `QVERIFY`/`QFAIL` 宏展开成 `return;`，只能用在 void 函数**：放进返回 QString/bool 的辅助函数直接编译错（`qtestcase.h:66`）。测试辅助函数一律 void + 出参
+45. **弹幕 lane 自顶向下填充，稀疏弹幕永远到不了屏幕中部**：Running 的"最空 lane"算法按 y=0,10,20… 顺序占位，(600,320) 这类中部锚点只在并发弹幕多到把 lane 填过 320（约 130 条在屏）时才有图形可冻结——探针实锤：稀疏 fixture 的矩形范围 y[0..275]→y[0..75]，"悬停冻结"验证静默不报错。**hook-gate 的 fixture 必须 0.05s 间隔**；据此推断真机日常录播（高密度）才会触发悬停冻结，低密度直播场景该功能可能"看似没反应"
+46. **build 树的 exe 直接跑不起来**：加载器不认 PATH 兜底（裸跑退出码 `0xC0000135`，或静默卡在加载器错误框上进程活着但零日志）。要在 build 树调试：`cp dist/*.dll build/release/` + `mklink /J build\release\plugins dist\plugins`，诊断完 `rm *.dll` + `rmdir plugins`（**junction 只能 rmdir，rm -rf 会穿透删掉 dist\plugins**）。hook-gate 已内置 `QT_QPA_PLATFORM_PLUGIN_PATH`/`VLC_PLUGIN_PATH`/PATH 三个环境变量，但实测仍需 DLL 在 exe 旁
 
 ---
 
@@ -205,11 +207,13 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 
 ---
 
-## 8. 工具脚本（`tools\`，14 个）与验证钩子
+## 8. 工具脚本（`tools\`，16 个）与验证钩子
 
 | 脚本 | 用途 |
 | --- | --- |
 | `run-tests.ps1` | **一键门禁**：4 个单测目标（parse/config/shield/load）逐个 qmake+make+运行，输出各自 Totals，任一失败退出码 1（`-NoBuild` 只跑不编） |
+| `hook-gate.ps1` | **GUI 钩子门禁**：以 `BILILOCAL_EMBED_TEST=1` 起播放器播本地 fixture，断言 `msg.log` 三个标记（`seeked to 10%` / `hover: freeze` / `hover: release`），全中才退出码 0；`-Media` 可换 Z: 真实录播做对照 |
+| `gen-media.py` | 生成 hook-gate 的本地 fixture 到 `tools\.media\`：`sample-60s.y4m`（裸 YUV4MPEG2 流，libvlc 原生可播，本机无转码器也能造视频）+ 同名 xml（**0.05s 间隔高密度弹幕**，原因见 §6-45） |
 | `setcfg.py <key> <value>` | 改 `Config.txt` 任意键（布尔/数字/字符串自动识别） |
 | `pwc.ps1` | **PrintWindow(PW_RENDERFULLCONTENT) 抓窗口**——抓视频/底栏用这个 |
 | `shot.ps1` | BitBlt 抓屏（D3D/GL 层会黑，仅参考） |

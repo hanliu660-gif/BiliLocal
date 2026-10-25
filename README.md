@@ -14,7 +14,7 @@ danmaku XML (`*.xml`) that recorder tools drop next to the video.
 
 ## What changed vs upstream
 
-- **64-bit build** (Qt 5.15.2 / MinGW 8.1.0), and a long list of upstream-era
+- **64-bit build** (Qt 6.8 LTS / MSVC 2022), and a long list of upstream-era
   bugs fixed (config persistence, UTF-8 BOM danmaku parsing, crash-on-quit,
   fullscreen glitches — see the commit history, every commit documents the
   root cause and its evidence)
@@ -85,30 +85,32 @@ danmaku XML (`*.xml`) that recorder tools drop next to the video.
 
 Toolchain used by this fork:
 
-- Qt 5.15.2 (mingw81_64)
-- MinGW 8.1.0 (x86_64-w64-mingw32)
-- VLC 3.0.24 — SDK (headers + import libs) at build time, full runtime
+- Qt 6.8.3 (msvc2022_64) — the Core5Compat module is required (legacy
+  GBK/encoding danmaku files go through its QTextCodec)
+- MSVC 2022 (v143) — the CMake Visual Studio generator locates the
+  toolchain on its own
+- VLC 3.0.24 — SDK (headers + MSVC import libs) at build time, full runtime
   (libvlc, libvlccore, plugins) at run time
 
 ```bat
-set PATH=<mingw>\bin;<qt>\bin;%PATH%
-qmake BiliLocal.pro THIRDPARTY=<vlc-sdk-root> CONFIG+=release
-mingw32-make -j8 release
+cmake -G "Visual Studio 17 2022" -A x64 -B build-cmake6 -S . -DQt6_DIR=<qt6>\lib\cmake\Qt6
+cmake --build build-cmake6 --config Release -j8
 ```
 
 Sources with Chinese string literals must stay UTF-8 with BOM. Runtime needs
-Qt5 Core/Gui/Widgets/Network/Concurrent, the VLC runtime, the VC runtime
-(vcruntime140 etc.), and `locale/<lang>/bililocal.qm` for translations —
-the BOM/i18n housekeeping workflow lives in [docs/HANDOVER.md](docs/HANDOVER.md).
+Qt6 Core/Gui/Widgets/Network/Concurrent/OpenGL/OpenGLWidgets/Core5Compat, the
+VLC runtime, the VC runtime (vcruntime140 etc.), and `locale/<lang>/bililocal.qm`
+for translations — the BOM/i18n housekeeping workflow lives in
+[docs/HANDOVER.md](docs/HANDOVER.md).
 
 ## Tests
 
-Danmaku parsing and pure helpers are covered by a QtTest suite
-(`test/tst_parse.pro`, 7 cases — it caught an upstream ASS color bug):
+Five QtTest targets (41 cases; parse 9, config 7, shield 9, load 12,
+list 4) build and run through CTest — the load/parse suites caught the
+upstream ASS color bug and several regressions of our own:
 
 ```bat
-qmake test\tst_parse.pro && mingw32-make
-release\tst_parse.exe
+ctest --test-dir build-cmake6 -C Release
 ```
 
 ## Lineage
@@ -116,6 +118,8 @@ release\tst_parse.exe
 - Upstream: `AncientLysine/BiliLocal` @ `9d1cb05` (0.4.2, 2016)
 - `v0.5.0-vmem` — rollback point of the original vmem rendering line, before
   the VLC 3 / d3d11 direct-output rewrite
+- `v0.6.0-qt5-final` — last Qt 5 / MinGW state before the Qt 6.8 LTS /
+  MSVC migration
 
 ## License
 

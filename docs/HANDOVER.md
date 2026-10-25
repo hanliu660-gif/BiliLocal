@@ -42,10 +42,10 @@
 | `build-cmake6\` | **CMake 影子构建（现役）**：Qt 6.8.3 msvc2022_64 + VS 生成器 → `Release\BiliLocal.exe` + 5 个测试 exe + `zh_CN.qm`/`zh_TW.qm`；构建命令见 §4 |
 | `dist-msvc\` | **Qt6 线成品（Phase 3 验收用）**：Qt6 exe + Qt6 DLL/插件 + 原 VLC 运行库；等千夏过人眼清单 |
 | `src\test\*.cpp` | 5 个测试目标 41 例（parse 9 / config 7 / shield 9 / load 12 / list 4），构建与运行全走 `build-cmake6` + ctest（`tools\run-tests.ps1` 一键；负向对照与测试约束的说明在 §2/§8） |
-| `deps\archive\` | 依赖归档：`vlc-sdk-3.0.21-win64.zip`（= `deps\thirdparty` 的快照，110,162 B，SHA256 `857CE77B…`；来源与再生途径见 §9） |
+| `deps\archive\` | 依赖归档：`vlc-sdk-3.0.24-win64.zip`（= `deps\thirdparty` 现快照，SHA256 `7BD12CD7…`；只有头文件+再生 MinGW 库，**无官方 .lib**）+ 旧 `vlc-sdk-3.0.21-win64.zip`（SHA256 `857CE77B…`）；来源与再生途径见 §9 |
 | `dist\` | **可直接运行的成品（日常在用）**：exe + Qt5 + VLC 3.0.24（FFmpeg 8.1.2）+ 插件 + 翻译。**Qt6 版在 dist-msvc\，Phase 3 全过后两者对调** |
 | `deps\` | 工具链：Qt 5.15.2（mingw81_64 + msvc2019_64，遗留）、**Qt 6.8.3（msvc2022_64，现役）**、MinGW 8.1.0（遗留）、VLC SDK 头文件/导入库（在 `deps\thirdparty`）。VLC 运行库只存在于 dist；`deps\dl` 仅剩 `vlc-2.2.8-win64.zip`（vmem 考古用） |
-| `tools\` | 调试/测试脚本（14 个，见 §8） |
+| `tools\` | 调试/测试脚本（16 个，见 §8） |
 | `test\` | 已清空（2026-10-25 清点：`embed.xml` 与 `rec.*` 符号链接均已不存在）。hook-gate 的弹幕 fixture 与本地视频由 `tools\gen-media.py` 按需生成到 `tools\.media\`（不入 git，见 §8） |
 | `%LOCALAPPDATA%\BiliLocal\Config.txt` | 运行时配置（JSON） |
 | `%LOCALAPPDATA%\BiliLocal\cache\msg.log` | 日志（超 10MB 自动轮转成 `.old`） |
@@ -73,12 +73,12 @@
 - **源码**：`master` = 最新提交（**从 05:30 起改为不写死文档哈希**——写死的值在提交瞬间就过期，当前值用 `git log -1 --oneline` 取）；**最后一个代码提交 = `f7fcf57`**（CI）← `b813721`/`576374b`/`395bb09`（CI 三连修）← `d547f50`（tst_config.pro 补 moc）← `1f10936`（文档 18 版）← `15b2667`（CMake 构建）← `dd8efc3`（tst_list）← `0f25480`（钩子注释纠偏）← `0c74654`（tst_shield/tst_load）← `7bf39d2`（同一视频只加载一份弹幕）← `30466b0`（弹幕 shader 修好、白方块消失）← `600b369`（审计第 5 批）← `9edac7c`（审计第 4 批）← `1b10dc0`（审计第 3 批）← `2f8a1d1`（审计第 2 批）← `cd3b0fe`（审计第 1 批）← `d98327b`（UI/DPI）← `81aab8f` ← `a5f95fe` ← `a9fbcb3` ← `63f9a4b` ← `8d9c8ec` ← `44fbb3e` ← `7f8685a` ← `473ba62` ← `3f86f74` ← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`。上游 `9d1cb05`；回滚 tag `v0.5.0-vmem` = `46b68b9`；远端 `github` = `github.com/hanliu660-gif/BiliLocal`。
 - **单测**：五个目标共 **41 例全绿**（qmake 树与 CMake 树各验一遍，2026-10-25）：`tst_parse` **9/9**、`tst_config` **7/7**、`tst_shield` **9/9**、`tst_load` **12/12**、`tst_list` **4/4**。**负向对照做了三个**：①把 `tst_config` 两处 `QWriteLocker locker(&lock);` 注释掉重建，`concurrentWriters` 直接 SIGSEGV（`rc=139`）；②把 `Load.cpp` 嗅探的 `.trimmed()` 去掉重建，`blankLineBeforeXml` 变红（0 条弹幕）、其余 11 例不受影响；③把 List 的 `if (loaded.contains(key))` 短路成 `if (false)`，`tst_list` 两用例双红 ⇒ 用例不是空跑。GUI 钩子剧本另有 `tools\hook-gate.ps1` 断言三个日志标记（见 §8）。List 的去重路径已覆盖；Danmaku 本体仍因依赖整套服务定位器暂不独立成测（见 §10-4）。
 - **编译警告**：**42 → 3**（连清两轮：`a5f95fe` 清 6 个位置，`81aab8f` 清最后 1 个；`0c74654` 新增的两个测试目标构建 **0 警告**）。剩下 3 条是**刻意留的**：`-Wimplicit-fallthrough` 1 条（`src\src\Model\Running.cpp:283` 的 `case 1` 落到 `case 0`，入队本来就该两模式同路）、`libvlc_video_set_subtitle_file` 2 条（`src\src\Player\VPlayer.cpp:476`，VLC 3 标弃用但照常可用，换 VLC 4 才必须改）。
-- **i18n**：源码全英文串，中文走 `dist\locale\zh_CN\bililocal.qm`（187/187 全译，含繁体）。改 UI 文案后：lupdate → 补译 → lrelease → 部署 qm。
+- **i18n**：源码全英文串，中文走 `locale\zh_CN\bililocal.qm`（187/187 全译，含繁体）。改 UI 文案后：lupdate 补 `.ts` → 重新构建（CMake 的 `translations ALL` 目标自动 lrelease 出 `build-cmake6\zh_CN.qm`/`zh_TW.qm`）→ 拷进 dist 树 `locale\<lang>\bililocal.qm`。
 - **运行库**：VLC **3.0.24**（d3d11 直出）；`dist\plugins` 里**混住着 Qt 的四个插件目录**（`platforms\` `imageformats\` `mediaservice\` `styles\`），整目录替换 VLC 时必须把它们合并到顶层，否则 Qt 起不来（流程见 §9）。dist 只带 exe 实际导入的 5 个 Qt DLL（Concurrent/Core/Gui/Network/Widgets）。
 - **配置**：`Output=Embed` 已是唯一输出（键保留但代码不再读）；`Immediate=True`；`HardwareDecode` 已无消费者（d3d11 固定开启，`Arguments` 手写 `--avcodec-hw=`/`--vout=` 仍可覆盖）。
 - **备份**：git 历史 = 本地 `src\.git` + GitHub 双保险；vmem 旧线源码完整在 tag `v0.5.0-vmem`（重编需自备 VLC 2.2.8）。
 - **未决事项**：**Phase 1 结案（2026-10-26 千夏本人开关 `dist-msvc\BiliLocal.exe` 验收通过）**；**Phase 2（Qt 5.15 → 6.8 LTS）进行中**。其余旧裁定不变（dist 不再瘦身、Z: 长时段观察结案）。
-- **CI**：`.github/workflows/ci.yml`——push 到 master 触发，runner 上 aqt 装 Qt 5.15.2 mingw81 + SourceForge mingw-builds 8.1.0（坑 48），`BILILOCAL_BUILD_APP=OFF` 只编测试目标并 ctest；已两连绿（日志实证 "100% tests passed out of 5"），Qt/MinGW 走 actions/cache（key `qt-5.15.2-mingw81-v2`）。查状态：认证 API 或徽章 SVG。**迁移期间每次 push 都会跑，红了不许推**。
+- **CI**：`.github/workflows/ci.yml`——push 到 master 触发，**单 job（Phase 2 起）**：runner 上 aqt 装 Qt 6.8.3 msvc2022_64 + qt5compat（不钉 `-G`，坑 51；装完落盘验 `Qt6Core.dll`，坑 52），`BILILOCAL_BUILD_APP=OFF` 只编测试目标并 ctest（41 例）；Qt 走 actions/cache（key `qt-6.8.3-msvc2022-v1`）。查状态：认证 API 或徽章 SVG。**每次 push 都会跑，红了不许推**。
 - **验证分工**：agent 工具几乎全能自验——日志取证（`hover: freeze/release`、`Load: processed … pool=N`、`Program Link Failed` 计数）、进程内钩子注入（双击全屏/单击暂停/悬停扫掠/拍点右键）、时序验证、对话框巡览截图；**用户本人只做"真实右键点到弹幕"这一个动作**（物理点击过不了三层窗口栈的焦点/显示盲区，合成事件替代不了，见 `a4b5acf`）与主观体验类验收。
 
 ### 2.1 版本沿革（根因与证据都在 git 提交信息里）
@@ -115,6 +115,10 @@
 | `dd8efc3` | tst_list：`case Records` 去重端到端——模板子项（itemFromFile 目录扫描自动建）+ 命令行反斜杠绝对路径复刻 `7bf39d2` 现场 → 池=1；ghost 文件变体验证 fallback 去重 → `errorOccured`=1；负向对照两红。测试结构教训：List 的信号连接同样无上下文对象，实例必须全程一份；**刻意不注册 Config**（掐断 touch→自动保存链，测试不落盘） |
 | `15b2667` | CMake 构建：CMakeLists 与 .pro 逐项等价（单平台三件套 DEFINES + 验证钩子、PCH、AUTOMOC/AUTORCC、图标 RC、翻译、5 测试目标），41 例 + hook-gate 双验证后 **dist 切换为 CMake 产物**；`.gitignore` 的 `*.rc` 加例外；tst_config 补 Local 桩（AUTOMOC 会 moc include 链里的头，坑 47） |
 | `395bb09`…`2136fe5` | CI 落地：GitHub Actions push 触发，runner 只编测试目标并 ctest（41 例，run #4/#5 两连绿 + 缓存命中验证）；aqt 的 tools_mingw810 元数据已废 → MinGW 8.1 改 SourceForge mingw-builds 官方存档 + 7zr.exe 解（坑 48）；`BILILOCAL_BUILD_APP=OFF` 让 CI 免 VLC SDK |
+| `74a7569` | 文档 19 版：迁移裁定解除，任务书进 §10（回滚锚 tag `v0.6.0-qt5-final`） |
+| `f81e6ee` / `25e3751` | **Phase 1**：MSVC 工具链（官方 .lib 入 thirdparty/lib/msvc、全局 /utf-8、fixture 反斜杠真修——坑 49/50）；CI 加 msvc job、不钉生成器（坑 51） |
+| `599dc95` | Phase 1 结案：千夏开关 `dist-msvc` 验收通过 |
+| `8bb173f` / `f630a70` | **Phase 2**：Qt 6.8.3 全面落地（shader 330 core、Core5Compat、事件坐标/desktop/setCodec/AA_* 全清）+ qmake 遗留删除 + run-tests 改 ctest + CI 换 Qt6 单 job（坑 52–54）；文档 21 版 |
 
 ---
 
@@ -257,7 +261,7 @@ Copy-Item C:\DSH\APP\BiliLocal\build-cmake6\Release\BiliLocal.exe C:\DSH\APP\Bil
 - 悬停验证：每 60 拍循环「扫掠→(600,320) 压 14 拍（验证静止不解冻）→第 56 拍右键」，起播后自动跳 10%；旧闭环（双击全屏/单击暂停）需另加 `BILILOCAL_EMBED_CLICK=1`。`msg.log` 找 `hover: freeze/release`。
 - `BILILOCAL_EMBED_TEST` **无条件编进发布 exe**（`BiliLocal.pro` 的 DEFINES），靠环境变量触发；源码注释已与事实对齐（`0f25480` 纠掉"正式构建不编译"的旧说法），之所以不改成 release 剔除，是因为悬停/子菜单等外部验证脚本都依赖发布 exe 里的钩子。
 
-**GitHub Actions CI（`.github/workflows/ci.yml`，2026-10-25 首绿）**：push 到 master 触发。runner 上 aqt 装 Qt 5.15.2 win64_mingw81 + SourceForge 下 mingw-builds 8.1.0（坑 48），`BILILOCAL_BUILD_APP=OFF` 只编 5 个测试目标并 `ctest`（41 例，日志实证 "100% tests passed out of 5"）；Qt+MinGW 走 actions/cache（key `qt-5.15.2-mingw81-v2`，命中后秒级）。主程序编译与 hook-gate 留本机（CI 虚机 D3D11/GL 不可信）。查运行状态：认证 API 或 Actions 徽章 SVG（`actions/workflows/ci.yml/badge.svg`）。
+**GitHub Actions CI（`.github/workflows/ci.yml`；2026-10-25 MinGW 首绿，2026-10-26 起单 job 换 Qt 6.8）**：push 到 master 触发。runner 上 aqt 装 Qt 6.8.3 win64_msvc2022_64 + qt5compat（`qttools` 不是 6.x 模块名，lrelease 在 base 包里——坑 52；装完落盘验 `bin\Qt6Core.dll`），不指定 `-G`（坑 51），`BILILOCAL_BUILD_APP=OFF` 只编 5 个测试目标并 `ctest`（41 例）；Qt 走 actions/cache（key `qt-6.8.3-msvc2022-v1`，命中后秒级）。主程序编译与 hook-gate 留本机（CI 虚机 D3D11/GL 不可信）。查运行状态：认证 API 或 Actions 徽章 SVG（`actions/workflows/ci.yml/badge.svg`）。
 
 **PS 5.1 铁律**：一律 `-NoProfile -ExecutionPolicy Bypass -File`；脚本存 UTF-8 带 BOM、**不写中文字面量**；`$Pid` 只读、`Move/Cli/lp` 是别名；`Start-Process -RedirectStandardError` 别配 `-Wait`；子进程会继承 stdout 管道（给 `UseShellExecute=$false` 的启动加 stdio 重定向，否则调用方假死）。
 
@@ -279,12 +283,13 @@ Copy-Item C:\DSH\APP\BiliLocal\build-cmake6\Release\BiliLocal.exe C:\DSH\APP\Bil
   - `deps\5.15.2\mingw81_64`（501M）：Qt 官方存档 5.15.2 的 mingw81_64 组件（download.qt.io/archive/qt/5.15/5.15.2/）
   - `deps\Tools\mingw810_64`（465M）：Qt 5.15.2 配套的 MinGW 8.1.0（download.qt.io 存档 Tools 分类）
   - `deps\dl\vlc-2.2.8-win64.zip`：SHA256 `DD2AD3B5…`（vmem 考古用，勿删）
-  - Qt/MinGW 近 1G **不做本地压缩归档**：官方存档仍可下载，本地快照的维护成本大于收益；真正难再生的是 thirdparty，已归档解决
+  - Qt 6.8.3 msvc2022_64（`deps\6.8.3\`）：官方存档可随时 aqt 再下（命令见上），**不做本地压缩归档**；qt5compat 模块已含在内
+  - Qt 5.15.2 mingw81_64（501M）+ msvc2019_64、MinGW 8.1.0（465M）：**遗留但暂留**（`v0.6.0-qt5-final` 回滚重编用）；官方存档仍可下载，Phase 3 定稿时裁决去留
 - 网络盘：`Z:` = RaiDrive 挂载 WebDAV，读速 0.1–45 MB/s 抖动；读慢时播放器"未响应"属挂载问题
 
 ---
 
-## 10. 迁移任务书（已批准——**下一会话从这里开始**）
+## 10. 迁移任务书（执行中——**Phase 1/2 已落地，剩 Phase 3 用户验收与定稿**）
 
 > 2026-10-25 晚裁定：解除"先不迁移"，按本节执行。开工前**先读 §0 约束和 §11 影响清单**；每个 Phase 完成后给实测证据（41 例 + hook-gate + 该阶段验收）再进下一段；**渲染正确性的人眼清单必须用户本人过**（§2 验证分工）；门禁（pre-push + CI）红了不许推。
 >
@@ -344,7 +349,7 @@ Copy-Item C:\DSH\APP\BiliLocal\build-cmake6\Release\BiliLocal.exe C:\DSH\APP\Bil
 
 ## 11. Qt 6 迁移影响清单（**已全部落地（Phase 1+2，2026-10-26）**——本节保留作技术底账）
 
-- **工具链耦合**：Qt 6 Windows 官方包只有 MSVC——MinGW 路线意味着同时换编译器（新 mingw-w64）。~~qmake → CMake~~ **已完成**（`15b2667`，构建清单划一项）；剩编译器换代待裁定。
+- **工具链耦合**：Qt 6 Windows 官方包只有 MSVC——MinGW 路线意味着同时换编译器（新 mingw-w64）。~~qmake → CMake~~ **已完成**（`15b2667`）；~~编译器换代~~ **已完成**（Phase 1 `f81e6ee`：MSVC v143 + 官方 .lib）。
 - **全库命中清单**（除下列各项外，QRegExp / QDesktopWidget / qrand / toTime_t / `QString::SkipEmptyParts` / `toList()`/`toSet()` / `QFontMetrics::width` 均 **0 命中**）：
 
 | 项 | 位置 | Qt 6 处置 |
@@ -358,13 +363,13 @@ Copy-Item C:\DSH\APP\BiliLocal\build-cmake6\Release\BiliLocal.exe C:\DSH\APP\Bil
 
 - **高风险区**：`d98327b` 的 DPI 工作（150% 屏 PassThrough 取整、逐档 dpr 绘制）建立在 Qt 5 的开关式高 DPI 之上，Qt 6 恒开高 DPI 后必须重测。
 - **不受影响**：libvlc 侧（VPlayer/Embed 直出）与 Qt 版本无关；§6-18/23/24/25 的输入路由坑是窗口系统层面，大半仍成立。
-- **量级预估**：CMake 已销账（`15b2667`）；剩余 = 编译器切换 + QTextCodec/Core5Compat 改写 + shader 330 移植 + 渲染层/DPI 重验 ≈ 2–3 个会话；动手前先重读本文件 §6。
+- **量级预估（已销账）**：CMake 化（`15b2667`）→ 编译器切换（Phase 1）→ QTextCodec/Core5Compat 改写 + shader 330 移植 + 渲染层/DPI 重验（Phase 2，探针实证 1.50）全部落地；渲染正确性的人眼确认归 Phase 3 清单。
 
 ---
 
 ## 附：快速回滚
 
-- **源码回滚**：`git checkout v0.5.0-vmem` → 重编（回到最初的 vmem 线）。
+- **源码回滚**：`git checkout v0.6.0-qt5-final` + deps 的 Qt5/MinGW 工具链 = 回到 Qt6 迁移前（dist 里的 Qt5 线 exe 就是这条线的产物）；`git checkout v0.5.0-vmem` → 自备 VLC 2.2.8 重编 = 最初的 vmem 线。
 - **旧线运行时**：VLC 2.2.8 运行库与免编译 vmem exe 已于 2026-10-24 删除。真要跑 vmem 线：从 tag 重编 exe + 自行从 VideoLAN 官方存档下载 VLC 2.2.8 win64 + 配置改 `Output=Window`。vmem 线是已知崩溃/高 CPU 路线，仅作考古。
 - **单轮回滚**：任意一轮都是独立提交，`git revert <hash>` 即可；`30466b0`（shader）与 `7bf39d2`（去重）互不依赖。
 - **全历史恢复**：`git clone https://github.com/hanliu660-gif/BiliLocal.git <目录>`（或从本地 `src\` 直接拷贝）。

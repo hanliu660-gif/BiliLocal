@@ -344,17 +344,30 @@ bool Info::eventFilter(QObject *o, QEvent *e)
 {
 	if (o == timeS && duration > 0){
 		const QEvent::Type t = e->type();
+		if (t == QEvent::Wheel){
+			// 滚轮以前直接改滑块值，而 valueChanged 里 isSliderDown() 为假，
+			// 于是光标停在进度条上滚一下就跳 5 秒或 1/10 时长。
+			return true;
+		}
 		if (t == QEvent::MouseButtonPress || t == QEvent::MouseMove || t == QEvent::MouseButtonRelease){
 			QMouseEvent *me = static_cast<QMouseEvent *>(e);
-			if (t == QEvent::MouseButtonPress && me->button() != Qt::LeftButton){
+			if (t == QEvent::MouseMove){
+				if (!dragging || !(me->buttons() & Qt::LeftButton)){
+					return QWidget::eventFilter(o, e);
+				}
+			}
+			else if (me->button() != Qt::LeftButton){
+				// 右键/中键不接管：右键菜单要能弹出来，松手也不许提交跳转
 				return false;
 			}
-			if (t == QEvent::MouseMove && !dragging){
-				return QWidget::eventFilter(o, e);
+			else if (t == QEvent::MouseButtonRelease && !dragging){
+				return false;
 			}
 			const int w = qMax(timeS->width() - 1, 1);
 			const double ratio = qBound(0.0, me->pos().x() / double(w), 1.0);
-			const qint64 target = qint64(duration * ratio);
+			// 末尾留 500ms：正好跳到 duration 会被 VPlayer::setTime 判成
+			// 「已到片尾」而直接 stop()，拖到最右就变成了停播。
+			const qint64 target = qMin(qint64(duration * ratio), qMax<qint64>(duration - 500, 0));
 			updating = 1;
 			timeS->setValue(int(target));
 			updating = 0;
@@ -370,6 +383,36 @@ bool Info::eventFilter(QObject *o, QEvent *e)
 		}
 	}
 	return QWidget::eventFilter(o, e);
+}
+
+qint64 Info::timeAtX(int x) const
+{
+	if (duration <= 0 || !timeS){
+		return -1;
+	}
+	const int left = timeS->mapTo(parentWidget(), QPoint(0, 0)).x();
+	const int w = qMax(timeS->width() - 1, 1);
+	const double ratio = qBound(0.0, (x - left) / double(w), 1.0);
+	return qMin(qint64(duration * ratio), qMax<qint64>(duration - 500, 0));
+}
+
+int Info::barMinWidth() const
+{
+	if (!playB || !listB || !timeS){
+		return 0;
+	}
+	const double f = font().pointSizeF();
+	const int x = qMax(int(logicalDpiX() * f / 72), 1);
+	int w = int(0.83 * x) * 2;         // 左右留白
+	w += int(2.5 * x) + int(0.6 * x);  // 播放按钮 + 间隔
+	w += int(13 * x) + int(0.5 * x);   // 时间文本 + 间隔
+	w += int(8 * x) + int(0.5 * x);    // 进度条最少 8x + 间隔
+	w += int(9.4 * x);                 // 音量条 + 间隔
+	QWidget *const right[] = { listB, fullB, prefB, openB, rateB, danmB };
+	for (QWidget *b : right){
+		w += qMax(b->sizeHint().width(), int(3 * x)) + int(0.4 * x);
+	}
+	return w;
 }
 
 void Info::resizeEvent(QResizeEvent *e)

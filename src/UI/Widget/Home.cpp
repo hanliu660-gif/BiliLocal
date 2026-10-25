@@ -610,7 +610,12 @@ void Home::seekTo(QPoint p, bool commit)
 		return;
 	}
 	const double ratio = qBound(0.0, p.x() / double(qMax(width() - 1, 1)), 1.0);
-	const qint64 t = qint64(d * ratio);
+	// 落在进度条上时按滑块的映射算（Info::timeAtX），否则退回整窗宽度；
+	// 两条路径原来各算各的，同一个像素能差出半个进度条的长度。
+	qint64 t = info ? info->timeAtX(p.x()) : -1;
+	if (t < 0){
+		t = qint64(d * ratio);
+	}
 	if (info) {
 		info->previewTime(t);
 	}
@@ -708,6 +713,12 @@ void Home::resizeEvent(QResizeEvent * e)
 	const QSize size = e->size();
 	arender->resize(size);
 	int w = size.width(), h = size.height();
+	// 窗口窄于底栏所需宽度时，进度条会压住右侧按钮（Info::resizeEvent 里
+	// 只能把进度条钳到 8x 宽），所以这里把下限抬到底栏的真实需求。
+	const int minW = qMax(int(360 * logicalDpiX() / 72), info->barMinWidth());
+	if (minimumWidth() != minW){
+		setMinimumWidth(minW);
+	}
 	info->terminate();
 	int ih = int(4.2 * logicalDpiY() * font().pointSizeF() / 72);
 	info->setGeometry(0, h - ih, w, ih);

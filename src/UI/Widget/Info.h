@@ -47,6 +47,13 @@ namespace UI
 
 		QPushButton *listB;
 
+		// 底栏「整条横带可点」与滑块自身拖动必须用同一套 x→时间映射：
+		// 以前两处分别按窗口宽度、按滑块宽度换算，同一个像素能差出 slx 那么多。
+		qint64 timeAtX(int x) const;
+
+		// 底栏按 sizeHint 排完所需的最小宽度：窗口比它窄时进度条会压住右侧按钮。
+		int barMinWidth() const;
+
 		// 外部（Home 的底栏拖动）预览时间时只更新显示，不触发 seek
 		void previewTime(qint64 _time)
 		{

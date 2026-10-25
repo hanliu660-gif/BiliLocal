@@ -83,11 +83,13 @@ jobs:
           pip install aqtinstall
           aqt install-qt windows desktop 5.15.2 win64_msvc2019_64 -O $env:QT_ROOT
 
-      # runner 预装 VS2022，VS 生成器自动定位 v143；单测不链 libvlc，无 SDK 依赖
+      # runner 镜像的 VS 版本会演进（2026-10 实测：钉 -G "Visual Studio 17 2022"
+      # 报 could not find any instance of Visual Studio），不指定生成器，
+      # 让 CMake 用镜像上实际安装的默认 VS；本机仍显式用 17 2022（BuildTools 17.x）
       - name: Configure (tests only, VS generator)
         shell: pwsh
         run: |
-          cmake -G "Visual Studio 17 2022" -A x64 -B build-msvc -S . `
+          cmake -A x64 -B build-msvc -S . `
             -DBILILOCAL_BUILD_APP=OFF `
             "-DQt5_DIR=$env:QT_ROOT\5.15.2\msvc2019_64\lib\cmake\Qt5"
 

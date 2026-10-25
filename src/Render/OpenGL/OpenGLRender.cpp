@@ -24,17 +24,18 @@ void OpenGLRender::setup()
 
 	Q_D(OpenGLRender);
 
+	// resource 在 initializeGL() 里才建；时间信号早于第一次绘制到达时是空的
 	connect(
 		lApp->findObject<APlayer>(),
 		&APlayer::timeChanged,
 		this,
-		[d]() { d->resource->manager.squeeze(5000); });
+		[d]() { if (!d->resource.isNull()){ d->resource->manager.squeeze(5000); } });
 
 	connect(
 		lApp->findObject<APlayer>(),
 		&APlayer::reach,
 		this,
-		[d]() { d->resource->manager.squeeze(0); },
+		[d]() { if (!d->resource.isNull()){ d->resource->manager.squeeze(0); } },
 		Qt::QueuedConnection);
 }
 
@@ -65,6 +66,11 @@ QSize OpenGLRender::getActualSize()
 void OpenGLRender::draw(QRect rect)
 {
 	Q_D(OpenGLRender);
+	// 从 paintGL 进来的：上下文当前且绑着本 surface，才能安全删纹理。
+	// squeeze() 只是把过期图集挪进 graveyard，真正 delete 在这里。
+	if (!d->resource.isNull()){
+		d->resource->manager.collect();
+	}
 	d->draw(rect.isValid() ? rect : QRect(QPoint(0, 0), getActualSize()));
 }
 

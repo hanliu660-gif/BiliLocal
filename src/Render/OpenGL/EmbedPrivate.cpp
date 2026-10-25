@@ -223,20 +223,32 @@ namespace
 }
 
 OpenGLEmbedRenderPrivate::OpenGLEmbedRenderPrivate()
+	: host(nullptr)
+	, surface(nullptr)
+	, overlay(nullptr)
+	, filter(nullptr)
+	, alive(QSharedPointer<bool>::create(true))
 {
 	host = lApp->findObject<Interface>()->widget();
 	surface = new ESurface(host);
 	overlay = new EWindow(this);
 	overlay->create();
 	if (host){
-		host->installEventFilter(new EFilter(this, host));
+		filter = new EFilter(this, host);
+		host->installEventFilter(filter);
 	}
-	QObject::connect(lApp->findObject<APlayer>(), &APlayer::begin, overlay, &QWindow::show);
+	beginConn = QObject::connect(lApp->findObject<APlayer>(), &APlayer::begin, overlay, &QWindow::show);
 	// libvlc 在 set_hwnd 时会按当时的窗口尺寸建交换链，若那一刻尺寸还没定下来，
 	// 视频就会一直画在左上角很小的一块；起播后轻微抖动一次尺寸，逼它重新 ResizeBuffers。
-	QObject::connect(lApp->findObject<APlayer>(), &APlayer::begin, [this]() {
+	beginNudgeConn = QObject::connect(lApp->findObject<APlayer>(), &APlayer::begin, [this]() {
 		for (int ms : { 600, 1500, 3000 }){
-			QTimer::singleShot(ms, [this]() { nudge(); });
+			// 捕获 alive 的副本：计时器到点时渲染层可能已经析构（退出/重建输出）
+			QTimer::singleShot(ms, [this, alive = alive]() {
+				if (!alive || !*alive){
+					return;
+				}
+				nudge();
+			});
 		}
 	});
 	syncOverlay();
@@ -244,7 +256,22 @@ OpenGLEmbedRenderPrivate::OpenGLEmbedRenderPrivate()
 
 OpenGLEmbedRenderPrivate::~OpenGLEmbedRenderPrivate()
 {
+	if (alive){
+		*alive = false;
+	}
+	QObject::disconnect(beginConn);
+	QObject::disconnect(beginNudgeConn);
+	if (filter && host){
+		host->removeEventFilter(filter);
+		delete filter;
+	}
+	filter = nullptr;
 	delete overlay;
+	overlay = nullptr;
+	// surface 虽然挂在 host 名下，这里也要主动拆：它是 libvlc 直出的原生子窗，
+	// 留到 host 析构时再删就晚了（渲染层早已不在）。
+	delete surface;
+	surface = nullptr;
 }
 
 void OpenGLEmbedRenderPrivate::syncOverlay()

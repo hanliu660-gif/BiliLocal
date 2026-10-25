@@ -126,10 +126,15 @@ public:
 	void shuffle();
 	void squeeze(int timeout);
 
+	// 真正释放 squeeze() 标记掉的图集。必须在 paintGL 里（上下文当前、且绑的
+	// 是这块 surface）调用；在别处 delete 会让 ~OpenGLAtlas 的 glDeleteTextures 落空。
+	void collect();
+
 private:
 	OpenGLRenderPrivate *render;
 
 	QList<OpenGLAtlas *> atlases;
+	QList<OpenGLAtlas *> graveyard;
 	GLuint upload;
 	GLuint buffer;
 	QHash<CreateInfo, QPair<QList<OpenGLSprite>, QSize>> cached;

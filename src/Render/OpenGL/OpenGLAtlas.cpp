@@ -251,13 +251,23 @@ void OpenGLAtlasMgr::shuffle()
 
 void OpenGLAtlasMgr::squeeze(int timeout)
 {
+	// 只标记、不删除：squeeze() 由 APlayer::timeChanged 直连进来，跑在 paintGL
+	// 之外，那时没有「这块 surface 的当前上下文」，~OpenGLAtlas 里的
+	// glDeleteTextures 会落到别的上下文上或直接不生效，纹理就一直留着。
 	for (auto iter = atlases.begin(); iter != atlases.end() && atlases.size() > 2;) {
 		if ((*iter)->expired(timeout)) {
-			delete *iter;
+			graveyard.append(*iter);
 			iter = atlases.erase(iter);
 		}
 		else {
 			++iter;
 		}
+	}
+}
+
+void OpenGLAtlasMgr::collect()
+{
+	while (!graveyard.isEmpty()){
+		delete graveyard.takeFirst();
 	}
 }

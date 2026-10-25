@@ -3,6 +3,7 @@
 #include "OpenGLRenderPrivate.h"
 #include "../../Local.h"
 #include <QOpenGLWindow>
+#include <QSharedPointer>
 #include <QWidget>
 
 /*
@@ -53,4 +54,10 @@ private:
 	QWidget *host;
 	QWidget *surface;
 	QOpenGLWindow *overlay;
+	// 析构要按"挂上去的反顺序"拆干净：事件过滤器不摘，Home 上会留着指向
+	// 已销毁渲染层的槽；延迟 nudge 的 singleShot 靠 alive 标记失效，别碰 this。
+	QObject *filter;
+	QMetaObject::Connection beginConn;
+	QMetaObject::Connection beginNudgeConn;
+	QSharedPointer<bool> alive;
 };

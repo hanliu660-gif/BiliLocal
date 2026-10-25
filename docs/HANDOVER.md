@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> **更新时间**：2026-10-25（**第十八版：测试 41 例 + SDK 3.0.24 + CMake 化**——tst_list 入库+负向对照、thirdparty 刷新到 3.0.24（MinGW 导入库从出货运行库再生成）、CMakeLists 落地并切换 dist 为 CMake 产物；同日早前：验证分工收窄、hook-gate/fixture/pre-push 门禁（见 §2/§8）。代码事实按 2026-10-25 22:30 前后实测））
+> **更新时间**：2026-10-25（**第十九版：迁移裁定解除**——"先不迁移"改为**已批准执行**，下一会话按 §10 迁移任务书推进，回滚锚点 tag `v0.6.0-qt5-final` 已打在 CI 全绿状态。本轮会话先后落地：验证分工收窄、tst_shield/tst_load/tst_list（41 例 + 三个负向对照）、hook-gate/gen-media/本地 fixture、pre-push 门禁、VC 运行库入 dist、thirdparty 刷新到 VLC 3.0.24 SDK、CMake 化并切换 dist、GitHub Actions CI（坑 45–48）））
 >
 > **这份文档写给谁**：写给"下一会话接手这个工程的人/AI"。先读 §0 约束，再看 §2 当前状态，动手前看 §6 坑。
 >
@@ -69,8 +69,9 @@
 - **运行库**：VLC **3.0.24**（d3d11 直出）；`dist\plugins` 里**混住着 Qt 的四个插件目录**（`platforms\` `imageformats\` `mediaservice\` `styles\`），整目录替换 VLC 时必须把它们合并到顶层，否则 Qt 起不来（流程见 §9）。dist 只带 exe 实际导入的 5 个 Qt DLL（Concurrent/Core/Gui/Network/Widgets）。
 - **配置**：`Output=Embed` 已是唯一输出（键保留但代码不再读）；`Immediate=True`；`HardwareDecode` 已无消费者（d3d11 固定开启，`Arguments` 手写 `--avcodec-hw=`/`--vout=` 仍可覆盖）。
 - **备份**：git 历史 = 本地 `src\.git` + GitHub 双保险；vmem 旧线源码完整在 tag `v0.5.0-vmem`（重编需自备 VLC 2.2.8）。
-- **未决事项**：无（10-25 裁定：dist 不再瘦身、Z: 长时段观察结案）。
-- **验证分工**（2026-10-25 用户澄清，收窄旧表述）：agent 工具几乎全能自验——日志取证（`hover: freeze/release`、`Load: processed … pool=N`、`Program Link Failed` 计数）、进程内钩子注入（双击全屏/单击暂停/悬停扫掠/拍点右键）、时序验证、对话框巡览截图；**用户本人只做"真实右键点到弹幕"这一个动作**（物理点击过不了三层窗口栈的焦点/显示盲区，合成事件替代不了，见 `a4b5acf`）与主观体验类验收。
+- **未决事项**：**迁移已获批（2026-10-25 晚）**——"先不迁移"裁定解除，**下一会话从 §10 迁移任务书开始干活**；其余旧裁定不变（dist 不再瘦身、Z: 长时段观察结案）。
+- **CI**：`.github/workflows/ci.yml`——push 到 master 触发，runner 上 aqt 装 Qt 5.15.2 mingw81 + SourceForge mingw-builds 8.1.0（坑 48），`BILILOCAL_BUILD_APP=OFF` 只编测试目标并 ctest；已两连绿（日志实证 "100% tests passed out of 5"），Qt/MinGW 走 actions/cache（key `qt-5.15.2-mingw81-v2`）。查状态：认证 API 或徽章 SVG。**迁移期间每次 push 都会跑，红了不许推**。
+- **验证分工**：agent 工具几乎全能自验——日志取证（`hover: freeze/release`、`Load: processed … pool=N`、`Program Link Failed` 计数）、进程内钩子注入（双击全屏/单击暂停/悬停扫掠/拍点右键）、时序验证、对话框巡览截图；**用户本人只做"真实右键点到弹幕"这一个动作**（物理点击过不了三层窗口栈的焦点/显示盲区，合成事件替代不了，见 `a4b5acf`）与主观体验类验收。
 
 ### 2.1 版本沿革（根因与证据都在 git 提交信息里）
 
@@ -105,6 +106,7 @@
 | `5ecd888` | `tst_parse.cpp` 头注纠偏：删掉"Danmaku/Shield 覆盖不到"的过时说法（Shield 已由 `tst_shield` 覆盖）与"人眼弹幕"旧表述（见本版验证分工修订）；纯注释 |
 | `dd8efc3` | tst_list：`case Records` 去重端到端——模板子项（itemFromFile 目录扫描自动建）+ 命令行反斜杠绝对路径复刻 `7bf39d2` 现场 → 池=1；ghost 文件变体验证 fallback 去重 → `errorOccured`=1；负向对照两红。测试结构教训：List 的信号连接同样无上下文对象，实例必须全程一份；**刻意不注册 Config**（掐断 touch→自动保存链，测试不落盘） |
 | `15b2667` | CMake 构建：CMakeLists 与 .pro 逐项等价（单平台三件套 DEFINES + 验证钩子、PCH、AUTOMOC/AUTORCC、图标 RC、翻译、5 测试目标），41 例 + hook-gate 双验证后 **dist 切换为 CMake 产物**；`.gitignore` 的 `*.rc` 加例外；tst_config 补 Local 桩（AUTOMOC 会 moc include 链里的头，坑 47） |
+| `395bb09`…`2136fe5` | CI 落地：GitHub Actions push 触发，runner 只编测试目标并 ctest（41 例，run #4/#5 两连绿 + 缓存命中验证）；aqt 的 tools_mingw810 元数据已废 → MinGW 8.1 改 SourceForge mingw-builds 官方存档 + 7zr.exe 解（坑 48）；`BILILOCAL_BUILD_APP=OFF` 让 CI 免 VLC SDK |
 
 ---
 
@@ -279,20 +281,44 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 
 ---
 
-## 10. 下一步建议
+## 10. 迁移任务书（已批准——**下一会话从这里开始**）
 
-1. 大 xml 异步解析：**仅当**哪天录播 xml 大到可感知卡顿时再做（别用 `QFutureWatcher`，见 §7-1）。
-2. 渲染层（`EmbedPrivate`/`ARender`/`OpenGL*`）：已在 `600b369` 修过一轮（图集纹理在 paintGL 里删、析构补齐 surface/过滤器/连接、延迟 nudge 加存活标记），**再动要先讲清现象并给证据**。
-3. 待用户拍板的**加功能**项（没批准前不要动）：编辑器按弹幕类型上色（模式 4/5/6 淡色底）、底栏静音/上一集/下一集/截图按钮。
-4. 模型层剩余覆盖（List/Danmaku 本体）：独立成测需要更大的桩面（APlayer 会拖进 VPlayer/libvlc），暂缓；现有 37 例已盖住嗅探与屏蔽语义这两个 bug 高发区。
+> 2026-10-25 晚裁定：解除"先不迁移"，按本节执行。开工前**先读 §0 约束和 §11 影响清单**；每个 Phase 完成后给实测证据（41 例 + hook-gate + 该阶段验收）再进下一段；**渲染正确性的人眼清单必须用户本人过**（§2 验证分工）；门禁（pre-push + CI）红了不许推。
+>
+> **回滚锚点**：tag `v0.6.0-qt5-final`（打在 CI 全绿的 2136fe5 上）；`deps\Tools\mingw810_64` 与 `deps\5.15.2` 原封不动，任何阶段可整体回退重编。
+
+**Phase 1 · 换编译器（保持 Qt 5.15，风险最低）**
+- 装 VS BuildTools（VC + Win SDK）；Qt 用 aqt 换 `win64_msvc2019_64`（同一条命令换 target，清单已验证存在）。
+- CMake 侧加 MSVC 配置（generator `Visual Studio 17 2022` 或 Ninja+cl，`-A x64`）；导入库**直接用官方 3.0.24 SDK 的 `libvlc.lib`**——gendef/dlltool 流程是 MinGW 专属，MSVC 不需要（`deps\thirdparty\lib` 里官方 `.lib` 已随 3.0.24 sdk 解包放在 `deps\dl\vlc-3.0.24-extracted`，若已清理则从归档 zip 再取）。
+- 预期工作：一轮 MSVC 警告清理（历史纪录 42→3，值得信任）；坑 11/12 的 MinGW 特调天然合法不用动。
+- 验收：41 例 + hook-gate + 用户开关一次播放器；CI 加一条 msvc job（runner 预装 VS，aqt 装 msvc 版 Qt 即可）。
+
+**Phase 2 · Qt 5.15 → 6.8 LTS（核心会话）**
+- `Parse.cpp:9-48` 的 `QTextCodec` → Core5Compat 的 QTextCodec（**`QStringConverter` 只覆盖 UTF 系，GBK 老弹幕文件必须靠 Core5Compat**——漏了的表现是"某些 xml 静默 0 条弹幕"，坑 35 家族）。
+- `Local.cpp:188` 的 `AA_UseHighDpiPixmaps`（Qt 6 恒开，删行）；`Local.cpp:194` 的 `AA_UseOpenGLES` 语义重验。
+- **六个 shader GLSL 1.20 → 330 core**（`varying`→`in/out`、`texture2D`→`texture`；坑 36/40 的失败形状 = "链接不上但照画"，排查入口是 `msg.log` 的 `Program Link Failed`）。
+- DPI：`d98327b` 的 PassThrough 取整在 Qt 6 恒开高 DPI 下重测（150% 屏）。
+- CI 配方换成 6.x + MSVC；**qmake 遗留在本阶段删除**（`.pro`×5、`build\` 与 4+1 个 qmake 测试树、run-tests.ps1 改用 ctest）。
+
+**Phase 3 · 用户验收（人眼清单）**
+弹幕可见/颜色/描边/滚动速度、悬停冻结（高密度段，`hook-gate.ps1` 先跑）、**右键弹幕数据块（用户专属动作）**、全屏进出、断点续播、双主题、Prefer 五页、屏蔽规则生效。全过后 dist 定稿、清理旧构建树。
+
+**Phase 4 · VLC 4（独立会话，等上游 4.0 final）**
+与 Qt 解耦。必改点已知：`libvlc_video_set_subtitle_file`（现存的 2 条警告在 4.x 头文件里会变硬错误）。可先做纸面差异清单，把考古变成核对。
+
+**每阶段的纪律**：独立提交（Phase 名进提交信息）→ 跑全门禁 → 证据进文档 → 再进下一段。任何一段失败：`git reset`/`revert` + 从 tag 重编即回滚，`deps\` 的 Qt5/MinGW 树不受影响。
+
+**迁移完成后回到的账**（现在不做）：
+1. 大 xml 异步解析：仅当卡顿可感知（别用 `QFutureWatcher`，见 §7-1）。
+2. Danmaku 本体独立成测：服务定位器换代（可并入迁移收尾）后桩面消失，自然解锁。
+3. 待拍板的加功能：编辑器按弹幕类型上色（模式 4/5/6 淡色底）、底栏静音/上一集/下一集/截图按钮。
+4. 渲染/输入路由重构：仍按 §10-2 旧规则——没有现象和证据就不动。
 
 > 2026-10-25 裁定并结案：**dist 不再瘦身**（`lua\` 1.1M + `opengl32sw.dll` 21M 实测可去，决定保留）；**Z: 长时段观察不再挂账**（RaiDrive 链路抖动，日常播到不对劲再查）。
 
 ---
 
-## 11. Qt 6 迁移纸面预案（未启动，仅备案）
-
-> 原则：**先不动**（2026-10-25 用户裁定）。触发条件：安全事件、Qt 5.15 官方二进制不可得、或新硬件逼着换工具链。以下为 2026-10-25 全库 grep 的实测排查，真要迁移时按单核对。
+## 11. Qt 6 迁移影响清单（已批准执行——任务书在 §10，本节保留作技术底账）
 
 - **工具链耦合**：Qt 6 Windows 官方包只有 MSVC——MinGW 路线意味着同时换编译器（新 mingw-w64）。~~qmake → CMake~~ **已完成**（`15b2667`，构建清单划一项）；剩编译器换代待裁定。
 - **全库命中清单**（除下列各项外，QRegExp / QDesktopWidget / qrand / toTime_t / `QString::SkipEmptyParts` / `toList()`/`toSet()` / `QFontMetrics::width` 均 **0 命中**）：
@@ -308,7 +334,7 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 
 - **高风险区**：`d98327b` 的 DPI 工作（150% 屏 PassThrough 取整、逐档 dpr 绘制）建立在 Qt 5 的开关式高 DPI 之上，Qt 6 恒开高 DPI 后必须重测。
 - **不受影响**：libvlc 侧（VPlayer/Embed 直出）与 Qt 版本无关；§6-18/23/24/25 的输入路由坑是窗口系统层面，大半仍成立。
-- **量级预估**：CMake 化 + QTextCodec 改写 + 渲染层重验 ≈ 2–4 个会话；动手前先重读本文件 §6。
+- **量级预估**：CMake 已销账（`15b2667`）；剩余 = 编译器切换 + QTextCodec/Core5Compat 改写 + shader 330 移植 + 渲染层/DPI 重验 ≈ 2–3 个会话；动手前先重读本文件 §6。
 
 ---
 

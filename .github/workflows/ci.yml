@@ -44,7 +44,7 @@ jobs:
         shell: pwsh
         run: |
           $env:PATH = "$env:QT_ROOT\mgw81\mingw64\bin;$env:QT_ROOT\5.15.2\mingw81_64\bin;" + $env:PATH
-          cmake -G "MinGW Makefiles" -B build -S src `
+          cmake -G "MinGW Makefiles" -B build -S . `
             -DCMAKE_BUILD_TYPE=Release `
             -DBILILOCAL_BUILD_APP=OFF `
             "-DQt5_DIR=$env:QT_ROOT\5.15.2\mingw81_64\lib\cmake\Qt5"

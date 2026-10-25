@@ -20,7 +20,12 @@ find_package(Qt5 5.15 REQUIRED COMPONENTS Core Gui Widgets Network Concurrent Te
 
 set(THIRDPARTY "${CMAKE_CURRENT_SOURCE_DIR}/../deps/thirdparty" CACHE PATH "VLC SDK root (include + lib/amd64)")
 
+# CI 上只编测试（单测不链 libvlc，不需要 SDK）；主程序默认仍随全量构建
+option(BILILOCAL_BUILD_APP "Build the main application (needs the VLC SDK)" ON)
+
 # ---- 主程序 ---------------------------------------------------------------
+
+if(BILILOCAL_BUILD_APP)
 set(BILILOCAL_SOURCES
 	src/Access/Load.cpp
 	src/Access/Parse.cpp
@@ -141,6 +146,8 @@ qt5_add_translation(BILILOCAL_QM
 if(MINGW)
 	target_link_options(BiliLocal PRIVATE $<$<CONFIG:Release>:-Wl,-s>)
 endif()
+
+endif() # BILILOCAL_BUILD_APP
 
 # ---- 测试 ------------------------------------------------------------------
 # 每个目标对应 test/ 下的一个 .pro；桩与最小实现在各自 tst_*.cpp 里，

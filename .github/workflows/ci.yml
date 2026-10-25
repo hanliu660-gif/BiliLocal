@@ -1,0 +1,57 @@
+# BiliLocal CI：只编 5 个单测目标并运行（单测不链 libvlc，不需要 VLC SDK）。
+# 主程序 + hook-gate 留在本机验证（CI 虚机的 D3D11/GL 不可信，见交接文档 §8）。
+# Qt/MinGW 经 aqt 安装并缓存；首次运行约几分钟，命中缓存后秒级恢复。
+name: ci
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    runs-on: windows-latest
+    env:
+      QT_ROOT: D:\a\qt
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Qt 5.15.2 (mingw81) + MinGW 8.1
+        id: qtcache
+        uses: actions/cache@v4
+        with:
+          path: D:\a\qt
+          key: qt-5.15.2-mingw81-v1
+
+      - name: Install Qt and MinGW via aqt
+        if: steps.qtcache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          pip install aqtinstall
+          aqt install-qt windows desktop 5.15.2 win64_mingw81 -O $env:QT_ROOT
+          aqt install-tool windows desktop tools_mingw810 qt.tools.win64_mingw810 -O $env:QT_ROOT
+
+      - name: Configure (tests only)
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:QT_ROOT\Tools\mingw810_64\bin;$env:QT_ROOT\5.15.2\mingw81_64\bin;" + $env:PATH
+          cmake -G "MinGW Makefiles" -B build -S src `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DBILILOCAL_BUILD_APP=OFF `
+            "-DQt5_DIR=$env:QT_ROOT\5.15.2\mingw81_64\lib\cmake\Qt5"
+
+      - name: Build test targets
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:QT_ROOT\Tools\mingw810_64\bin;$env:QT_ROOT\5.15.2\mingw81_64\bin;" + $env:PATH
+          cmake --build build -j
+
+      - name: Run unit tests
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:QT_ROOT\5.15.2\mingw81_64\bin;$env:GITHUB_WORKSPACE\build;" + $env:PATH
+          ctest --test-dir build --output-on-failure -C Release

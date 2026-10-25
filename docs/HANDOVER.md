@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> **更新时间**：2026-10-25（**第十六版：整合重写**——当前状态归拢到最前、坑位重新连续编号、去掉半年前的部署流水账；事实与数字全部按 2026-10-25 16:08 的实测重写）
+> **更新时间**：2026-10-25（**第十六版：整合重写**——当前状态归拢到最前、坑位重新连续编号、去掉半年前的部署流水账；事实与数字全部按 2026-10-25 18:46 的实测重写）
 >
 > **这份文档写给谁**：写给"下一会话接手这个工程的人/AI"。先读 §0 约束，再看 §2 当前状态，动手前看 §6 坑。
 >
@@ -25,6 +25,7 @@
 - **要实测证据**（截图、日志原文、UIA 读数、SHA256），不要"应该可以"。
 - **功能/交互的验收测试交给用户本人做**：自动化只负责日志取证与时序验证，别为 UI 行为搭模拟点击链路。
 - **路径别写死**：工程会被搬，脚本里用相对路径或参数。
+- **说明文档的位置与其中的绝对路径，改之前先问**：`交接文档.md`、`src\docs\HANDOVER.md`、`APP\AGENTS.md` 这类文档放在哪个目录、叫什么名字、里面写的绝对路径，都属"先问再动"。内容修订可以直接做。
 - **进度落盘**：重要状态写进这份文档，别只留在会话里（他按上下文付费）。
 
 ---
@@ -52,10 +53,10 @@
 
 ---
 
-## 2. 当前状态（2026-10-25 16:08 实测）
+## 2. 当前状态（2026-10-25 18:46 实测）
 
-- **exe**：`dist\BiliLocal.exe` = **931,840 字节**，SHA256 **`0742B29E…`**（构建自 `7bf39d2`，16:08 部署，与 `build\release\BiliLocal.exe` 同哈希）。**构建确定性两证**：①与 build 产物逐字节相同；②同一份源码在空目录重编，只差 4 个字节（PE 头时间戳/校验和），代码段完全一致 ⇒ dist 与源码一一对应，没有"改了忘重编"的死角。
-- **源码**：`master` = 最新提交（**从 05:30 起改为不写死文档哈希**——写死的值在提交瞬间就过期，当前值用 `git log -1 --oneline` 取）；**最后一个代码提交 = `7bf39d2`**（同一视频只加载一份弹幕）← `30466b0`（弹幕 shader 修好、白方块消失）← `600b369`（审计第 5 批）← `9edac7c`（审计第 4 批）← `1b10dc0`（审计第 3 批）← `2f8a1d1`（审计第 2 批）← `cd3b0fe`（审计第 1 批）← `d98327b`（UI/DPI）← `81aab8f` ← `a9fbcb3` ← `63f9a4b` ← `8d9c8ec` ← `44fbb3e` ← `7f8685a` ← `473ba62` ← `3f86f74` ← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`。上游 `9d1cb05`；回滚 tag `v0.5.0-vmem` = `46b68b9`；远端 `github` = `github.com/hanliu660-gif/BiliLocal`。
+- **exe**：`dist\BiliLocal.exe` = **931,840 字节**，SHA256 **`F44A1F07…`**（构建自 `7bf39d2`，18:46 全量 clean 重建后部署，与 `build\release\BiliLocal.exe` 同哈希）。**构建可复现性（2026-10-25 18:46 实测三组）**：①`dist` 与 `build\release` 逐字节相同（每次部署都 sha256 校验）；②同一构建树连续两次全量 clean 重建：931,840 B，只差 **4 字节**（offset 137/138、217/218 = PE 时间戳/校验和）；③把 `git archive HEAD` 导到**另一个目录**重建：尺寸同为 931,840 B，但差 **2,692 字节**（4 字节 PE 头 + 2,688 字节在代码/数据区），成因未定。⇒ **尺寸可复现、字节不完全可复现：判断"是不是同一份源码"只能看 git 提交号，别比哈希。**
+- **源码**：`master` = 最新提交（**从 05:30 起改为不写死文档哈希**——写死的值在提交瞬间就过期，当前值用 `git log -1 --oneline` 取）；**最后一个代码提交 = `7bf39d2`**（同一视频只加载一份弹幕）← `30466b0`（弹幕 shader 修好、白方块消失）← `600b369`（审计第 5 批）← `9edac7c`（审计第 4 批）← `1b10dc0`（审计第 3 批）← `2f8a1d1`（审计第 2 批）← `cd3b0fe`（审计第 1 批）← `d98327b`（UI/DPI）← `81aab8f` ← `a5f95fe` ← `a9fbcb3` ← `63f9a4b` ← `8d9c8ec` ← `44fbb3e` ← `7f8685a` ← `473ba62` ← `3f86f74` ← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`。上游 `9d1cb05`；回滚 tag `v0.5.0-vmem` = `46b68b9`；远端 `github` = `github.com/hanliu660-gif/BiliLocal`。
 - **单测**：`tst_parse` **9/9**（7 用例 + init/cleanup，2026-10-25 复跑）；`tst_config` **7/7**。**负向对照做过**：把两处 `QWriteLocker locker(&lock);` 注释掉重建，`concurrentWriters` 直接 SIGSEGV（`rc=139`）⇒ 用例不是空跑。
 - **编译警告**：**42 → 3**（连清两轮：`a5f95fe` 清 6 个位置，`81aab8f` 清最后 1 个）。剩下 3 条是**刻意留的**：`-Wimplicit-fallthrough` 1 条（`src\src\Model\Running.cpp:283` 的 `case 1` 落到 `case 0`，入队本来就该两模式同路）、`libvlc_video_set_subtitle_file` 2 条（`src\src\Player\VPlayer.cpp:476`，VLC 3 标弃用但照常可用，换 VLC 4 才必须改）。
 - **i18n**：源码全英文串，中文走 `dist\locale\zh_CN\bililocal.qm`（187/187 全译，含繁体）。改 UI 文案后：lupdate → 补译 → lrelease → 部署 qm。
@@ -183,6 +184,7 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 39. **`glDeleteTextures` 必须在上下文当前时调**：`OpenGLAtlasMgr::squeeze()` 由 `timeChanged` 直连（paintGL 之外），在那里 `delete` 图集 ⇒ 删除打空、纹理不释放。改法是只标记进 `graveyard`，在 `draw()` 里 `collect()` 真删
 40. **桌面 GL 的 shader 里不要写 `precision lowp float;`**：Qt 为桌面 GL 预置 `#define lowp`/`mediump`/`highp`（展开为空），这行变成 `precision  float;` ⇒ 桌面 GLSL 语法错误，表现为 `syntax error, unexpected IDENTIFIER` + `Program Link Failed`；程序没链接上而代码照旧 `glDrawArrays`，于是每条弹幕被固定管线画成**纯白方块**。排查入口：`msg.log` 里 `Program Link Failed` 的条数（本机曾累积 35550 条，每帧 `bind()` 都重试）
 41. **同一视频在 List 里可能挂多条指向同一份弹幕的规则**：模板展开成正斜杠、"命令行带 xml 打开"登记的绝对路径是反斜杠，`Load` 按 source 字符串全等去重失效 ⇒ 同一份 xml 加载两次、弹幕整屏重复。`List` 的 `case Records:` 现按 `QFileInfo::canonicalFilePath()`（取不到退回 `cleanPath(fromNativeSeparators())`）本轮去重；用户 List 里那两条规则原样保留
+42. **别用 exe 的 SHA256 判断"是不是同一份源码编的"**：同一构建树重复 clean 重建只差 4 字节（PE 时间戳/校验和），但把同样的源码导到另一个目录重建，尺寸一模一样（931,840 B）却有 2,692 字节不同（代码/数据区 2,688），成因未定。要证明源码同源，认 git 提交号。
 
 ---
 

@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> **更新时间**：2026-10-25（**第十七版：模型层单测**——tst_shield/tst_load 共 21 例入库+负向对照、一键测试门禁 run-tests.ps1、钩子注释纠偏、VC 运行库入 dist、deps 归档与来源记录、Qt 6 纸面预案（仅备案未启动）；代码事实按 2026-10-25 20:09 前后实测。同日修订：验证分工表述按用户澄清收窄——"只能人眼验证"实为"仅真实右键到弹幕这一个动作需要本人"，见 §2/§3/§6-14，源码头注同步纠偏 `5ecd888`；GUI 钩子门禁 hook-gate + 本地 fixture + pre-push 门禁落地（见 §8，坑 45/46））
+> **更新时间**：2026-10-25（**第十八版：测试 41 例 + SDK 3.0.24 + CMake 化**——tst_list 入库+负向对照、thirdparty 刷新到 3.0.24（MinGW 导入库从出货运行库再生成）、CMakeLists 落地并切换 dist 为 CMake 产物；同日早前：验证分工收窄、hook-gate/fixture/pre-push 门禁（见 §2/§8）。代码事实按 2026-10-25 22:30 前后实测））
 >
 > **这份文档写给谁**：写给"下一会话接手这个工程的人/AI"。先读 §0 约束，再看 §2 当前状态，动手前看 §6 坑。
 >
@@ -36,7 +36,8 @@
 | --- | --- |
 | `src\` | 源码 git 仓库（全部工作在 `master`）；tag `v0.5.0-vmem` = 早期 vmem 线回滚点 |
 | `src\docs\HANDOVER.md` | 本文的仓库备份副本（正本在工程根，更新后同步过来） |
-| `build\` | 影子构建（qmake + mingw32-make），产物 `build\release\BiliLocal.exe` |
+| `build\` | qmake 影子构建（**遗留路径**，与 CMake 并存到 Qt 6 迁移时移除）→ `build\release\BiliLocal.exe` |
+| `build-cmake\` | **CMake 影子构建（主）**（2026-10-25 起，dist 的产物出处；CMakeLists 在 `src\`，构建命令见 §4） |
 | `build-test\` | 单测构建树（`src\test\tst_parse.pro`，只链 Parse 与 Utils 两个 TU）→ `release\tst_parse.exe`（9/9）。跑前把 `deps\5.15.2\mingw81_64\bin` 与 `deps\Tools\mingw810_64\bin` 放进 PATH |
 | `build-test-config\` | 单测构建树（`src\test\tst_config.pro`，只链 `Config.cpp`）→ `release\tst_config.exe`（7/7）。`qmake ../src/test/tst_config.pro -spec win32-g++ "CONFIG+=release"` 后 make，同样要设 PATH |
 | `src\test\tst_config.*` | Config 的 7 例单测：往返、缺键写回不冲掉别的键、2 线程 × 500 次并发写、坏配置留备份、存档是合法 JSON |
@@ -60,9 +61,9 @@
 
 ## 2. 当前状态（2026-10-25 18:46 实测）
 
-- **exe**：`dist\BiliLocal.exe` = **931,840 字节**，SHA256 **`2C0005D3…`**（构建自 `0f25480`，20:00 前后部署；该提交只改注释，exe 与 `build\release\BiliLocal.exe` 逐字节一致）。**构建可复现性（2026-10-25 18:46 实测三组）**：①`dist` 与 `build\release` 逐字节相同（每次部署都 sha256 校验）；②同一构建树连续两次全量 clean 重建：931,840 B，只差 **4 字节**（offset 137/138、217/218 = PE 时间戳/校验和）；③把 `git archive HEAD` 导到**另一个目录**重建：尺寸同为 931,840 B，但差 **2,692 字节**（4 字节 PE 头 + 2,688 字节在代码/数据区），成因未定。⇒ **尺寸可复现、字节不完全可复现：判断"是不是同一份源码"只能看 git 提交号，别比哈希。**
-- **源码**：`master` = 最新提交（**从 05:30 起改为不写死文档哈希**——写死的值在提交瞬间就过期，当前值用 `git log -1 --oneline` 取）；**最后一个代码提交 = `5ecd888`**（tst_parse 头注纠偏，纯注释）← `0f25480`（钩子注释纠偏，纯注释）← `0c74654`（tst_shield/tst_load 新单测）← `7bf39d2`（同一视频只加载一份弹幕）← `30466b0`（弹幕 shader 修好、白方块消失）← `600b369`（审计第 5 批）← `9edac7c`（审计第 4 批）← `1b10dc0`（审计第 3 批）← `2f8a1d1`（审计第 2 批）← `cd3b0fe`（审计第 1 批）← `d98327b`（UI/DPI）← `81aab8f` ← `a5f95fe` ← `a9fbcb3` ← `63f9a4b` ← `8d9c8ec` ← `44fbb3e` ← `7f8685a` ← `473ba62` ← `3f86f74` ← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`。上游 `9d1cb05`；回滚 tag `v0.5.0-vmem` = `46b68b9`；远端 `github` = `github.com/hanliu660-gif/BiliLocal`。
-- **单测**：四个目标共 **37 例全绿**（2026-10-25，`tools\run-tests.ps1` 一键复跑）：`tst_parse` **9/9**、`tst_config` **7/7**、`tst_shield` **9/9**、`tst_load` **12/12**。**负向对照做了两个**：①把 `tst_config` 两处 `QWriteLocker locker(&lock);` 注释掉重建，`concurrentWriters` 直接 SIGSEGV（`rc=139`）；②把 `Load.cpp` 嗅探的 `.trimmed()` 去掉重建，`blankLineBeforeXml` 变红（0 条弹幕）、其余 11 例不受影响 ⇒ 用例不是空跑。GUI 钩子剧本另有 `tools\hook-gate.ps1` 断言三个日志标记（见 §8）。List 与 Danmaku 本体因依赖整套服务定位器 + APlayer（会拖进 VPlayer/libvlc）暂不独立成测（见 §10-4）。
+- **exe**：`dist\BiliLocal.exe` = **956,928 字节**，SHA256 **`6C55F692…`**（**CMake 构建**自 `15b2667`，构建树 `build-cmake\`；比 qmake 产物大 25K 属段布局差异；图标资源经 ExtractAssociatedIcon 实证存在）。链接的是 3.0.24 SDK——见 §9。**构建可复现性（2026-10-25 18:46 实测三组）**：①`dist` 与 `build\release` 逐字节相同（每次部署都 sha256 校验）；②同一构建树连续两次全量 clean 重建：931,840 B，只差 **4 字节**（offset 137/138、217/218 = PE 时间戳/校验和）；③把 `git archive HEAD` 导到**另一个目录**重建：尺寸同为 931,840 B，但差 **2,692 字节**（4 字节 PE 头 + 2,688 字节在代码/数据区），成因未定。⇒ **尺寸可复现、字节不完全可复现：判断"是不是同一份源码"只能看 git 提交号，别比哈希。**
+- **源码**：`master` = 最新提交（**从 05:30 起改为不写死文档哈希**——写死的值在提交瞬间就过期，当前值用 `git log -1 --oneline` 取）；**最后一个代码提交 = `15b2667`**（CMake 构建）← `dd8efc3`（tst_list）← `0f25480`（钩子注释纠偏）← `0c74654`（tst_shield/tst_load 新单测）← `7bf39d2`（同一视频只加载一份弹幕）← `30466b0`（弹幕 shader 修好、白方块消失）← `600b369`（审计第 5 批）← `9edac7c`（审计第 4 批）← `1b10dc0`（审计第 3 批）← `2f8a1d1`（审计第 2 批）← `cd3b0fe`（审计第 1 批）← `d98327b`（UI/DPI）← `81aab8f` ← `a5f95fe` ← `a9fbcb3` ← `63f9a4b` ← `8d9c8ec` ← `44fbb3e` ← `7f8685a` ← `473ba62` ← `3f86f74` ← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`。上游 `9d1cb05`；回滚 tag `v0.5.0-vmem` = `46b68b9`；远端 `github` = `github.com/hanliu660-gif/BiliLocal`。
+- **单测**：五个目标共 **41 例全绿**（qmake 树与 CMake 树各验一遍，2026-10-25）：`tst_parse` **9/9**、`tst_config` **7/7**、`tst_shield` **9/9**、`tst_load` **12/12**、`tst_list` **4/4**。**负向对照做了三个**：①把 `tst_config` 两处 `QWriteLocker locker(&lock);` 注释掉重建，`concurrentWriters` 直接 SIGSEGV（`rc=139`）；②把 `Load.cpp` 嗅探的 `.trimmed()` 去掉重建，`blankLineBeforeXml` 变红（0 条弹幕）、其余 11 例不受影响；③把 List 的 `if (loaded.contains(key))` 短路成 `if (false)`，`tst_list` 两用例双红 ⇒ 用例不是空跑。GUI 钩子剧本另有 `tools\hook-gate.ps1` 断言三个日志标记（见 §8）。List 的去重路径已覆盖；Danmaku 本体仍因依赖整套服务定位器暂不独立成测（见 §10-4）。
 - **编译警告**：**42 → 3**（连清两轮：`a5f95fe` 清 6 个位置，`81aab8f` 清最后 1 个；`0c74654` 新增的两个测试目标构建 **0 警告**）。剩下 3 条是**刻意留的**：`-Wimplicit-fallthrough` 1 条（`src\src\Model\Running.cpp:283` 的 `case 1` 落到 `case 0`，入队本来就该两模式同路）、`libvlc_video_set_subtitle_file` 2 条（`src\src\Player\VPlayer.cpp:476`，VLC 3 标弃用但照常可用，换 VLC 4 才必须改）。
 - **i18n**：源码全英文串，中文走 `dist\locale\zh_CN\bililocal.qm`（187/187 全译，含繁体）。改 UI 文案后：lupdate → 补译 → lrelease → 部署 qm。
 - **运行库**：VLC **3.0.24**（d3d11 直出）；`dist\plugins` 里**混住着 Qt 的四个插件目录**（`platforms\` `imageformats\` `mediaservice\` `styles\`），整目录替换 VLC 时必须把它们合并到顶层，否则 Qt 起不来（流程见 §9）。dist 只带 exe 实际导入的 5 个 Qt DLL（Concurrent/Core/Gui/Network/Widgets）。
@@ -102,6 +103,8 @@
 | `0c74654` | 单测第 3 轮（模型层补覆盖）：`tst_shield` 9 例（空/坏正则跳过、m/u/t 往返、isBlocked 全语义、aboutToSave 落盘往返——顺带坐实了 Shield 构造连接无上下文对象这个隐性约束）+ `tst_load` 12 例（真文件真嗅探：BOM/空行两大历史回归、四格式分支、AcFun 兜底、缺文件报错、队列顺序、延迟平移）；负向对照 = 去 `.trimmed()` 后 `blankLineBeforeXml` 变红。fixture 的两个教训见 §6-43/44 |
 | `0f25480` | 钩子注释纠偏：`EmbedPrivate.cpp` 的"正式构建不编译"改为"无条件编进所有构建"（§8 的 ⚠️ 项结案）；纯注释改动，exe 尺寸不变重新部署 |
 | `5ecd888` | `tst_parse.cpp` 头注纠偏：删掉"Danmaku/Shield 覆盖不到"的过时说法（Shield 已由 `tst_shield` 覆盖）与"人眼弹幕"旧表述（见本版验证分工修订）；纯注释 |
+| `dd8efc3` | tst_list：`case Records` 去重端到端——模板子项（itemFromFile 目录扫描自动建）+ 命令行反斜杠绝对路径复刻 `7bf39d2` 现场 → 池=1；ghost 文件变体验证 fallback 去重 → `errorOccured`=1；负向对照两红。测试结构教训：List 的信号连接同样无上下文对象，实例必须全程一份；**刻意不注册 Config**（掐断 touch→自动保存链，测试不落盘） |
+| `15b2667` | CMake 构建：CMakeLists 与 .pro 逐项等价（单平台三件套 DEFINES + 验证钩子、PCH、AUTOMOC/AUTORCC、图标 RC、翻译、5 测试目标），41 例 + hook-gate 双验证后 **dist 切换为 CMake 产物**；`.gitignore` 的 `*.rc` 加例外；tst_config 补 Local 桩（AUTOMOC 会 moc include 链里的头，坑 47） |
 
 ---
 
@@ -114,6 +117,21 @@
 ---
 
 ## 4. 怎么重编 / 部署
+
+**CMake（2026-10-25 起为主路径）**（cmake 来自 pip 包：`...\dsh-runtimes\dsh-next-primary-runtime\dependencies\python\Scripts\cmake.exe`）：
+
+```powershell
+$env:PATH = "C:\DSH\APP\BiliLocal\deps\Tools\mingw810_64\bin;C:\DSH\APP\BiliLocal\deps\5.15.2\mingw81_64\bin;" + $env:PATH
+cmake -G "MinGW Makefiles" -B C:\DSH\APP\BiliLocal\build-cmake -S C:\DSH\APP\BiliLocal\src `
+      -DCMAKE_BUILD_TYPE=Release -DQt5_DIR=C:\DSH\APP\BiliLocal\deps\5.15.2\mingw81_64\lib\cmake\Qt5
+cmake --build C:\DSH\APP\BiliLocal\build-cmake -j8
+# 部署（先停进程）
+Stop-Process -Name BiliLocal -Force -ErrorAction SilentlyContinue
+Copy-Item C:\DSH\APP\BiliLocal\build-cmake\BiliLocal.exe C:\DSH\APP\BiliLocal\dist\ -Force
+```
+改动 CMakeLists 后重跑第一条 configure。测试可用 `ctest --test-dir build-cmake`（跑前 PATH 要带 Qt bin）。
+
+**qmake（遗留路径，保留未删，Qt 6 迁移时移除）**：
 
 ```powershell
 $deps = 'C:\DSH\APP\BiliLocal\deps'
@@ -196,7 +214,8 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 43. **Load 的 xml 嗅探只认 `<packet>`/`<i>`/`<c>` 三种头**：裸 `<l i=` 内容（AcFunLocalizer 真文件必有 `<c>` 包裹）三个分支全不命中 ⇒ 默认构造的 `ResultDelegate` ⇒ **静默 0 条弹幕**。给 `tst_load` 写 fixture 时踩到；"能被认出"本身就是格式契约的一部分
 44. **QtTest 的 `QVERIFY`/`QFAIL` 宏展开成 `return;`，只能用在 void 函数**：放进返回 QString/bool 的辅助函数直接编译错（`qtestcase.h:66`）。测试辅助函数一律 void + 出参
 45. **弹幕 lane 自顶向下填充，稀疏弹幕永远到不了屏幕中部**：Running 的"最空 lane"算法按 y=0,10,20… 顺序占位，(600,320) 这类中部锚点只在并发弹幕多到把 lane 填过 320（约 130 条在屏）时才有图形可冻结——探针实锤：稀疏 fixture 的矩形范围 y[0..275]→y[0..75]，"悬停冻结"验证静默不报错。**hook-gate 的 fixture 必须 0.05s 间隔**；据此推断真机日常录播（高密度）才会触发悬停冻结，低密度直播场景该功能可能"看似没反应"
-46. **build 树的 exe 直接跑不起来**：加载器不认 PATH 兜底（裸跑退出码 `0xC0000135`，或静默卡在加载器错误框上进程活着但零日志）。要在 build 树调试：`cp dist/*.dll build/release/` + `mklink /J build\release\plugins dist\plugins`，诊断完 `rm *.dll` + `rmdir plugins`（**junction 只能 rmdir，rm -rf 会穿透删掉 dist\plugins**）。hook-gate 已内置 `QT_QPA_PLATFORM_PLUGIN_PATH`/`VLC_PLUGIN_PATH`/PATH 三个环境变量，但实测仍需 DLL 在 exe 旁
+46. **build 树的 exe 直接跑不起来**：加载器不认 PATH 兜底（裸跑退出码 `0xC0000135`，或静默卡在加载器错误框上进程活着但零日志）。要在 build 树调试：`cp dist/*.dll build/release/` + `mklink /J build\release\plugins dist\plugins`，诊断完 `rm *.dll` + `rmdir plugins`（**junction 只能 rmdir，rm -rf 会穿透删掉 dist\plugins**）。hook-gate 已内置 `QT_QPA_PLATFORM_PLUGIN_PATH`/`VLC_PLUGIN_PATH`/PATH 三个环境变量，但实测仍需 DLL 在 exe 旁——**现脚本对非 dist 的 exe 自动 stage**（见 §8）
+47. **AUTOMOC 会 moc include 链里所有含 Q_OBJECT 的头**：qmake 的 moc 面由 HEADERS 列表决定，CMake 的 AUTOMOC 扫源码 include——`tst_config.cpp` 没 HEADERS 列 Local.h 也被 moc 出来（`mocs_compilation.cpp` 引用 ctor/dtor/槽符号）。CMake 化时按链接错误补桩，别按 qmake 的 HEADERS 直觉
 
 ---
 
@@ -211,8 +230,8 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 
 | 脚本 | 用途 |
 | --- | --- |
-| `run-tests.ps1` | **一键门禁**：4 个单测目标（parse/config/shield/load）逐个 qmake+make+运行，输出各自 Totals，任一失败退出码 1（`-NoBuild` 只跑不编） |
-| `hook-gate.ps1` | **GUI 钩子门禁**：以 `BILILOCAL_EMBED_TEST=1` 起播放器播本地 fixture，断言 `msg.log` 三个标记（`seeked to 10%` / `hover: freeze` / `hover: release`），全中才退出码 0；`-Media` 可换 Z: 真实录播做对照 |
+| `run-tests.ps1` | **一键门禁**：5 个单测目标（parse/config/shield/load/list，41 例）逐个 qmake+make+运行，输出各自 Totals，任一失败退出码 1（`-NoBuild` 只跑不编）；pre-push 钩子调它 |
+| `hook-gate.ps1` | **GUI 钩子门禁**：以 `BILILOCAL_EMBED_TEST=1` 起播放器播本地 fixture，断言 `msg.log` 三个标记（`seeked to 10%` / `hover: freeze` / `hover: release`），全中才退出码 0；`-Media` 可换 Z: 真实录播做对照；**非 dist 的 exe 会自动 stage DLL+junction**（坑 46） |
 | `gen-media.py` | 生成 hook-gate 的本地 fixture 到 `tools\.media\`：`sample-60s.y4m`（裸 YUV4MPEG2 流，libvlc 原生可播，本机无转码器也能造视频）+ 同名 xml（**0.05s 间隔高密度弹幕**，原因见 §6-45） |
 | `setcfg.py <key> <value>` | 改 `Config.txt` 任意键（布尔/数字/字符串自动识别） |
 | `pwc.ps1` | **PrintWindow(PW_RENDERFULLCONTENT) 抓窗口**——抓视频/底栏用这个 |
@@ -246,7 +265,9 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 - Python：`C:\Users\23239\.dsh\dsh-runtimes\dsh-next-primary-runtime\dependencies\python\python.exe`（系统 `python` 是 Store 存根，跑了等于没跑）
 - VC 运行库（VLC3 需要）：**dist 已自带**（2026-10-25 从系统 System32 拷入 vcruntime140 123,472 B / vcruntime140_1 47,264 B / msvcp140 553,552 B，v14.50.35719.0，拷入后启动冒烟通过）。换机器无需再装；如需更新再取 [vc_redist.x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)
 - **deps 来源与归档（2026-10-25 补）**：
-  - `deps\thirdparty`（VLC 3.0.21 SDK，1.4M）→ 已归档 `deps\archive\vlc-sdk-3.0.21-win64.zip`（SHA256 `857CE77B…`，18 条目 = `include/vlc/*.h` + `lib/amd64`）。再生途径：VideoLAN 官方存档 libvlc 3.0.21 win64 7z 里的 `sdk\`
+  - `deps\thirdparty`（**VLC 3.0.24 SDK**，同日从 3.0.21 刷新）→ 归档 `deps\archive\vlc-sdk-3.0.24-win64.zip`（SHA256 `7BD12CD7…`）。**注意**：官方 7z 的 lib 只有 MSVC `.lib`——现行 `lib/amd64` 里的 `.def`+`.dll.a` 是 `gendef dist\libvlc.dll` 提取导出表、`dlltool -m i386:x86-64 --as-flags=--64` 从**出货运行库本体**再生成的，`include/` 为官方 3.0.24 头；链接验证 = 41 例 + hook-gate 全绿、警告仍是那 2 条已知项
+  - `deps\dl\vlc-3.0.24-win64.7z`：SHA256 `1ED59C09…`（download.videolan.org，`sdk/` 子树 112 条目）
+  - `deps\archive\vlc-sdk-3.0.21-win64.zip`：旧 SDK 存档保留（SHA256 `857CE77B…`）
   - `deps\5.15.2\mingw81_64`（501M）：Qt 官方存档 5.15.2 的 mingw81_64 组件（download.qt.io/archive/qt/5.15/5.15.2/）
   - `deps\Tools\mingw810_64`（465M）：Qt 5.15.2 配套的 MinGW 8.1.0（download.qt.io 存档 Tools 分类）
   - `deps\dl\vlc-2.2.8-win64.zip`：SHA256 `DD2AD3B5…`（vmem 考古用，勿删）
@@ -270,7 +291,7 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 
 > 原则：**先不动**（2026-10-25 用户裁定）。触发条件：安全事件、Qt 5.15 官方二进制不可得、或新硬件逼着换工具链。以下为 2026-10-25 全库 grep 的实测排查，真要迁移时按单核对。
 
-- **工具链耦合**：Qt 6 Windows 官方包只有 MSVC——MinGW 路线意味着同时换编译器（新 mingw-w64）和构建系统（qmake → CMake）。想解耦风险，第一步只换编译器（保持 Qt 5.15），框架另算。
+- **工具链耦合**：Qt 6 Windows 官方包只有 MSVC——MinGW 路线意味着同时换编译器（新 mingw-w64）。~~qmake → CMake~~ **已完成**（`15b2667`，构建清单划一项）；剩编译器换代待裁定。
 - **全库命中清单**（除下列各项外，QRegExp / QDesktopWidget / qrand / toTime_t / `QString::SkipEmptyParts` / `toList()`/`toSet()` / `QFontMetrics::width` 均 **0 命中**）：
 
 | 项 | 位置 | Qt 6 处置 |

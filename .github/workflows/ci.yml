@@ -43,7 +43,7 @@ jobs:
       - name: Configure (tests only)
         shell: pwsh
         run: |
-          $env:PATH = "$env:QT_ROOT\Tools\mingw810_64\bin;$env:QT_ROOT\5.15.2\mingw81_64\bin;" + $env:PATH
+          $env:PATH = "$env:QT_ROOT\mgw81\mingw64\bin;$env:QT_ROOT\5.15.2\mingw81_64\bin;" + $env:PATH
           cmake -G "MinGW Makefiles" -B build -S src `
             -DCMAKE_BUILD_TYPE=Release `
             -DBILILOCAL_BUILD_APP=OFF `
@@ -52,7 +52,7 @@ jobs:
       - name: Build test targets
         shell: pwsh
         run: |
-          $env:PATH = "$env:QT_ROOT\Tools\mingw810_64\bin;$env:QT_ROOT\5.15.2\mingw81_64\bin;" + $env:PATH
+          $env:PATH = "$env:QT_ROOT\mgw81\mingw64\bin;$env:QT_ROOT\5.15.2\mingw81_64\bin;" + $env:PATH
           cmake --build build -j
 
       - name: Run unit tests

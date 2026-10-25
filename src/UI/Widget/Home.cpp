@@ -554,7 +554,7 @@ void Home::mouseDoubleClickEvent(QMouseEvent * e)
 	clickTimer->stop();
 	// 按位置判断而不是按"条子是否可见"：以前条子可见的 2 秒窗口内双击会被忽略，
 	// 全屏里想双击退出得先等条子收走。现在只要双击点不在条子上就切换。
-	const QPoint p = e->pos();
+	const QPoint p = e->position().toPoint();
 	const bool overUi = (info->isVisible() && info->geometry().contains(p))
 		|| (menu->isShown() && !menu->isWindow() && menu->geometry().contains(p));
 		if (!overUi) {
@@ -567,7 +567,7 @@ void Home::mouseDoubleClickEvent(QMouseEvent * e)
 void Home::mouseMoveEvent(QMouseEvent * e)
 {
 	lastMove = QDateTime::currentMSecsSinceEpoch();
-	QPoint cur = e->pos();
+	QPoint cur = e->position().toPoint();
 	// 悬停冻结：光标压在弹幕上就把它停住（移开自动恢复,无超时——
 	// 鼠标静止时不产生 mousemove,靠续期的定时器会把冻结拆台）。
 	// 拖进度条或悬停在底栏上时不冻结——那不是在看弹幕。
@@ -632,7 +632,7 @@ void Home::mousePressEvent(QMouseEvent * e)
 		holdTimer->start(350);
 	}
 	if (e->button() == Qt::LeftButton) {
-		QPoint p = e->pos();
+		QPoint p = e->position().toPoint();
 		// 底栏整条横带都能点：即使 Info 还没滑出来，按下也直接定位
 		if (p.y() >= height() - infoHeight()) {
 			seekdrag = true;
@@ -644,7 +644,7 @@ void Home::mousePressEvent(QMouseEvent * e)
 			return;
 		}
 		if (sta.isNull()) {
-			sta = e->globalPos();
+			sta = e->globalPosition().toPoint();
 			wgd = pos();
 		}
 		bool inInfo = info->isShown() && info->geometry().contains(p);
@@ -665,11 +665,11 @@ void Home::mouseReleaseEvent(QMouseEvent * e)
 {
 	if (seekdrag) {
 		seekdrag = false;
-		seekTo(e->pos(), true);
+		seekTo(e->position().toPoint(), true);
 		sta = wgd = QPoint();
 		return;
 	}
-	if (!info->geometry().contains(e->pos())) {
+	if (!info->geometry().contains(e->position().toPoint())) {
 		if (aplayer->getState() == APlayer::Play) {
 			info->push(true);
 		}
@@ -683,7 +683,7 @@ void Home::mouseReleaseEvent(QMouseEvent * e)
 		}
 		else {
 			holdTimer->stop();
-			showContextMenu(e->pos());
+			showContextMenu(e->position().toPoint());
 		}
 	}
 	QWidget::mouseReleaseEvent(e);
@@ -741,7 +741,7 @@ void Home::setGeometry(QSize size, bool center)
 	QSize m = minimumSize();
 	QRect r;
 	r.setSize(QSize(qMax(m.width(), size.width()), qMax(m.height(), size.height())));
-	QRect s = QApplication::desktop()->screenGeometry(this);
+	QRect s = screen()->geometry();
 	QRect t = center ? s : geometry();
 	if ((windowFlags()&Qt::CustomizeWindowHint) == 0) {
 		s.setTop(s.top() + style()->pixelMetric(QStyle::PM_TitleBarHeight));

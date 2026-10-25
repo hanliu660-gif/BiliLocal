@@ -2,6 +2,8 @@
 #include "Parse.h"
 #include "../Local.h"
 #include <QtConcurrent>
+// Qt6：QTextCodec 移入 Core5Compat，不再随 <QtCore> 伞头带入
+#include <QTextCodec>
 #include <cstdlib>
 
 namespace
@@ -179,7 +181,7 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 			qThreadPool->reserveThread();
 			const auto &result = QtConcurrent::blockingMappedReduced<
 				QVector<Comment>,
-				QVector<RawChar>,
+				QVector<RawChar> &,
 				std::function<Comment(const RawChar &)>,
 				std::function<void(QVector<Comment> &, const Comment &)>>
 				(raws, map, reduce, QtConcurrent::OrderedReduce | QtConcurrent::SequentialReduce);
@@ -233,7 +235,7 @@ Parse::ResultDelegate Parse::parseComment(const QByteArray &data, Utils::Site si
 			qThreadPool->reserveThread();
 			const auto &result = QtConcurrent::blockingMappedReduced<
 				QVector<Comment>,
-				QVector<QJsonValue>,
+				QVector<QJsonValue> &,
 				std::function<Comment(const QJsonValue &)>,
 				std::function<void(QVector<Comment> &, const Comment &)>>
 				(raws, map, reduce, QtConcurrent::OrderedReduce | QtConcurrent::SequentialReduce);

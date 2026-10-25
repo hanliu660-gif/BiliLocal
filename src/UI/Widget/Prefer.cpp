@@ -625,7 +625,7 @@ QDialog(parent)
 				QStringList sl = sm->stringList();
 				{
 					QTextStream read(&file);
-					read.setCodec("UTF-8");
+					read.setEncoding(QStringConverter::Utf8);
 					QStringList list;
 					QString type = QFileInfo(file).suffix();
 					QRegularExpression rule;
@@ -664,7 +664,7 @@ QDialog(parent)
 				if (!path.endsWith(".sol")){
 					file.open(QIODevice::WriteOnly | QIODevice::Text);
 					QTextStream stream(&file);
-					stream.setCodec("UTF-8");
+					stream.setEncoding(QStringConverter::Utf8);
 					stream << "<filters>" << Qt::endl;
 					for (const QString &iter : rm->stringList()){
 						stream << "  <item enabled=\"true\">t=" << iter << "</item>" << Qt::endl;

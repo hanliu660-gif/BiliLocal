@@ -14,7 +14,7 @@ void Utils::setCenter(QWidget *widget)
 	QRect rect = widget->geometry();
 	QWidget *parent = widget->parentWidget();
 	if (!parent) {
-		rect.moveCenter(QApplication::desktop()->screenGeometry(widget).center());
+		rect.moveCenter(widget->screen()->geometry().center());
 	}
 	else {
 		if (widget->isWindow()) {

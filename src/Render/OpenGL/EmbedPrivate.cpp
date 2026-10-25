@@ -124,7 +124,7 @@ namespace
 			if (host == nullptr){
 				return;
 			}
-			const QPoint gp = e->globalPos();
+			const QPoint gp = e->globalPosition().toPoint();
 			const QPoint hp = host->mapFromGlobal(gp);
 			QWidget *w = host->childAt(hp);
 			// childAt 不看 WA_TransparentForMouseEvents：视频区会命中 ESurface，

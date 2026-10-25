@@ -1,7 +1,7 @@
 # BiliLocal CI：只编 5 个单测目标并运行（单测不链 libvlc，不需要 VLC SDK）。
-# 两个工具链各一条 job：unit = MinGW 8.1（历史主线），unit-msvc = VS2022 v143
-#（Phase 1 编译器切换起，见交接文档 §10）。主程序 + hook-gate 留在本机验证
-#（CI 虚机的 D3D11/GL 不可信，见交接文档 §8）。Qt 经 aqt 安装并缓存。
+# Phase 2 起单 job：Qt 6.8 + MSVC（不钉 -G，用 runner 镜像的默认 VS，坑 51）；
+# qmake/MinGW 线已随 Qt6 迁移删除。主程序 + hook-gate 留在本机验证（CI 虚机的
+# D3D11/GL 不可信，见交接文档 §8）。Qt 经 aqt 安装并缓存。
 name: ci
 
 on:
@@ -21,84 +21,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache Qt 5.15.2 (mingw81) + MinGW 8.1
+      - name: Cache Qt 6.8.3 (msvc2022)
         id: qtcache
         uses: actions/cache@v4
         with:
           path: D:\a\qt
-          key: qt-5.15.2-mingw81-v2
+          key: qt-6.8.3-msvc2022-v1
 
-      - name: Install Qt and MinGW
+      - name: Install Qt (msvc2022_64 + qt5compat)
         if: steps.qtcache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           pip install aqtinstall
-          aqt install-qt windows desktop 5.15.2 win64_mingw81 -O $env:QT_ROOT
-          # aqt 的 tools_mingw810 元数据在 qt.io 已拉不到（checksum 404）；
-          # 改下 mingw-builds 官方 8.1.0（与 Qt 配套的同源构建），用 7zr 解
-          curl.exe -sL -o "$env:RUNNER_TEMP\7zr.exe" "https://www.7-zip.org/a/7zr.exe"
-          curl.exe -sL -o "$env:RUNNER_TEMP\mingw81.7z" "https://sourceforge.net/projects/mingw-w64/files/Toolchains%20targetting%20Win64/Personal%20Builds/mingw-builds/8.1.0/threads-posix/seh/x86_64-8.1.0-release-posix-seh-rt_v6-rev0.7z"
-          & "$env:RUNNER_TEMP\7zr.exe" x -y -o"$env:QT_ROOT\mgw81" "$env:RUNNER_TEMP\mingw81.7z" | Out-Null
-          Test-Path "$env:QT_ROOT\mgw81\mingw64\bin\mingw32-make.exe"
+          aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -m qt5compat -O $env:QT_ROOT
+          # aqt 参数错了也可能 exit 0（本机实测：qttools 模块名不存在仍 rc=0），
+          # 落盘验证才算数（坑 52）
+          if (-not (Test-Path "$env:QT_ROOT\6.8.3\msvc2022_64\bin\Qt6Core.dll")) { exit 1 }
 
-      - name: Configure (tests only)
+      # Qt6 的 lrelease 在 base 包里（qttools 不是 6.x 的模块名）
+      - name: Configure (tests only, default VS generator)
         shell: pwsh
         run: |
-          $env:PATH = "$env:QT_ROOT\mgw81\mingw64\bin;$env:QT_ROOT\5.15.2\mingw81_64\bin;" + $env:PATH
-          cmake -G "MinGW Makefiles" -B build -S . `
-            -DCMAKE_BUILD_TYPE=Release `
+          cmake -A x64 -B build -S . `
             -DBILILOCAL_BUILD_APP=OFF `
-            "-DQt5_DIR=$env:QT_ROOT\5.15.2\mingw81_64\lib\cmake\Qt5"
+            "-DQt6_DIR=$env:QT_ROOT\6.8.3\msvc2022_64\lib\cmake\Qt6"
 
       - name: Build test targets
         shell: pwsh
-        run: |
-          $env:PATH = "$env:QT_ROOT\mgw81\mingw64\bin;$env:QT_ROOT\5.15.2\mingw81_64\bin;" + $env:PATH
-          cmake --build build -j
+        run: cmake --build build --config Release -j
 
       - name: Run unit tests
         shell: pwsh
         run: |
-          $env:PATH = "$env:QT_ROOT\5.15.2\mingw81_64\bin;$env:GITHUB_WORKSPACE\build;" + $env:PATH
+          $env:PATH = "$env:QT_ROOT\6.8.3\msvc2022_64\bin;" + $env:PATH
           ctest --test-dir build --output-on-failure -C Release
-
-  unit-msvc:
-    runs-on: windows-latest
-    env:
-      QT_ROOT: D:\a\qt
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Cache Qt 5.15.2 (msvc2019)
-        id: qtcache
-        uses: actions/cache@v4
-        with:
-          path: D:\a\qt
-          key: qt-5.15.2-msvc2019-v1
-
-      - name: Install Qt (msvc2019_64)
-        if: steps.qtcache.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          pip install aqtinstall
-          aqt install-qt windows desktop 5.15.2 win64_msvc2019_64 -O $env:QT_ROOT
-
-      # runner 镜像的 VS 版本会演进（2026-10 实测：钉 -G "Visual Studio 17 2022"
-      # 报 could not find any instance of Visual Studio），不指定生成器，
-      # 让 CMake 用镜像上实际安装的默认 VS；本机仍显式用 17 2022（BuildTools 17.x）
-      - name: Configure (tests only, VS generator)
-        shell: pwsh
-        run: |
-          cmake -A x64 -B build-msvc -S . `
-            -DBILILOCAL_BUILD_APP=OFF `
-            "-DQt5_DIR=$env:QT_ROOT\5.15.2\msvc2019_64\lib\cmake\Qt5"
-
-      - name: Build test targets
-        shell: pwsh
-        run: cmake --build build-msvc --config Release -j
-
-      - name: Run unit tests
-        shell: pwsh
-        run: |
-          $env:PATH = "$env:QT_ROOT\5.15.2\msvc2019_64\bin;" + $env:PATH
-          ctest --test-dir build-msvc --output-on-failure -C Release

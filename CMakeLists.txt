@@ -4,10 +4,10 @@
 #         -DCMAKE_BUILD_TYPE=Release \
 #         -DQt5_DIR=<qt>/lib/cmake/Qt5
 #   cmake --build build-cmake -j
-# 用法（MSVC + Qt 5.15.2 msvc2019_64，Phase 1 起）：
-#   cmake -G "Visual Studio 17 2022" -A x64 -B build-cmake-msvc \
-#         -DQt5_DIR=<qt-msvc>/lib/cmake/Qt5
-#   cmake --build build-cmake-msvc --config Release -j
+# 用法（MSVC + Qt 6.8 msvc2022_64，Phase 2 起）：
+#   cmake -G "Visual Studio 17 2022" -A x64 -B build-cmake6 \
+#         -DQt6_DIR=<qt6>/lib/cmake/Qt6
+#   cmake --build build-cmake6 --config Release -j
 # THIRDPARTY 默认指向仓库外的 deps\thirdparty，可用 -DTHIRDPARTY=... 覆盖。
 # MinGW 链 gendef/dlltool 再生的 lib/amd64/*.dll.a；MSVC 直接链官方
 # 3.0.24 SDK 的 lib/msvc/*.lib（从 deps\dl\vlc-3.0.24-win64.7z 的 sdk\lib 再取）。
@@ -28,7 +28,10 @@ if(MSVC)
 	add_compile_options(/utf-8)
 endif()
 
-find_package(Qt5 5.15 REQUIRED COMPONENTS Core Gui Widgets Network Concurrent Test LinguistTools)
+# Qt6：QOpenGL* 移入 OpenGL 模块、QOpenGLWindow 移入 OpenGLWidgets、
+# QTextCodec 移入 Core5Compat（GBK 老弹幕文件必须靠它，QStringConverter 只覆盖 UTF 系）
+find_package(Qt6 6.8 REQUIRED COMPONENTS
+	Core Gui Widgets Network Concurrent OpenGL OpenGLWidgets Core5Compat Test LinguistTools)
 
 set(THIRDPARTY "${CMAKE_CURRENT_SOURCE_DIR}/../deps/thirdparty" CACHE PATH "VLC SDK root (include + lib/amd64)")
 
@@ -132,13 +135,15 @@ if(MSVC)
 	target_compile_definitions(BiliLocal PRIVATE NOMINMAX)
 	target_link_directories(BiliLocal PRIVATE ${THIRDPARTY}/lib/msvc)
 	target_link_libraries(BiliLocal PRIVATE
-		Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network Qt5::Concurrent
+		Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Concurrent
+		Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Core5Compat
 		dwmapi libvlc libvlccore
 	)
 else()
 	target_link_directories(BiliLocal PRIVATE ${THIRDPARTY}/lib/amd64)
 	target_link_libraries(BiliLocal PRIVATE
-		Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network Qt5::Concurrent
+		Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Concurrent
+		Qt6::OpenGL Qt6::OpenGLWidgets Qt6::Core5Compat
 		dwmapi vlc vlccore
 	)
 endif()
@@ -160,10 +165,13 @@ set_target_properties(BiliLocal PROPERTIES
 	AUTORCC ON
 )
 
-qt5_add_translation(BILILOCAL_QM
+qt6_add_translation(BILILOCAL_QM
 	res/zh_CN.ts
 	res/zh_TW.ts
 )
+# qt*_add_translation 只声明输出不排产——不挂 ALL 目标的话 CMake 树从编不出 qm
+#（Phase 1/2 之前 dist\locale 的 qm 都是 qmake 时代的产品，此处首次真正由 CMake 生成）
+add_custom_target(translations ALL DEPENDS ${BILILOCAL_QM})
 
 if(MINGW)
 	target_link_options(BiliLocal PRIVATE $<$<CONFIG:Release>:-Wl,-s>)
@@ -179,14 +187,14 @@ function(bili_test name)
 	cmake_parse_arguments(ARG "" "" "SOURCES;HEADERS;LIBS" ${ARGN})
 	add_executable(${name} ${ARG_SOURCES} ${ARG_HEADERS})
 	target_include_directories(${name} PRIVATE src)
-	target_link_libraries(${name} PRIVATE Qt5::Core Qt5::Gui Qt5::Test ${ARG_LIBS})
+	target_link_libraries(${name} PRIVATE Qt6::Core Qt6::Gui Qt6::Test Qt6::Core5Compat ${ARG_LIBS})
 	set_target_properties(${name} PROPERTIES AUTOMOC ON)
 endfunction()
 
 bili_test(tst_parse
 	SOURCES test/tst_parse.cpp src/Access/Parse.cpp src/Utils.cpp
 	HEADERS src/Access/Parse.h
-	LIBS Qt5::Network Qt5::Concurrent
+	LIBS Qt6::Network Qt6::Concurrent
 )
 
 bili_test(tst_config
@@ -202,13 +210,13 @@ bili_test(tst_shield
 bili_test(tst_load
 	SOURCES test/tst_load.cpp src/Access/Load.cpp src/Access/Parse.cpp src/Config.cpp src/Utils.cpp
 	HEADERS src/Access/Load.h src/Config.h src/Local.h src/Model/Comment.h src/Model/Danmaku.h src/Player/APlayer.h
-	LIBS Qt5::Network Qt5::Concurrent
+	LIBS Qt6::Network Qt6::Concurrent
 )
 
 bili_test(tst_list
 	SOURCES test/tst_list.cpp src/Model/List.cpp src/Access/Load.cpp src/Access/Parse.cpp src/Config.cpp src/Utils.cpp
 	HEADERS src/Model/List.h src/Access/Load.h src/Config.h src/Local.h src/Model/Comment.h src/Model/Danmaku.h src/Player/APlayer.h
-	LIBS Qt5::Network Qt5::Concurrent
+	LIBS Qt6::Network Qt6::Concurrent
 )
 
 enable_testing()

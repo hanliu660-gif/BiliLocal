@@ -364,7 +364,7 @@ bool Info::eventFilter(QObject *o, QEvent *e)
 				return false;
 			}
 			const int w = qMax(timeS->width() - 1, 1);
-			const double ratio = qBound(0.0, me->pos().x() / double(w), 1.0);
+			const double ratio = qBound(0.0, me->position().x() / double(w), 1.0);
 			// 末尾留 500ms：正好跳到 duration 会被 VPlayer::setTime 判成
 			// 「已到片尾」而直接 stop()，拖到最右就变成了停播。
 			const qint64 target = qMin(qint64(duration * ratio), qMax<qint64>(duration - 500, 0));

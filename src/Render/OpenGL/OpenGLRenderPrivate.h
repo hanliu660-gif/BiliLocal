@@ -4,6 +4,8 @@
 #include "OpenGLAtlas.h"
 #include <QtCore>
 #include <QtGui>
+// Qt6：QOpenGLShaderProgram/QOpenGLBuffer/QOpenGLFunctions 从 QtGui 挪进 OpenGL 模块
+#include <QtOpenGL>
 
 class OpenGLRenderPrivate :public ARenderPrivate, public QOpenGLFunctions
 {

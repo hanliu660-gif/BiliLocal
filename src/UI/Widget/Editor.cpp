@@ -295,10 +295,10 @@ namespace{
 		void mouseMoveEvent(QMouseEvent *e)
 		{
 			if (m_point.isNull()){
-				m_point = e->pos();
+				m_point = e->position().toPoint();
 			}
 			else{
-				m_shift = e->x() - m_point.x();
+				m_shift = int(e->position().x()) - m_point.x();
 				update();
 			}
 		}
@@ -307,7 +307,7 @@ namespace{
 		{
 			if (m_point.isNull() == false){
 				int w = width() - 100 * logicalDpiX() / 96;
-				qint64 d = (e->x() - m_point.x()) * m_duration / w;
+				qint64 d = (int(e->position().x()) - m_point.x()) * m_duration / w;
 				for (qint64 it : m_magnet){
 					if (qAbs(d + m_record->delay - it) < m_duration / (w / 5) + 1){
 						d = it - m_record->delay;

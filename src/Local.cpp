@@ -180,16 +180,13 @@ namespace
 
 int main(int argc, char *argv[])
 {
-	QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-	// Qt5 默认把缩放按整数倍取整：150% 的系统缩放会被抬到 200%，整个界面大 1/3；
-	// 改成跟随系统的小数缩放，和资源管理器/浏览器一致
+	// Qt6 恒开高 DPI（AA_EnableHighDpiScaling/AA_UseHighDpiPixmaps 已随 Qt5 移除）；
+	// PassThrough 取整保留：150% 的系统缩放不再被抬到整数倍，和资源管理器/浏览器一致
 	QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
-	// 位图图标（/Picture 下的 png、窗口图标）在高 DPI 下按 @2x 取图，避免被拉伸发糊
-	QGuiApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 	// 老显卡的 ANGLE（D3D9→GLES）兜底：必须在 QGuiApplication 构造之前设，
 	// 否则是空操作——旧代码把 a.setAttribute(AA_UseOpenGLES) 写在构造之后，从没生效过。
 	// 默认不开：弹幕层是透明 QOpenGLWindow 叠加，ANGLE 下没实测过；需要时临时试
-	// BILILOCAL_GL=angle 启动。
+	// BILILOCAL_GL=angle 启动（Qt6 的 Windows 官方包不再带 ANGLE，此路径仅存档）。
 	if (qEnvironmentVariable("BILILOCAL_GL") == QLatin1String("angle")) {
 		QGuiApplication::setAttribute(Qt::AA_UseOpenGLES);
 	}

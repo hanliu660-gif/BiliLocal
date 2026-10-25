@@ -32,7 +32,11 @@ OpenGLAtlas::OpenGLAtlas(OpenGLRenderPrivate *render)
 
 OpenGLAtlas::~OpenGLAtlas()
 {
-	render->glDeleteTextures(1, &cached);
+	// 刻意不删纹理：页的 GL 释放只走 OpenGLAtlasMgr::collect()（批量、且保证
+	// 上下文当前）。走到这里还有纹理的情况只有进程退出——context 马上销毁，
+	// 对象随 context 回收；Qt6 的退出序列里调 glDelete* 会长时间拖住 GUI 线程
+	// 甚至空指针崩溃（dumps 24384/32884 挂起于 glDeleteFramebuffers，
+	// 3148/36200 同析构链 ACCESS_VIOLATION——交接文档坑 55）。
 }
 
 void OpenGLAtlas::insert(QList<QImage> &source, int effect, QList<OpenGLSprite> &result)
@@ -110,8 +114,8 @@ OpenGLAtlasMgr::OpenGLAtlasMgr(OpenGLRenderPrivate *render)
 
 OpenGLAtlasMgr::~OpenGLAtlasMgr()
 {
-	render->glDeleteFramebuffers(1, &buffer);
-	render->glDeleteTextures(1, &upload);
+	// 退出路径零 GL 调用（同 ~OpenGLAtlas 的理由）：FBO 与纹理随 context 销毁
+	// 回收。atlases/graveyard 里的页由 ~OpenGLAtlas 无 GL 地释放。
 }
 
 uint qHash(const OpenGLAtlasMgr::CreateInfo &i, uint seed = 0)
@@ -267,7 +271,17 @@ void OpenGLAtlasMgr::squeeze(int timeout)
 
 void OpenGLAtlasMgr::collect()
 {
-	while (!graveyard.isEmpty()){
-		delete graveyard.takeFirst();
+	// 批量删除：把整批页的纹理并成一次 glDeleteTextures（一次驱动往返），
+	// 替代过去逐页 delete——每页各打一发 glDeleteTextures，Qt6 下这类调用
+	// 每次都可能被驱动拖住，播放中的小顿挫主要来自这里
+	if (!graveyard.isEmpty() && render){
+		QList<GLuint> ids;
+		ids.reserve(graveyard.size());
+		for (OpenGLAtlas *page : graveyard) {
+			ids.append(page->getTexture());
+		}
+		render->glDeleteTextures(ids.size(), ids.constData());
 	}
+	qDeleteAll(graveyard);
+	graveyard.clear();
 }

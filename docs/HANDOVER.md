@@ -64,6 +64,7 @@
 - **Qt6 产物**：`dist-msvc\BiliLocal.exe` **978,432 B / SHA256 `2b042f41…`**（构建树 `build-cmake6\`，Qt 6.8.3 msvc2022_64 + VS 生成器；qm 首次由 CMake 真编并部署）。**等 Phase 3 人眼清单**，全过后与 `dist\`（MinGW/Qt5，`6C55F692…`）对调定稿。
 - **Qt6 门禁实测（2026-10-26）**：构建 **0 警告**；ctest **5/5 目标 = 41/41**（9+7+9+12+4，Totals 原文已核）；hook-gate 对 dist-msvc **PASS**（三标记全中、`Load: processed … pool=1`、`Program Link Failed`+`syntax error` 计数 0）；**DPI 探针（Qt6 无窗口程序，150% 屏）：dpr=1.50 / logical 1707×960 / physical 2560×1440**——d98327b 的成果在 Qt6 恒开高 DPI 下无回退。
 - **qmake 遗留已删（Phase 2）**：`.pro`×6（主 + 5 测试）、`build\` + 6 个 qmake 测试树；`tools\run-tests.ps1`（pre-push 门禁）改 `cmake --build build-cmake6 + ctest`，实测走通（"100% tests passed out of 5"）。
+- **Phase 3 首轮反馈修复（2026-10-26 晚，坑 55）**：关闭长卡顿 + 间歇崩溃——图集析构链退出路径去 GL 化 + `collect()` 批量删除。实测：**关闭 2.0–2.1s ×3**（修复前 2.0–8.1s；Qt5 基线 2.0s）；**播放 CPU 7.1%/核**（Qt5 基线 9.7%，重 fixture 1 万条弹幕）；hook-gate PASS。exe `dist-msvc\BiliLocal.exe` **978,944 B / `f6b73df1…`**。
 - **CI**：单 job `unit` = Qt 6.8.3 msvc2022_64 + qt5compat（aqt，缓存 key `qt-6.8.3-msvc2022-v1`），不钉 `-G`（坑 51）；aqt 模块名错也可能 exit 0，CI 里落盘验 `Qt6Core.dll`（坑 52）。
 - **Phase 1 结案**：千夏 2026-10-26 开关 `dist-msvc\BiliLocal.exe`（当时为 Qt5/MSVC，878,080 B `b4e39ad1…`）验收通过；回滚锚 tag `v0.6.0-qt5-final` 仍有效。
 
@@ -224,6 +225,7 @@ Copy-Item C:\DSH\APP\BiliLocal\build-cmake6\Release\BiliLocal.exe C:\DSH\APP\Bil
 52. **aqt 的两个 6.x 陷阱**：①Qt 6 没有 `qttools` 模块——lrelease/lupdate 在 base 包里，`aqt install-qt … -m qttools` 报 `The packages ['qttools'] were not found`；②**报这个错时 aqt 仍然 exit 0**（本机实测），后台任务/脚本看着是绿的其实什么都没装。修法 = 只 `-m qt5compat`，装完落盘验 `bin\Qt6Core.dll`（CI 已内置）。**教训：外部工具的 exit code 不可全信，关键步骤要有产物存在性断言**
 53. **Qt6 的 `QtConcurrent::blockingMappedReduced` sequence 版是转发引用**：签名 `<ResultType, Sequence, MapFunctor, ReduceFunctor>(Sequence &&sequence, …)`——Qt5 时代显式把 `Sequence` 钉成值类型 `QVector<T>`，形参就是右值引用，左值序列绑不上，编译器只剩迭代器重载可候选（报"没有重载可以转换所有参数类型"，且候选注记把 4 个模板实参错位展示，极难读）。修法 = 模板实参写 `QVector<T> &`（或传 `std::move`）。**教训：Qt6 把 QtConcurrent 的映射版重载整个重做过，显式模板实参要对 6.8 的头文件核对，别背 Qt5 的**
 54. **迁移影响清单按"类型名"扫描会漏调用点**：§11 清单写了 `QDesktopWidget` 0 命中，但 `QApplication::desktop()->screenGeometry()` 这类**调用点**（类型名不出现）漏网两处（Home.cpp/WidgetInterfacePrivate.cpp），到 Qt6 编译才炸。修法 = `screen()->geometry()`（QWidget::screen 自 5.14 起有）。**教训：查 API 存废要连方法名一起 grep（`::desktop(`、`->desktop(`），只查类名必漏**
+55. **Qt6 下退出时的 GL 删除会挂住/崩溃（图集析构链，Phase 3 用户实测暴露）**：关闭窗口时 GUI 线程在 `~OpenGLAtlasMgr`/`~OpenGLAtlas` 的 `render->glDeleteFramebuffers/glDeleteTextures` 上被驱动拖住数秒（弹幕池越大越久：0 条 2s、1 万条 2~8s），同一析构链还会空指针崩溃。**取证路径值得记**：WER LocalDumps 落的 4 份转储里，**挂起报告的"异常地址"就是卡死线程的当前 IP**——用 pip 的 `minidump`+`pefile` 解析（本机无 cdb）：异常 IP 对 Qt6Gui.dll 导出表取最近符号 = `glDeleteFramebuffers+0xc`，两份挂起同址独立复现，另两份同链 ACCESS_VIOLATION。修法 = ①退出路径零 GL 调用（对象随 context 销毁回收，退出补删本来就是无效功）；②播放中 `collect()` 批量删除（一次 `glDeleteTextures(n, ids)` 顶逐页 N 次驱动往返——每次往返都可能被驱动拖住，播放中的小顿挫同源）。实测：关闭 2.0–2.1s×3（修复前 2.0–8.1s，Qt5 基线 2.0s）。**教训：①AppHang 的 dump 与崩溃 dump 走同一个 LocalDumps 目录，别只当崩溃用；②Qt6 改了窗口/上下文销毁时序，"退出时补删 GL 对象"的代码全部要重审；③析构链里持有兄弟对象指针（atlas→render）在销毁序变化下随时变悬空**
 
 ---
 

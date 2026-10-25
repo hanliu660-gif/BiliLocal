@@ -127,7 +127,8 @@ public:
 	void squeeze(int timeout);
 
 	// 真正释放 squeeze() 标记掉的图集。必须在 paintGL 里（上下文当前、且绑的
-	// 是这块 surface）调用；在别处 delete 会让 ~OpenGLAtlas 的 glDeleteTextures 落空。
+	// 是这块 surface）调用；删除是批量的——一次 glDeleteTextures 顶每页一次
+	// 驱动往返（Qt6 下逐页删会拖住 GUI 线程，见交接文档坑 55）。
 	void collect();
 
 private:

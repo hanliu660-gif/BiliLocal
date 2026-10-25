@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> **更新时间**：2026-10-25（**第十七版：模型层单测**——tst_shield/tst_load 共 21 例入库+负向对照、一键测试门禁 run-tests.ps1、钩子注释纠偏、VC 运行库入 dist、deps 归档与来源记录、Qt 6 纸面预案（仅备案未启动）；代码事实按 2026-10-25 20:09 前后实测。同日修订：验证分工表述按用户澄清收窄——"只能人眼验证"实为"仅真实右键到弹幕这一个动作需要本人"，见 §2/§3/§6-14）
+> **更新时间**：2026-10-25（**第十七版：模型层单测**——tst_shield/tst_load 共 21 例入库+负向对照、一键测试门禁 run-tests.ps1、钩子注释纠偏、VC 运行库入 dist、deps 归档与来源记录、Qt 6 纸面预案（仅备案未启动）；代码事实按 2026-10-25 20:09 前后实测。同日修订：验证分工表述按用户澄清收窄——"只能人眼验证"实为"仅真实右键到弹幕这一个动作需要本人"，见 §2/§3/§6-14，源码头注同步纠偏 `5ecd888`）
 >
 > **这份文档写给谁**：写给"下一会话接手这个工程的人/AI"。先读 §0 约束，再看 §2 当前状态，动手前看 §6 坑。
 >
@@ -61,7 +61,7 @@
 ## 2. 当前状态（2026-10-25 18:46 实测）
 
 - **exe**：`dist\BiliLocal.exe` = **931,840 字节**，SHA256 **`2C0005D3…`**（构建自 `0f25480`，20:00 前后部署；该提交只改注释，exe 与 `build\release\BiliLocal.exe` 逐字节一致）。**构建可复现性（2026-10-25 18:46 实测三组）**：①`dist` 与 `build\release` 逐字节相同（每次部署都 sha256 校验）；②同一构建树连续两次全量 clean 重建：931,840 B，只差 **4 字节**（offset 137/138、217/218 = PE 时间戳/校验和）；③把 `git archive HEAD` 导到**另一个目录**重建：尺寸同为 931,840 B，但差 **2,692 字节**（4 字节 PE 头 + 2,688 字节在代码/数据区），成因未定。⇒ **尺寸可复现、字节不完全可复现：判断"是不是同一份源码"只能看 git 提交号，别比哈希。**
-- **源码**：`master` = 最新提交（**从 05:30 起改为不写死文档哈希**——写死的值在提交瞬间就过期，当前值用 `git log -1 --oneline` 取）；**最后一个代码提交 = `0f25480`**（钩子注释纠偏，纯注释）← `0c74654`（tst_shield/tst_load 新单测）← `7bf39d2`（同一视频只加载一份弹幕）← `30466b0`（弹幕 shader 修好、白方块消失）← `600b369`（审计第 5 批）← `9edac7c`（审计第 4 批）← `1b10dc0`（审计第 3 批）← `2f8a1d1`（审计第 2 批）← `cd3b0fe`（审计第 1 批）← `d98327b`（UI/DPI）← `81aab8f` ← `a5f95fe` ← `a9fbcb3` ← `63f9a4b` ← `8d9c8ec` ← `44fbb3e` ← `7f8685a` ← `473ba62` ← `3f86f74` ← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`。上游 `9d1cb05`；回滚 tag `v0.5.0-vmem` = `46b68b9`；远端 `github` = `github.com/hanliu660-gif/BiliLocal`。
+- **源码**：`master` = 最新提交（**从 05:30 起改为不写死文档哈希**——写死的值在提交瞬间就过期，当前值用 `git log -1 --oneline` 取）；**最后一个代码提交 = `5ecd888`**（tst_parse 头注纠偏，纯注释）← `0f25480`（钩子注释纠偏，纯注释）← `0c74654`（tst_shield/tst_load 新单测）← `7bf39d2`（同一视频只加载一份弹幕）← `30466b0`（弹幕 shader 修好、白方块消失）← `600b369`（审计第 5 批）← `9edac7c`（审计第 4 批）← `1b10dc0`（审计第 3 批）← `2f8a1d1`（审计第 2 批）← `cd3b0fe`（审计第 1 批）← `d98327b`（UI/DPI）← `81aab8f` ← `a5f95fe` ← `a9fbcb3` ← `63f9a4b` ← `8d9c8ec` ← `44fbb3e` ← `7f8685a` ← `473ba62` ← `3f86f74` ← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`。上游 `9d1cb05`；回滚 tag `v0.5.0-vmem` = `46b68b9`；远端 `github` = `github.com/hanliu660-gif/BiliLocal`。
 - **单测**：四个目标共 **37 例全绿**（2026-10-25，`tools\run-tests.ps1` 一键复跑）：`tst_parse` **9/9**、`tst_config` **7/7**、`tst_shield` **9/9**、`tst_load` **12/12**。**负向对照做了两个**：①把 `tst_config` 两处 `QWriteLocker locker(&lock);` 注释掉重建，`concurrentWriters` 直接 SIGSEGV（`rc=139`）；②把 `Load.cpp` 嗅探的 `.trimmed()` 去掉重建，`blankLineBeforeXml` 变红（0 条弹幕）、其余 11 例不受影响 ⇒ 用例不是空跑。List 与 Danmaku 本体因依赖整套服务定位器 + APlayer（会拖进 VPlayer/libvlc）暂不独立成测（见 §10-4）。
 - **编译警告**：**42 → 3**（连清两轮：`a5f95fe` 清 6 个位置，`81aab8f` 清最后 1 个；`0c74654` 新增的两个测试目标构建 **0 警告**）。剩下 3 条是**刻意留的**：`-Wimplicit-fallthrough` 1 条（`src\src\Model\Running.cpp:283` 的 `case 1` 落到 `case 0`，入队本来就该两模式同路）、`libvlc_video_set_subtitle_file` 2 条（`src\src\Player\VPlayer.cpp:476`，VLC 3 标弃用但照常可用，换 VLC 4 才必须改）。
 - **i18n**：源码全英文串，中文走 `dist\locale\zh_CN\bililocal.qm`（187/187 全译，含繁体）。改 UI 文案后：lupdate → 补译 → lrelease → 部署 qm。
@@ -101,6 +101,7 @@
 | `7bf39d2` | 同一视频弹幕重复（用户报"同样的弹幕会出现两次"）：List 里同时存在模板 `%{Path}/%{File}.xml`（正斜杠）与"命令行带 xml 打开"登记的绝对路径（反斜杠），`Load` 按 source 字符串全等去重失效 ⇒ 加载两次。`case Records:` 改按 `QFileInfo::canonicalFilePath()`（取不到退回 `cleanPath(fromNativeSeparators())`）本轮去重；实测 `Load: processed` 两条→一条 |
 | `0c74654` | 单测第 3 轮（模型层补覆盖）：`tst_shield` 9 例（空/坏正则跳过、m/u/t 往返、isBlocked 全语义、aboutToSave 落盘往返——顺带坐实了 Shield 构造连接无上下文对象这个隐性约束）+ `tst_load` 12 例（真文件真嗅探：BOM/空行两大历史回归、四格式分支、AcFun 兜底、缺文件报错、队列顺序、延迟平移）；负向对照 = 去 `.trimmed()` 后 `blankLineBeforeXml` 变红。fixture 的两个教训见 §6-43/44 |
 | `0f25480` | 钩子注释纠偏：`EmbedPrivate.cpp` 的"正式构建不编译"改为"无条件编进所有构建"（§8 的 ⚠️ 项结案）；纯注释改动，exe 尺寸不变重新部署 |
+| `5ecd888` | `tst_parse.cpp` 头注纠偏：删掉"Danmaku/Shield 覆盖不到"的过时说法（Shield 已由 `tst_shield` 覆盖）与"人眼弹幕"旧表述（见本版验证分工修订）；纯注释 |
 
 ---
 

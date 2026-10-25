@@ -79,7 +79,7 @@
 - **运行库**：VLC **3.0.24**（d3d11 直出）；`dist\plugins` 里**混住着 Qt 的四个插件目录**（`platforms\` `imageformats\` `mediaservice\` `styles\`），整目录替换 VLC 时必须把它们合并到顶层，否则 Qt 起不来（流程见 §9）。dist 只带 exe 实际导入的 5 个 Qt DLL（Concurrent/Core/Gui/Network/Widgets）。
 - **配置**：`Output=Embed` 已是唯一输出（键保留但代码不再读）；`Immediate=True`；`HardwareDecode` 已无消费者（d3d11 固定开启，`Arguments` 手写 `--avcodec-hw=`/`--vout=` 仍可覆盖）。
 - **备份**：git 历史 = 本地 `src\.git` + GitHub 双保险；vmem 旧线源码完整在 tag `v0.5.0-vmem`（重编需自备 VLC 2.2.8）。
-- **未决事项**：**Phase 1 已落地，只差千夏本人开关一次 `dist-msvc\BiliLocal.exe` 验收**（§10）；验收过后进 Phase 2（Qt 5.15 → 6.8 LTS，核心会话）。其余旧裁定不变（dist 不再瘦身、Z: 长时段观察结案）。
+- **未决事项**：**Phase 1 结案（2026-10-26 千夏本人开关 `dist-msvc\BiliLocal.exe` 验收通过）**；**Phase 2（Qt 5.15 → 6.8 LTS）进行中**。其余旧裁定不变（dist 不再瘦身、Z: 长时段观察结案）。
 - **CI**：`.github/workflows/ci.yml`——push 到 master 触发，runner 上 aqt 装 Qt 5.15.2 mingw81 + SourceForge mingw-builds 8.1.0（坑 48），`BILILOCAL_BUILD_APP=OFF` 只编测试目标并 ctest；已两连绿（日志实证 "100% tests passed out of 5"），Qt/MinGW 走 actions/cache（key `qt-5.15.2-mingw81-v2`）。查状态：认证 API 或徽章 SVG。**迁移期间每次 push 都会跑，红了不许推**。
 - **验证分工**：agent 工具几乎全能自验——日志取证（`hover: freeze/release`、`Load: processed … pool=N`、`Program Link Failed` 计数）、进程内钩子注入（双击全屏/单击暂停/悬停扫掠/拍点右键）、时序验证、对话框巡览截图；**用户本人只做"真实右键点到弹幕"这一个动作**（物理点击过不了三层窗口栈的焦点/显示盲区，合成事件替代不了，见 `a4b5acf`）与主观体验类验收。
 
@@ -325,7 +325,7 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 > hook-gate 对 `dist-msvc` PASS、pre-push MinGW 41 例绿、CI 双 job **绿**（`25e3751`；首跑 `f81e6ee` 挂在
 > runner 无 VS2022，坑 51 修掉）。
 > 产物 `dist-msvc\BiliLocal.exe` 878,080 B / `b4e39ad1…`；**dist 本体未动**（`6c55f692…`，MinGW 线照常可用）。
-> 用户开关验收过后才进 Phase 2。
+> 用户开关验收过后才进 Phase 2。**✅ 2026-10-26 千夏开关验收通过（"没问题"），Phase 1 结案。**
 
 **Phase 2 · Qt 5.15 → 6.8 LTS（核心会话）**
 - `Parse.cpp:9-48` 的 `QTextCodec` → Core5Compat 的 QTextCodec（**`QStringConverter` 只覆盖 UTF 系，GBK 老弹幕文件必须靠 Core5Compat**——漏了的表现是"某些 xml 静默 0 条弹幕"，坑 35 家族）。

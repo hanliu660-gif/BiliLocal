@@ -17,3 +17,6 @@
 *.opendb
 *.db
 bin
+# hand-authored icon resource for the CMake build (the *.rc ignore above
+# targets legacy MSVC scaffolding)
+!res/BiliLocal.rc

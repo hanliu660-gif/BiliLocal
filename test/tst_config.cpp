@@ -36,6 +36,21 @@ Local *Local::instance()
 	return nullptr;
 }
 
+// CMake 的 AUTOMOC 会把 include 链里的 Local.h 一并 moc，链接需要这三个符号
+// （qmake 时代 HEADERS 没列 Local.h 所以从没链接过它们）
+Local::Local(QObject *parent)
+	: QObject(parent)
+{
+}
+
+Local::~Local()
+{
+}
+
+void Local::tryLocal(QString)
+{
+}
+
 // ---- 测试 ----------------------------------------------------------------
 class tst_Config : public QObject
 {

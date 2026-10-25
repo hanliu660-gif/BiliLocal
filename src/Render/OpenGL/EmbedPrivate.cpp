@@ -28,8 +28,9 @@ namespace
 			setFlags(flags() | Qt::Tool | Qt::FramelessWindowHint | Qt::WindowDoesNotAcceptFocus);
 			QObject::connect(this, &EWindow::frameSwapped, std::bind(&OpenGLRenderPrivate::onSwapped, render));
 #ifdef BILILOCAL_EMBED_TEST
-			// 自动化验证：进程内注入合成鼠标事件走完整路由（正式构建不编译，
-			// 且仅当设置了 BILILOCAL_EMBED_TEST 环境变量才启动）
+			// 自动化验证：进程内注入合成鼠标事件走完整路由。本段经
+			// BiliLocal.pro 的 DEFINES 无条件编进所有构建（含发布 exe），
+			// 仅当设置了 BILILOCAL_EMBED_TEST 环境变量才启动
 			if (qEnvironmentVariableIsSet("BILILOCAL_EMBED_TEST")){
 				QTimer *wiggle = new QTimer(this);
 				QObject::connect(wiggle, &QTimer::timeout, [this](){

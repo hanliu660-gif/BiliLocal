@@ -67,7 +67,7 @@
 
 - **源码**：`master` = `f81e6ee`（**Phase 1 提交**：CMakeLists MSVC 分支 + tst_parse fixture 反斜杠 + CI unit-msvc job）← `74a7569`（文档 19 版）。远端已同步。
 - **MSVC 产物**：`dist-msvc\BiliLocal.exe` **878,080 B / SHA256 `b4e39ad1…`**（构建树 `build-cmake-msvc\`，VS2022 BuildTools cl 14.44 / SDK 10.0.26100 + Qt 5.15.2 `deps\5.15.2\msvc2019_64`）；**等待千夏本人开关一次完成验收**，验收前 dist 本体（MinGW 线）不动。
-- **MSVC 门禁实测（2026-10-26）**：构建 **0 警告**；ctest **5/5 目标 = 41/41**（9+7+9+12+4）；hook-gate 对 dist-msvc **PASS**（三标记全中、`Load: processed … pool=1`、`Program Link Failed` 计数 0、图标 ExtractAssociatedIcon=True）；pre-push 的 MinGW 41 例照常全绿。CI 改为 **unit（MinGW）+ unit-msvc（VS 生成器）双 job**，缓存 key `qt-5.15.2-msvc2019-v1`。
+- **MSVC 门禁实测（2026-10-26）**：构建 **0 警告**；ctest **5/5 目标 = 41/41**（9+7+9+12+4）；hook-gate 对 dist-msvc **PASS**（三标记全中、`Load: processed … pool=1`、`Program Link Failed` 计数 0、图标 ExtractAssociatedIcon=True）；pre-push 的 MinGW 41 例照常全绿。CI 改为 **unit（MinGW）+ unit-msvc（VS 生成器）双 job**，缓存 key `qt-5.15.2-msvc2019-v1`；首跑（`f81e6ee`）unit-msvc 挂在 configure——runner 镜像已无 VS2022（坑 51），改不钉生成器后 **`25e3751` 双 job 绿**。
 - **依赖动作**：官方 `libvlc.lib`/`libvlccore.lib`（MSVC 导入库）从 `deps\dl\vlc-3.0.24-win64.7z` 的 `sdk\lib\` 再取入 `deps\thirdparty\lib\msvc\`（连同 18/22 字节的 `vlc.lib`/`vlccore.lib` 转发桩）；hook-gate.ps1 加 `-Dist`（并行运行时根）。MSVC Qt 含 moc/rcc/lrelease，LinguistTools 可用。
 
 
@@ -240,6 +240,7 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 48. **aqt 的 `tools_mingw810` 元数据已废，且 mingw-builds 的 7z 是 BCJ2 滤波器**：CI 首跑与本机均复现 `tools_mingw810/Updates.xml` checksum 拉取失败（qt.io 侧问题，非代理）。MinGW 8.1 改从 SourceForge 的 mingw-builds 官方存档下（与 Qt 配套同源：x86_64-posix-seh 8.1.0）；py7zr 遇 BCJ2 直接 `UnsupportedCompressionMethodError`，用独立 `7zr.exe`（7-zip.org，600KB）解。CI 完整流程见 §8 的 CI 段
 49. **MSVC 在中文 Windows 上默认按 GBK 读无 BOM 源码**：仓库测试文件是无 BOM UTF-8 + 中文注释，MinGW 默认 UTF-8 所以从没暴露；MSVC 把 UTF-8 字节当 GBK 解，某个多字节序列可以吞掉紧随的声明字符，表现为成片的 `C2334 "unexpected token before {"` + 辅助函数 `C3861 找不到标识符`，看起来像代码坏了其实一个字符都没错。修法 = CMake 全局 `add_compile_options(/utf-8)`（带 BOM 的文件以 BOM 为准，互不干扰）。主程序目标先加了 /utf-8 所以一次通过，测试目标没加就全挂——**这坑只在"部分目标加了"时最迷惑**
 50. **`\&` 是未知转义：GCC 静默解码成 `&`，MSVC C4129 才报警**：tst_parse 的录播姬 fixture 写的 `{\&quot;user_hash\&quot;…}`，`\&quot;` 实际解码 = `&quot;`——**反斜杠丢了**，恰好是坑 27 自己警告的"合成样本缺反斜杠 = 假绿"形状（真实录播姬字节里内层 JSON 引号写作 `\&quot;`，带反斜杠）。修法是把 fixture 改成 `\\&quot;`（C++ 层双反斜杠 ⇒ xml 层真反斜杠），`hashRe` 本就容忍可选反斜杠，41 例不变、反斜杠分支从此有覆盖。教训：**换编译器的价值之一就是它替你抓GCC 沉默的老问题**
+51. **windows-latest 镜像不再保证装 VS2022**：CI 钉 `-G "Visual Studio 17 2022"` 报 `could not find any instance of Visual Studio`（2026-10-26 实测，runner 镜像的 VS 随年代演进）。修法 = CI 不指定生成器、只给 `-A x64`，让 CMake 选镜像实际安装的默认 VS；本机 BuildTools 是 17.x，显式 17 2022 不受影响。**教训：CI 配方里凡是"镜像预装了 X"的假设都会过期，能不钉就不钉**
 
 ---
 
@@ -321,7 +322,8 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 > 官方 `.lib` **不是**从归档 zip 再取（那是 thirdparty 快照，只有再生 `.dll.a`），而是从 `deps\dl\vlc-3.0.24-win64.7z`
 > 的 `sdk\lib\` 用 7zr 再取入 `deps\thirdparty\lib\msvc\`。CMakeLists 加 MSVC 分支（全局 `/utf-8`、NOMINMAX、
 > 链接分流），顺带修了坑 49/50——其中坑 50 是 fixture 反斜杠缺失的真修。证据：MSVC **0 警告**、ctest **41/41**、
-> hook-gate 对 `dist-msvc` PASS、pre-push MinGW 41 例绿、CI 双 job（提交 `f81e6ee`）。
+> hook-gate 对 `dist-msvc` PASS、pre-push MinGW 41 例绿、CI 双 job **绿**（`25e3751`；首跑 `f81e6ee` 挂在
+> runner 无 VS2022，坑 51 修掉）。
 > 产物 `dist-msvc\BiliLocal.exe` 878,080 B / `b4e39ad1…`；**dist 本体未动**（`6c55f692…`，MinGW 线照常可用）。
 > 用户开关验收过后才进 Phase 2。
 

@@ -77,7 +77,6 @@ void OpenGLRender::draw(QRect rect)
 namespace
 {
 	const char *vShaderDanm =
-		"precision lowp float;\n"
 		"attribute mediump vec4 a_VtxCoord;\n"
 		"attribute mediump vec2 a_TexCoord;\n"
 		"attribute vec4 a_ForeColor;\n"
@@ -99,7 +98,6 @@ namespace
 		"}\n";
 
 	const char *fShaderDanm =
-		"precision lowp float;\n"
 		"varying mediump vec2 v_vTexCoord;\n"
 		"varying vec3 v_ForeColor;\n"
 		"varying vec3 v_BackColor;\n"
@@ -120,7 +118,6 @@ namespace
 		"}\n";
 
 	const char *vShaderPost =
-		"precision lowp float;\n"
 		"attribute mediump vec4 a_VtxCoord;\n"
 		"attribute mediump vec2 a_TexCoord;\n"
 		"varying mediump vec2 v_vTexCoord;\n"
@@ -131,7 +128,6 @@ namespace
 		"}\n";
 
 	const char *fShaderStro =
-		"precision lowp float;\n"
 		"varying mediump vec2 v_vTexCoord;\n"
 		"uniform sampler2D u_SamplerA;\n"
 		"uniform mediump vec2 u_vPixelSize;\n"
@@ -149,7 +145,6 @@ namespace
 		"}\n";
 
 	const char *fShaderProj =
-		"precision lowp float;\n"
 		"varying mediump vec2 v_vTexCoord;\n"
 		"uniform sampler2D u_SamplerA;\n"
 		"uniform mediump vec2 u_vPixelSize;\n"
@@ -164,7 +159,6 @@ namespace
 		"}\n";
 
 	const char *fShaderGlow =
-		"precision lowp float;\n"
 		"varying mediump vec2 v_vTexCoord;\n"
 		"uniform sampler2D u_SamplerA;\n"
 		"uniform mediump vec2 u_vPixelSize;\n"

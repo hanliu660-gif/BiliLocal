@@ -1,6 +1,7 @@
 # BiliLocal CI：只编 5 个单测目标并运行（单测不链 libvlc，不需要 VLC SDK）。
-# 主程序 + hook-gate 留在本机验证（CI 虚机的 D3D11/GL 不可信，见交接文档 §8）。
-# Qt/MinGW 经 aqt 安装并缓存；首次运行约几分钟，命中缓存后秒级恢复。
+# 两个工具链各一条 job：unit = MinGW 8.1（历史主线），unit-msvc = VS2022 v143
+#（Phase 1 编译器切换起，见交接文档 §10）。主程序 + hook-gate 留在本机验证
+#（CI 虚机的 D3D11/GL 不可信，见交接文档 §8）。Qt 经 aqt 安装并缓存。
 name: ci
 
 on:
@@ -60,3 +61,42 @@ jobs:
         run: |
           $env:PATH = "$env:QT_ROOT\5.15.2\mingw81_64\bin;$env:GITHUB_WORKSPACE\build;" + $env:PATH
           ctest --test-dir build --output-on-failure -C Release
+
+  unit-msvc:
+    runs-on: windows-latest
+    env:
+      QT_ROOT: D:\a\qt
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Qt 5.15.2 (msvc2019)
+        id: qtcache
+        uses: actions/cache@v4
+        with:
+          path: D:\a\qt
+          key: qt-5.15.2-msvc2019-v1
+
+      - name: Install Qt (msvc2019_64)
+        if: steps.qtcache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          pip install aqtinstall
+          aqt install-qt windows desktop 5.15.2 win64_msvc2019_64 -O $env:QT_ROOT
+
+      # runner 预装 VS2022，VS 生成器自动定位 v143；单测不链 libvlc，无 SDK 依赖
+      - name: Configure (tests only, VS generator)
+        shell: pwsh
+        run: |
+          cmake -G "Visual Studio 17 2022" -A x64 -B build-msvc -S . `
+            -DBILILOCAL_BUILD_APP=OFF `
+            "-DQt5_DIR=$env:QT_ROOT\5.15.2\msvc2019_64\lib\cmake\Qt5"
+
+      - name: Build test targets
+        shell: pwsh
+        run: cmake --build build-msvc --config Release -j
+
+      - name: Run unit tests
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:QT_ROOT\5.15.2\msvc2019_64\bin;" + $env:PATH
+          ctest --test-dir build-msvc --output-on-failure -C Release

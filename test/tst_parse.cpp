@@ -71,7 +71,7 @@ private slots:
 	{
 		QByteArray xml =
 			"<?xml version=\"1.0\" encoding=\"UTF-8\"?><i>"
-			"<d p=\"39.909,1,25,16777215,1792834333995,0,0,0\" user=\"out**\" raw=\"[[0,0,0,0,0,0,0,&quot;x&quot;,0,0,0,&quot;&quot;,0,&quot;{}&quot;,&quot;{}&quot;,{&quot;extra&quot;:&quot;{\&quot;user_hash\&quot;:\&quot;1504623549\&quot;}&quot;}\"]\">yo</d>"
+			"<d p=\"39.909,1,25,16777215,1792834333995,0,0,0\" user=\"out**\" raw=\"[[0,0,0,0,0,0,0,&quot;x&quot;,0,0,0,&quot;&quot;,0,&quot;{}&quot;,&quot;{}&quot;,{&quot;extra&quot;:&quot;{\\&quot;user_hash\\&quot;:\\&quot;1504623549\\&quot;}&quot;}\"]\">yo</d>"
 			"</i>";
 		QVector<Comment> r = parseComment(xml, Utils::Bilibili);
 		QCOMPARE(r.size(), 1);

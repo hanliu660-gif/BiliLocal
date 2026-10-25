@@ -4,7 +4,13 @@
 #         -DCMAKE_BUILD_TYPE=Release \
 #         -DQt5_DIR=<qt>/lib/cmake/Qt5
 #   cmake --build build-cmake -j
+# 用法（MSVC + Qt 5.15.2 msvc2019_64，Phase 1 起）：
+#   cmake -G "Visual Studio 17 2022" -A x64 -B build-cmake-msvc \
+#         -DQt5_DIR=<qt-msvc>/lib/cmake/Qt5
+#   cmake --build build-cmake-msvc --config Release -j
 # THIRDPARTY 默认指向仓库外的 deps\thirdparty，可用 -DTHIRDPARTY=... 覆盖。
+# MinGW 链 gendef/dlltool 再生的 lib/amd64/*.dll.a；MSVC 直接链官方
+# 3.0.24 SDK 的 lib/msvc/*.lib（从 deps\dl\vlc-3.0.24-win64.7z 的 sdk\lib 再取）。
 cmake_minimum_required(VERSION 3.16)
 
 project(BiliLocal VERSION 0.5.0 LANGUAGES CXX RC)
@@ -14,6 +20,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# 中文 Windows 的 MSVC 默认按 GBK 读源码；仓库源码是无 BOM UTF-8（带中文的
+# 文件才有 BOM），不加这条注释里的 UTF-8 序列会被 GBK 误读，搅坏后续声明
+if(MSVC)
+	add_compile_options(/utf-8)
 endif()
 
 find_package(Qt5 5.15 REQUIRED COMPONENTS Core Gui Widgets Network Concurrent Test LinguistTools)
@@ -114,12 +126,22 @@ target_include_directories(BiliLocal PRIVATE
 	${THIRDPARTY}/include
 )
 
-target_link_directories(BiliLocal PRIVATE ${THIRDPARTY}/lib/amd64)
-
-target_link_libraries(BiliLocal PRIVATE
-	Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network Qt5::Concurrent
-	dwmapi vlc vlccore
-)
+if(MSVC)
+	# /utf-8 已全局加（含测试目标）；NOMINMAX：Qt 的 qt_windows.h 已自带，
+	# 但对直接 #include <windows.h> 的 TU 再钉一道
+	target_compile_definitions(BiliLocal PRIVATE NOMINMAX)
+	target_link_directories(BiliLocal PRIVATE ${THIRDPARTY}/lib/msvc)
+	target_link_libraries(BiliLocal PRIVATE
+		Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network Qt5::Concurrent
+		dwmapi libvlc libvlccore
+	)
+else()
+	target_link_directories(BiliLocal PRIVATE ${THIRDPARTY}/lib/amd64)
+	target_link_libraries(BiliLocal PRIVATE
+		Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network Qt5::Concurrent
+		dwmapi vlc vlccore
+	)
+endif()
 
 # 与 qmake 逐项对齐：单平台三件套 + 验证钩子（运行时由 BILILOCAL_EMBED_TEST
 # 环境变量触发）；Debug 另加 GRAPHIC_DEBUG

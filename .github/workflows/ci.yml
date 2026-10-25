@@ -25,15 +25,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: D:\a\qt
-          key: qt-5.15.2-mingw81-v1
+          key: qt-5.15.2-mingw81-v2
 
-      - name: Install Qt and MinGW via aqt
+      - name: Install Qt and MinGW
         if: steps.qtcache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           pip install aqtinstall
           aqt install-qt windows desktop 5.15.2 win64_mingw81 -O $env:QT_ROOT
-          aqt install-tool windows desktop tools_mingw810 qt.tools.win64_mingw810 -O $env:QT_ROOT
+          # aqt 的 tools_mingw810 元数据在 qt.io 已拉不到（checksum 404）；
+          # 改下 mingw-builds 官方 8.1.0（与 Qt 配套的同源构建），用 7zr 解
+          curl.exe -sL -o "$env:RUNNER_TEMP\7zr.exe" "https://www.7-zip.org/a/7zr.exe"
+          curl.exe -sL -o "$env:RUNNER_TEMP\mingw81.7z" "https://sourceforge.net/projects/mingw-w64/files/Toolchains%20targetting%20Win64/Personal%20Builds/mingw-builds/8.1.0/threads-posix/seh/x86_64-8.1.0-release-posix-seh-rt_v6-rev0.7z"
+          & "$env:RUNNER_TEMP\7zr.exe" x -y -o"$env:QT_ROOT\mgw81" "$env:RUNNER_TEMP\mingw81.7z" | Out-Null
+          Test-Path "$env:QT_ROOT\mgw81\mingw64\bin\mingw32-make.exe"
 
       - name: Configure (tests only)
         shell: pwsh

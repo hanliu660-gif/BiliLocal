@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> **更新时间**：2026-10-26（**第二十三版：Qt6 迁移结案（tag `v0.7.0-qt6`）**——Phase 3 复验通过后完成收尾：dist 对调（`dist\` 现为 Qt 6.8.3 线，`dist-qt5\` 原样归档作回滚位）、Qt5 杂项裁撤（MinGW 三件套/d3dcompiler_47/旧 qt.qm，pefile 全插件导入表实证无依赖，换 Qt6 自带 `qt_zh_CN/zh_TW.qm`）、死树清空（只余 `build-cmake6\`）、hook-gate 复验 PASS。**迁移全程：Phase 1 MSVC 工具链 → Phase 2 Qt 6.8.3 → Phase 3 用户验收（功能全过 + 坑 55 性能修复）→ 结案，7 个会话日内完成**。剩余挂账见 §10 尾部））
+> **更新时间**：2026-10-26 07:30（**第二十三版：Qt6 迁移结案（tag `v0.7.0-qt6`）**——Phase 3 复验通过后完成收尾：dist 对调（`dist\` 现为 Qt 6.8.3 线，`dist-qt5\` 原样归档作回滚位）、Qt5 杂项裁撤（MinGW 三件套/d3dcompiler_47/旧 qt.qm，pefile 全插件导入表实证无依赖，换 Qt6 自带 `qt_zh_CN/zh_TW.qm`）、死树清空（只余 `build-cmake6\`）、hook-gate 复验 PASS。**迁移全程：Phase 1 MSVC 工具链 → Phase 2 Qt 6.8.3 → Phase 3 用户验收（功能全过 + 坑 55 性能修复）→ 结案，7 个会话日内完成**。剩余挂账见 §10 尾部。**交接快照：本状态即会话交接点——src 工作树干净、无未推送提交、CI 绿；下一会话从 §10 尾部的挂账与用户拍板事项继续，勿主动动渲染/输入路由）**）
 >
 > **这份文档写给谁**：写给"下一会话接手这个工程的人/AI"。先读 §0 约束，再看 §2 当前状态，动手前看 §6 坑。
 >
@@ -227,7 +227,7 @@ Copy-Item C:\DSH\APP\BiliLocal\build-cmake6\Release\BiliLocal.exe C:\DSH\APP\Bil
 52. **aqt 的两个 6.x 陷阱**：①Qt 6 没有 `qttools` 模块——lrelease/lupdate 在 base 包里，`aqt install-qt … -m qttools` 报 `The packages ['qttools'] were not found`；②**报这个错时 aqt 仍然 exit 0**（本机实测），后台任务/脚本看着是绿的其实什么都没装。修法 = 只 `-m qt5compat`，装完落盘验 `bin\Qt6Core.dll`（CI 已内置）。**教训：外部工具的 exit code 不可全信，关键步骤要有产物存在性断言**
 53. **Qt6 的 `QtConcurrent::blockingMappedReduced` sequence 版是转发引用**：签名 `<ResultType, Sequence, MapFunctor, ReduceFunctor>(Sequence &&sequence, …)`——Qt5 时代显式把 `Sequence` 钉成值类型 `QVector<T>`，形参就是右值引用，左值序列绑不上，编译器只剩迭代器重载可候选（报"没有重载可以转换所有参数类型"，且候选注记把 4 个模板实参错位展示，极难读）。修法 = 模板实参写 `QVector<T> &`（或传 `std::move`）。**教训：Qt6 把 QtConcurrent 的映射版重载整个重做过，显式模板实参要对 6.8 的头文件核对，别背 Qt5 的**
 54. **迁移影响清单按"类型名"扫描会漏调用点**：§11 清单写了 `QDesktopWidget` 0 命中，但 `QApplication::desktop()->screenGeometry()` 这类**调用点**（类型名不出现）漏网两处（Home.cpp/WidgetInterfacePrivate.cpp），到 Qt6 编译才炸。修法 = `screen()->geometry()`（QWidget::screen 自 5.14 起有）。**教训：查 API 存废要连方法名一起 grep（`::desktop(`、`->desktop(`），只查类名必漏**
-55. **Qt6 下退出时的 GL 删除会挂住/崩溃（图集析构链，Phase 3 用户实测暴露）**：关闭窗口时 GUI 线程在 `~OpenGLAtlasMgr`/`~OpenGLAtlas` 的 `render->glDeleteFramebuffers/glDeleteTextures` 上被驱动拖住数秒（弹幕池越大越久：0 条 2s、1 万条 2~8s），同一析构链还会空指针崩溃。**取证路径值得记**：WER LocalDumps 落的 4 份转储里，**挂起报告的"异常地址"就是卡死线程的当前 IP**——用 pip 的 `minidump`+`pefile` 解析（本机无 cdb）：异常 IP 对 Qt6Gui.dll 导出表取最近符号 = `glDeleteFramebuffers+0xc`，两份挂起同址独立复现，另两份同链 ACCESS_VIOLATION。修法 = ①退出路径零 GL 调用（对象随 context 销毁回收，退出补删本来就是无效功）；②播放中 `collect()` 批量删除（一次 `glDeleteTextures(n, ids)` 顶逐页 N 次驱动往返——每次往返都可能被驱动拖住，播放中的小顿挫同源）。实测：关闭 2.0–2.1s×3（修复前 2.0–8.1s，Qt5 基线 2.0s）。**教训：①AppHang 的 dump 与崩溃 dump 走同一个 LocalDumps 目录，别只当崩溃用；②Qt6 改了窗口/上下文销毁时序，"退出时补删 GL 对象"的代码全部要重审；③析构链里持有兄弟对象指针（atlas→render）在销毁序变化下随时变悬空**
+55. **Qt6 下退出时的 GL 删除会挂住/崩溃（图集析构链，Phase 3 用户实测暴露）**：关闭窗口时 GUI 线程在 `~OpenGLAtlasMgr`/`~OpenGLAtlas` 的 `render->glDeleteFramebuffers/glDeleteTextures` 上被驱动拖住数秒（弹幕池越大越久：0 条 2s、1 万条 2~8s），同一析构链还会空指针崩溃。**取证路径值得记**：WER LocalDumps 落的 4 份转储里，**挂起报告的"异常地址"就是卡死线程的当前 IP**——用 pip 的 `minidump`+`pefile` 解析（本机无 cdb）：异常 IP 对 Qt6Gui.dll 导出表取最近符号 = `glDeleteFramebuffers+0xc`，两份挂起同址独立复现，另两份同链 ACCESS_VIOLATION。修法 = ①退出路径零 GL 调用（对象随 context 销毁回收，退出补删本来就是无效功）；②播放中 `collect()` 批量删除（一次 `glDeleteTextures(n, ids)` 顶逐页 N 次驱动往返——每次往返都可能被驱动拖住，播放中的小顿挫同源）。实测：关闭 2.0–2.1s×3（修复前 2.0–8.1s，Qt5 基线 2.0s）。**教训：①AppHang 的 dump 与崩溃 dump 走同一个 LocalDumps 目录，别只当崩溃用；②Qt6 改了窗口/上下文销毁时序，"退出时补删 GL 对象"的代码全部要重审；③析构链里持有兄弟对象指针（atlas→render）在销毁序变化下随时变悬空**。取证与计时脚本已固化：`tools\dumpscan.py`、`tools\close-probe.ps1`
 
 ---
 
@@ -245,7 +245,9 @@ Copy-Item C:\DSH\APP\BiliLocal\build-cmake6\Release\BiliLocal.exe C:\DSH\APP\Bil
 | `run-tests.ps1` | **一键门禁**（pre-push 调它）：`cmake --build build-cmake6` + `ctest -C Release`（5 目标 41 例），任一失败退出码 1；路径相对脚本位置，要求 build-cmake6 已 configure |
 | `hook-gate.ps1` | **GUI 钩子门禁**：以 `BILILOCAL_EMBED_TEST=1` 起播放器播本地 fixture，断言 `msg.log` 三个标记（`seeked to 10%` / `hover: freeze` / `hover: release`），全中才退出码 0；`-Media` 可换 Z: 真实录播做对照；`-Dist` 指定运行时根（并行树如 `dist-msvc` 必传，否则 staging 会把 dist 的 MinGW DLL 盖进 MSVC 树）；**非运行时根的 exe 会自动 stage DLL+junction**（坑 46） |
 | `gen-media.py` | 生成 hook-gate 的本地 fixture 到 `tools\.media\`：`sample-60s.y4m`（裸 YUV4MPEG2 流，libvlc 原生可播，本机无转码器也能造视频）+ 同名 xml（**0.05s 间隔高密度弹幕**，原因见 §6-45） |
-| `setcfg.py <key> <value>` | 改 `Config.txt` 任意键（布尔/数字/字符串自动识别） |
+| `close-probe.ps1` | **关闭计时探针**（坑 55 的 A/B 仪器）：PostMessage WM_CLOSE（不抢焦点），量「开窗时长」与「关窗→进程退出」，close+2s 采 CPU，打印 msg.log 尾部 |
+| `dumpscan.py` | **WER 转储取证**（无 cdb 时的坑 55 工具）：解析 LocalDumps .dmp——挂起报告的异常地址=卡死线程 IP，对模块导出表取最近符号 + 各线程栈顶扫描；依赖 pip `minidump`+`pefile` |
+| `setcfg.py <key> <value>` | 改 `Config.txt` 任意键（布尔/数字/字符串自动识别）。⚠️ 键名带 `/` 时在 Git Bash 会被吃成路径（坑 49 家族），用 `MSYS_NO_PATHCONV=1` 或 PowerShell 调 |
 | `pwc.ps1` | **PrintWindow(PW_RENDERFULLCONTENT) 抓窗口**——抓视频/底栏用这个 |
 | `shot.ps1` | BitBlt 抓屏（D3D/GL 层会黑，仅参考） |
 | `perfrun.ps1` | 起播放器采样 CPU（`-Media` 指定本地文件、`-Exe` 指定 exe） |

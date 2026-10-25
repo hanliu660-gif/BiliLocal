@@ -2,7 +2,7 @@
 
 
 
-> 更新时间：2026-10-25（**第十四版：审计剩余批（底栏交互 + 渲染层析构）**；同日校正版次哈希、目录表与工具数）——`master` = 最新提交（`git log -1 --oneline`，2026-10-25 05:30 之后全是纯文档提交）；**最后一个代码提交 = `1b10dc0`**（审计第 3 批：只修健壮性，不改使用逻辑）← `2f8a1d1`（审计第 2 批：置顶/快捷键/屏蔽正则/弹幕计数）← `cd3b0fe`（审计第 1 批：配置读-改-写竞态、坏配置备份、列表崩溃防御）← `d98327b`（UI/DPI 优化）← `81aab8f`（Danmaku 背景角色穿透修复）← `a9fbcb3`（悬停冻结持久化）← `63f9a4b`（设置审计）← 8d9c8ec（悬停冻结+发送者数据）← 44fbb3e（底栏目录记忆补修）← 7f8685a（瘦身）← 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 → 925,696 → 943,616 → 927,232 → 928,768 → 929,280 → 929,792 → 931,840 字节；dist 358M → 176M（2026-10-25 裁定不再瘦身，`lua\` 与 `opengl32sw.dll` 保留）。
+> 更新时间：2026-10-25（**第十五版：弹幕白方块与重复弹幕两个实测修复**；含审计第 4/5 批）——`master` = 最新提交（`git log -1 --oneline`，2026-10-25 05:30 之后全是纯文档提交）；**最后一个代码提交 = `7bf39d2`**（同一视频只加载一份弹幕）← `30466b0`（弹幕 shader 修好、白方块消失）← `600b369`（审计第 5 批：渲染层析构与纹理回收）← `9edac7c`（审计第 4 批：底栏交互一致性）← `1b10dc0`（审计第 3 批：只修健壮性，不改使用逻辑）← `2f8a1d1`（审计第 2 批：置顶/快捷键/屏蔽正则/弹幕计数）← `cd3b0fe`（审计第 1 批：配置读-改-写竞态、坏配置备份、列表崩溃防御）← `d98327b`（UI/DPI 优化）← `81aab8f`（Danmaku 背景角色穿透修复）← `a9fbcb3`（悬停冻结持久化）← `63f9a4b`（设置审计）← 8d9c8ec（悬停冻结+发送者数据）← 44fbb3e（底栏目录记忆补修）← 7f8685a（瘦身）← 473ba62（Win11 UI）← `3f86f74`（VLC 3.0.24）← `3155020`（单击暂停+扁平QSS+输入路由修复）← `c834050`（event(Init) 全限定名修复）← `cbc0b42`（启动续播+目录记忆）← `c8679e6`（现代化轮：主题/图标/面板/测试）← `d7847e8`（清理）← `49c173c`（单平台化+i18n）← `4702ab1`；已推送 `github.com/hanliu660-gif/BiliLocal`（remote 名 `github`），exe 1,093,120 → 948,224 → 964,608 → 925,696 → 943,616 → 927,232 → 928,768 → 929,280 → 929,792 → 931,840 字节；dist 358M → 176M（2026-10-25 裁定不再瘦身，`lua\` 与 `opengl32sw.dll` 保留）。
 
 > 写给新会话：先读这份，再看 `src\` 的 git 历史——**每个提交都有根因和证据**。
 
@@ -94,11 +94,11 @@
 
 
 
-- **exe**：`dist\BiliLocal.exe`，927,232 字节，SHA256 `D4F78BAE…`（构建自 `d98327b`，2026-10-25 07:12 部署；**构建确定性已两证**：①与 `build\release\BiliLocal.exe` 逐字节相同；②同一份源码在空目录重编，产物只差 4 个字节——PE 头的时间戳/校验和，代码段完全一致 ⇒ dist 与源码一一对应，没有"改了忘重编"的死角）
+- **exe**：`dist\BiliLocal.exe`，931,840 字节，SHA256 `0742B29E…`（构建自 `7bf39d2`，2026-10-25 16:08 部署；**构建确定性已两证**：①与 `build\release\BiliLocal.exe` 逐字节相同；②同一份源码在空目录重编，产物只差 4 个字节——PE 头的时间戳/校验和，代码段完全一致 ⇒ dist 与源码一一对应，没有"改了忘重编"的死角）
 
-- **部署状态**（2026-10-25 08:25 已更新）：`dist\BiliLocal.exe` = 931,840 字节 / SHA256 `9BD0040B…`，构建自 `600b369`（全量 clean 重建），已部署并与 `build\release` 同哈希。上一节记的"没进 dist"是 `cd3b0fe` 那一版的历史（当时播放器开着挡住拷贝，用户关掉后已补上）\r\n- ~~部署状态（历史）~~：`cd3b0fe` 的产物**还没进 `dist\`**——`build\release\BiliLocal.exe` 已是 928,768 字节 / SHA256 `A0218C5D…`（2026-10-25 07:35 构建），但拷 `dist\` 时 `BiliLocal.exe` 正被运行中的播放器占用（PID 7456，`cp` 报 `Device or resource busy`）。关掉播放器后 `cp build\release\BiliLocal.exe dist\BiliLocal.exe` 即可。
+- **部署状态**（2026-10-25 16:08 已更新）：`dist\BiliLocal.exe` = 931,840 字节 / SHA256 `0742B29E…`，构建自 `7bf39d2`（上一版 `600b369` 是全量 clean 重建；这版是增量构建，警告基线仍按全量 clean 的 3 条算），已部署并与 `build\release` 同哈希。上一节记的"没进 dist"是 `cd3b0fe` 那一版的历史（当时播放器开着挡住拷贝，用户关掉后已补上）\r\n- ~~部署状态（历史）~~：`cd3b0fe` 的产物**还没进 `dist\`**——`build\release\BiliLocal.exe` 已是 928,768 字节 / SHA256 `A0218C5D…`（2026-10-25 07:35 构建），但拷 `dist\` 时 `BiliLocal.exe` 正被运行中的播放器占用（PID 7456，`cp` 报 `Device or resource busy`）。关掉播放器后 `cp build\release\BiliLocal.exe dist\BiliLocal.exe` 即可。
 
-- **源码**：`master` = 最新提交（**从 2026-10-25 05:30 起改为不写死文档哈希**——写死的那个值在提交的瞬间就过期了，当前值请用 `git log -1 --oneline` 取）；**最后一个代码提交 = `1b10dc0`**（审计第 3 批：只修健壮性，不改使用逻辑）← `2f8a1d1`（审计第 2 批：置顶/快捷键/屏蔽正则/弹幕计数）← `cd3b0fe`（审计第 1 批：配置读-改-写竞态、坏配置备份、列表崩溃防御）← `d98327b`（UI/DPI 优化）← `81aab8f`（Danmaku 背景角色穿透修复）← `a9fbcb3`（悬停冻结持久化）← `63f9a4b`（设置审计）← `8d9c8ec`（悬停冻结+发送者数据）← `44fbb3e`（底栏目录记忆补修）← `7f8685a`（瘦身轮）← `473ba62`（Win11 UI 轮）← `3f86f74`（VLC 3.0.24）← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`；上游 = `9d1cb05`；回滚点 tag `v0.5.0-vmem` = `46b68b9`
+- **源码**：`master` = 最新提交（**从 2026-10-25 05:30 起改为不写死文档哈希**——写死的那个值在提交的瞬间就过期了，当前值请用 `git log -1 --oneline` 取）；**最后一个代码提交 = `7bf39d2`**（同一视频只加载一份弹幕）← `30466b0`（弹幕 shader 修好、白方块消失）← `600b369`（审计第 5 批：渲染层析构与纹理回收）← `9edac7c`（审计第 4 批：底栏交互一致性）← `1b10dc0`（审计第 3 批：只修健壮性，不改使用逻辑）← `2f8a1d1`（审计第 2 批：置顶/快捷键/屏蔽正则/弹幕计数）← `cd3b0fe`（审计第 1 批：配置读-改-写竞态、坏配置备份、列表崩溃防御）← `d98327b`（UI/DPI 优化）← `81aab8f`（Danmaku 背景角色穿透修复）← `a9fbcb3`（悬停冻结持久化）← `63f9a4b`（设置审计）← `8d9c8ec`（悬停冻结+发送者数据）← `44fbb3e`（底栏目录记忆补修）← `7f8685a`（瘦身轮）← `473ba62`（Win11 UI 轮）← `3f86f74`（VLC 3.0.24）← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`；上游 = `9d1cb05`；回滚点 tag `v0.5.0-vmem` = `46b68b9`
 
 - **运行库**：VLC **3.0.24**（FFmpeg 8.1.2，d3d11 直出；升级缘由见提交 3f86f74）；**dist\plugins 混住着 Qt 平台插件（platforms/imageformats/mediaservice/styles），整目录替换 VLC 时必须把这四个目录合并到顶层，否则 Qt 起不来**（升级/裁剪流程见第 9 节）；dist 只带 exe 实际导入的 5 个 Qt DLL（Concurrent/Core/Gui/Network/Widgets）
 
@@ -114,7 +114,7 @@
 
 
 
-- **已交付并推送（全部在 github/master 上，最后一个代码提交是 `600b369`）**：代码审计第 3 批（只修健壮性、不改任何使用逻辑：弹幕 xml 首字节是空行不再被误判成 AcFun JSON、13 位毫秒时间戳不再溢出成 0、畸形 ass 不再越界、追加第二份 xml 时去重集不再指向已释放内存、`t=` 残留规则删得掉、libvlc 事件先 detach 再 release、单实例转发把 socket 读干净）/代码审计第 2 批（置顶三态真正生效、快捷键列表不再漏 `Top`、快捷键 Esc 不再改键、屏蔽正则输入即校验 + 载入时跳过空/非法规则、弹幕预占计数在屏障后归零、`AA_UseOpenGLES` 挪到构造前且改成 `BILILOCAL_GL=angle` 才开）/代码审计第 1 批（`Config` 读-改-写整段加锁、`Config.txt` 解析失败留 `.broken-*` 备份、`List` 空表除零与负行空指针防御、新增 `test\tst_config.*` 7 例）/UI/DPI 优化轮（150% 屏不再被 Qt 抬到 200%、播放/暂停图标改矢量、主题 QSS 外置；**视觉变化须用户本人验收**——150% 屏上界面从等效 200% 缩回 150%，控件与字号都小 1/3）/悬停冻结单条弹幕(静止持久)/右键弹幕数据块(全文/用户名+哈希/时间/位置/真实同源计数)/屏蔽发送者按 hash 真实生效/屏蔽页双列重构/弹幕专属右键菜单/菜单对齐与文案翻转/设置审计轮(见 §2.1 沿革)/文件面板「清空」
+- **已交付并推送（全部在 github/master 上，最后一个代码提交是 `7bf39d2`）**：弹幕 shader 白方块修复（`30466b0`）与重复加载去重（`7bf39d2`）；代码审计第 3 批（只修健壮性、不改任何使用逻辑：弹幕 xml 首字节是空行不再被误判成 AcFun JSON、13 位毫秒时间戳不再溢出成 0、畸形 ass 不再越界、追加第二份 xml 时去重集不再指向已释放内存、`t=` 残留规则删得掉、libvlc 事件先 detach 再 release、单实例转发把 socket 读干净）/代码审计第 2 批（置顶三态真正生效、快捷键列表不再漏 `Top`、快捷键 Esc 不再改键、屏蔽正则输入即校验 + 载入时跳过空/非法规则、弹幕预占计数在屏障后归零、`AA_UseOpenGLES` 挪到构造前且改成 `BILILOCAL_GL=angle` 才开）/代码审计第 1 批（`Config` 读-改-写整段加锁、`Config.txt` 解析失败留 `.broken-*` 备份、`List` 空表除零与负行空指针防御、新增 `test\tst_config.*` 7 例）/UI/DPI 优化轮（150% 屏不再被 Qt 抬到 200%、播放/暂停图标改矢量、主题 QSS 外置；**视觉变化须用户本人验收**——150% 屏上界面从等效 200% 缩回 150%，控件与字号都小 1/3）/悬停冻结单条弹幕(静止持久)/右键弹幕数据块(全文/用户名+哈希/时间/位置/真实同源计数)/屏蔽发送者按 hash 真实生效/屏蔽页双列重构/弹幕专属右键菜单/菜单对齐与文案翻转/设置审计轮(见 §2.1 沿革)/文件面板「清空」
 
 - **明确放弃,勿重做**：底栏「弹幕·开」按钮的右键菜单(a4b5acf)——三层窗口结构盲区,详见 §2.1 与 §6 23-25
 
@@ -182,6 +182,8 @@
 | `9edac7c` | 审计第 4 批（交互一致性，用户"做就做呗"授权）：①`Info::eventFilter` 只认左键——右键/中键松手不再 `setTime`（原来只拦 Press 不拦 Release，右键一松就跳走）；②滚轮在进度条上被吞掉（原来走 `valueChanged`、`isSliderDown()` 为假 ⇒ 滚一下跳 5 秒或 1/10 时长）；③拖到最右钳到 `duration-500`（跳满会被 `VPlayer::setTime` 判成片尾直接 `stop()`）；④新增 `Info::timeAtX()`，`Home::seekTo` 与滑块共用同一套 x→时间映射（原来整窗宽 vs 滑块宽，左端差 slx）；⑤新增 `Info::barMinWidth()`，`Home::resizeEvent` 据此抬最小宽度，窄窗时进度条不再压住右侧按钮。 |
 
 | `600b369` | 审计第 5 批（渲染层，用户批准后解冻）：①`OpenGLAtlasMgr::squeeze()` 不再当场 `delete`——它是 `APlayer::timeChanged` 直连进来的，paintGL 之外没有当前上下文，`glDeleteTextures` 打空 ⇒ 纹理不释放；改成挪进 `graveyard`，由 `collect()` 在 `OpenGLRender::draw()`（paintGL 内）真删；②`APlayer` 的 `timeChanged/reach` 两个 lambda 加 `!d->resource.isNull()` 守卫（`resource` 在 `initializeGL()` 才建）；③`~OpenGLEmbedRenderPrivate` 补齐拆卸：`disconnect` 两路 `begin`、`removeEventFilter` + `delete` 过滤器、`delete surface`（原本只 `delete overlay`，surface/EFilter 留下指向已销毁渲染层）；④延迟 `nudge` 的 `singleShot` 改用 `QSharedPointer<bool> alive` 失效标记，析构后再触发不会碰 `this`。 |
+| `30466b0` | 弹幕 shader 白方块（用户报"弹幕变成白色方块"）：六个 shader 首行的 `precision lowp float;` 被 Qt 的 `#define lowp` 宏展开成 `precision  float;` ⇒ 桌面 GLSL 语法错误、程序没链接上，而代码仍照旧 `glDrawArrays`，于是每条弹幕被固定管线画成纯白矩形。删掉这六行后实测 `syntax error|Link Failed` 归零、弹幕恢复白色描边文字。 |
+| `7bf39d2` | 同一视频弹幕重复（用户报"同样的弹幕会出现两次"）：List 里同时存在模板 `%{Path}/%{File}.xml`（展开成正斜杠）与"命令行带 xml 打开"时登记的绝对路径（反斜杠），`Load` 按 source 字符串全等去重就失效 ⇒ 同一份 xml 被加载两次。`case Records:` 改为按 `QFileInfo::canonicalFilePath()`（取不到时 `QDir::cleanPath(QDir::fromNativeSeparators())`）在本轮去重；实测 `Load: processed` 由两条变一条。 |
 
 
 
@@ -334,11 +336,13 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 
 35. **弹幕 xml/ass 的类型靠"开头几字节"猜**：`Load::processNext` 只看 `data.left(512)`，而 xml 前面只要有一个空行，`startsWith("<?xml")` 就失配、整份文件被当 JSON 解析 ⇒ 0 条弹幕且没有任何报错。嗅探前必须 `trimmed()`；同理 BOM 要先剥（BOM 已在 0c4f7b7 处理）。
 
-36. **GLSL 1.20（`varying`/`texture2D`）在 core profile 上下文里编译不过**：本机虚拟显示适配器上实测 `QOpenGLShader::compile(Vertex): ERROR: 0:2: ' : syntax error, unexpected IDENTIFIER`（`varying` 被当成标识符），弹幕叠加层不画。这不是代码改动引入的（日志里早就有 8 次同样的失败），真机 NVIDIA 走兼容 profile 正常；换显卡/远程桌面时若发现"视频能放但没弹幕"，先看 `%LOCALAPPDATA%\BiliLocal\cache\msg.log` 里这条。
+36. **GLSL 1.20（`varying`/`texture2D`）在 core profile 上下文里编译不过**：本机虚拟显示适配器上实测 `QOpenGLShader::compile(Vertex): ERROR: 0:2: ' : syntax error, unexpected IDENTIFIER`（`varying` 被当成标识符），弹幕叠加层不画（`30466b0` 之后本机已能正常画：真正的拦路虎是 shader 首行的 `precision lowp float;`，见第 40 条）。这不是代码改动引入的（日志里早就有 8 次同样的失败），真机 NVIDIA 走兼容 profile 正常；换显卡/远程桌面时若发现"视频能放但没弹幕"，先看 `%LOCALAPPDATA%\BiliLocal\cache\msg.log` 里这条。
 
 38. **`QSlider` 的滚轮不走 `sliderMoved`**：滚轮改值触发的是 `valueChanged`，那时 `isSliderDown()` 为假，于是"只响应拖动"的判断拦不住它——光标停在进度条上滚一下就跳。要拦就在 `eventFilter` 里吞 `QEvent::Wheel`。`Info::eventFilter` 现在就是这么做的。
 39. **`glDeleteTextures` 必须在上下文当前时调**：`OpenGLAtlasMgr::squeeze()` 由 `APlayer::timeChanged` 直连进来（paintGL 之外），在那里 `delete` 图集，`~OpenGLAtlas` 里的删除会打空、纹理一直不释放。改法是只标记进 `graveyard`，在 `OpenGLRender::draw()` 里 `collect()` 真删。
 37. **新写的单测要做一次负向对照**：`tst_config` 在修好的实现上稳定 7/7；把两处 `QWriteLocker locker(&lock);` 注释掉重建后，`concurrentWriters` 直接 SIGSEGV（bash 里 `rc=139`，输出停在 `missingKeyKeepsOtherKeys` 之后）。没这个对照，就无法证明用例不是空跑。
+40. **桌面 GL 的 shader 里不要写 `precision lowp float;`**：Qt 为桌面 GL 预置了 `#define lowp` / `mediump` / `highp`（展开为空），这行会变成 `precision  float;`，桌面 GLSL 直接语法错误 —— 表现为 `QOpenGLShader::compile(Vertex): ERROR: 0:2: '' :  syntax error, unexpected IDENTIFIER` 加 `QOpenGLShader::link: Program Link Failed for unknown reason.`，而代码照旧 `glDrawArrays`，于是每条弹幕被固定管线画成纯白方块。排查入口：`%LOCALAPPDATA%\BiliLocal\cache\msg.log` 里 `Program Link Failed` 的条数（本机曾累积到 35550 条，因为每帧 `bind()` 都重试链接）。
+41. **同一视频在 List 里可能挂多条指向同一份弹幕的规则**：模板 `%{Path}/%{File}.xml` 展开成正斜杠，"命令行带 xml 打开"登记的绝对路径是反斜杠，`Load` 按 source 字符串全等去重就失效，同一份 xml 被加载两次、弹幕整屏重复。`List` 的 `case Records:` 现在用 `QFileInfo::canonicalFilePath()`（取不到时退回 `QDir::cleanPath(QDir::fromNativeSeparators())`）在每次 `mediaChanged` 里做一次本轮去重；数据本身没改，用户 List 里那两条规则都还留着。
 
 
 

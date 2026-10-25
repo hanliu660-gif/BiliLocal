@@ -1,6 +1,6 @@
 # BiliLocal 64 位自建版 · 交接文档
 
-> **更新时间**：2026-10-25（**第十六版：整合重写**——当前状态归拢到最前、坑位重新连续编号、去掉半年前的部署流水账；事实与数字全部按 2026-10-25 18:46 的实测重写）
+> **更新时间**：2026-10-25（**第十七版：模型层单测**——tst_shield/tst_load 共 21 例入库+负向对照、一键测试门禁 run-tests.ps1、钩子注释纠偏、VC 运行库入 dist、deps 归档与来源记录、Qt 6 纸面预案（仅备案未启动）；代码事实按 2026-10-25 20:09 前后实测）
 >
 > **这份文档写给谁**：写给"下一会话接手这个工程的人/AI"。先读 §0 约束，再看 §2 当前状态，动手前看 §6 坑。
 >
@@ -40,9 +40,14 @@
 | `build-test\` | 单测构建树（`src\test\tst_parse.pro`，只链 Parse 与 Utils 两个 TU）→ `release\tst_parse.exe`（9/9）。跑前把 `deps\5.15.2\mingw81_64\bin` 与 `deps\Tools\mingw810_64\bin` 放进 PATH |
 | `build-test-config\` | 单测构建树（`src\test\tst_config.pro`，只链 `Config.cpp`）→ `release\tst_config.exe`（7/7）。`qmake ../src/test/tst_config.pro -spec win32-g++ "CONFIG+=release"` 后 make，同样要设 PATH |
 | `src\test\tst_config.*` | Config 的 7 例单测：往返、缺键写回不冲掉别的键、2 线程 × 500 次并发写、坏配置留备份、存档是合法 JSON |
+| `build-test-shield\` | 单测构建树（`src\test\tst_shield.pro`，链 `Config.cpp`+`Shield.cpp`）→ `release\tst_shield.exe`（9/9）。qmake/make 流程同上 |
+| `src\test\tst_shield.*` | Shield 的 9 例单测：配置加载跳过空/坏正则、m/u/t 往返、isBlocked 模式/颜色/嘉宾全语义、aboutToSave 落盘往返。**测试里重建 Shield 前必须先断开 aboutToSave**（连接无上下文对象，见文件头注） |
+| `build-test-load\` | 单测构建树（`src\test\tst_load.pro`，真链 Load/Parse/Config/Utils）→ `release\tst_load.exe`（12/12）。同上 |
+| `src\test\tst_load.*` | Load 端到端 12 例：真文件真嗅探真解析，假 Danmaku 收结果；覆盖 BOM/前置空行两大历史回归 + 四格式分支 + AcFun 兜底 + 缺文件报错 + 队列顺序 + 延迟平移 |
+| `deps\archive\` | 依赖归档：`vlc-sdk-3.0.21-win64.zip`（= `deps\thirdparty` 的快照，110,162 B，SHA256 `857CE77B…`；来源与再生途径见 §9） |
 | `dist\` | **可直接运行的成品**：exe + Qt5 + VLC 3.0.24（FFmpeg 8.1.2）+ 插件 + 翻译 |
 | `deps\` | 工具链：Qt 5.15.2 (mingw81_64)、MinGW 8.1.0、VLC SDK 头文件/导入库（在 `deps\thirdparty`）。VLC 运行库只存在于 dist；`deps\dl` 仅剩 `vlc-2.2.8-win64.zip`（vmem 考古用） |
-| `tools\` | 调试/测试脚本（13 个，见 §8） |
+| `tools\` | 调试/测试脚本（14 个，见 §8） |
 | `test\` | `embed.xml` = 测试弹幕 fixture；`rec.xml` + `rec.flv` 是指向 Z: 真实录播的**符号链接**（Z: 未挂载时悬空，单测不依赖） |
 | `%LOCALAPPDATA%\BiliLocal\Config.txt` | 运行时配置（JSON） |
 | `%LOCALAPPDATA%\BiliLocal\cache\msg.log` | 日志（超 10MB 自动轮转成 `.old`） |
@@ -55,10 +60,10 @@
 
 ## 2. 当前状态（2026-10-25 18:46 实测）
 
-- **exe**：`dist\BiliLocal.exe` = **931,840 字节**，SHA256 **`F44A1F07…`**（构建自 `7bf39d2`，18:46 全量 clean 重建后部署，与 `build\release\BiliLocal.exe` 同哈希）。**构建可复现性（2026-10-25 18:46 实测三组）**：①`dist` 与 `build\release` 逐字节相同（每次部署都 sha256 校验）；②同一构建树连续两次全量 clean 重建：931,840 B，只差 **4 字节**（offset 137/138、217/218 = PE 时间戳/校验和）；③把 `git archive HEAD` 导到**另一个目录**重建：尺寸同为 931,840 B，但差 **2,692 字节**（4 字节 PE 头 + 2,688 字节在代码/数据区），成因未定。⇒ **尺寸可复现、字节不完全可复现：判断"是不是同一份源码"只能看 git 提交号，别比哈希。**
-- **源码**：`master` = 最新提交（**从 05:30 起改为不写死文档哈希**——写死的值在提交瞬间就过期，当前值用 `git log -1 --oneline` 取）；**最后一个代码提交 = `7bf39d2`**（同一视频只加载一份弹幕）← `30466b0`（弹幕 shader 修好、白方块消失）← `600b369`（审计第 5 批）← `9edac7c`（审计第 4 批）← `1b10dc0`（审计第 3 批）← `2f8a1d1`（审计第 2 批）← `cd3b0fe`（审计第 1 批）← `d98327b`（UI/DPI）← `81aab8f` ← `a5f95fe` ← `a9fbcb3` ← `63f9a4b` ← `8d9c8ec` ← `44fbb3e` ← `7f8685a` ← `473ba62` ← `3f86f74` ← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`。上游 `9d1cb05`；回滚 tag `v0.5.0-vmem` = `46b68b9`；远端 `github` = `github.com/hanliu660-gif/BiliLocal`。
-- **单测**：`tst_parse` **9/9**（7 用例 + init/cleanup，2026-10-25 复跑）；`tst_config` **7/7**。**负向对照做过**：把两处 `QWriteLocker locker(&lock);` 注释掉重建，`concurrentWriters` 直接 SIGSEGV（`rc=139`）⇒ 用例不是空跑。
-- **编译警告**：**42 → 3**（连清两轮：`a5f95fe` 清 6 个位置，`81aab8f` 清最后 1 个）。剩下 3 条是**刻意留的**：`-Wimplicit-fallthrough` 1 条（`src\src\Model\Running.cpp:283` 的 `case 1` 落到 `case 0`，入队本来就该两模式同路）、`libvlc_video_set_subtitle_file` 2 条（`src\src\Player\VPlayer.cpp:476`，VLC 3 标弃用但照常可用，换 VLC 4 才必须改）。
+- **exe**：`dist\BiliLocal.exe` = **931,840 字节**，SHA256 **`2C0005D3…`**（构建自 `0f25480`，20:00 前后部署；该提交只改注释，exe 与 `build\release\BiliLocal.exe` 逐字节一致）。**构建可复现性（2026-10-25 18:46 实测三组）**：①`dist` 与 `build\release` 逐字节相同（每次部署都 sha256 校验）；②同一构建树连续两次全量 clean 重建：931,840 B，只差 **4 字节**（offset 137/138、217/218 = PE 时间戳/校验和）；③把 `git archive HEAD` 导到**另一个目录**重建：尺寸同为 931,840 B，但差 **2,692 字节**（4 字节 PE 头 + 2,688 字节在代码/数据区），成因未定。⇒ **尺寸可复现、字节不完全可复现：判断"是不是同一份源码"只能看 git 提交号，别比哈希。**
+- **源码**：`master` = 最新提交（**从 05:30 起改为不写死文档哈希**——写死的值在提交瞬间就过期，当前值用 `git log -1 --oneline` 取）；**最后一个代码提交 = `0f25480`**（钩子注释纠偏，纯注释）← `0c74654`（tst_shield/tst_load 新单测）← `7bf39d2`（同一视频只加载一份弹幕）← `30466b0`（弹幕 shader 修好、白方块消失）← `600b369`（审计第 5 批）← `9edac7c`（审计第 4 批）← `1b10dc0`（审计第 3 批）← `2f8a1d1`（审计第 2 批）← `cd3b0fe`（审计第 1 批）← `d98327b`（UI/DPI）← `81aab8f` ← `a5f95fe` ← `a9fbcb3` ← `63f9a4b` ← `8d9c8ec` ← `44fbb3e` ← `7f8685a` ← `473ba62` ← `3f86f74` ← `3155020` ← `c834050` ← `cbc0b42` ← `c8679e6` ← `d7847e8` ← `49c173c` ← `4702ab1`。上游 `9d1cb05`；回滚 tag `v0.5.0-vmem` = `46b68b9`；远端 `github` = `github.com/hanliu660-gif/BiliLocal`。
+- **单测**：四个目标共 **37 例全绿**（2026-10-25，`tools\run-tests.ps1` 一键复跑）：`tst_parse` **9/9**、`tst_config` **7/7**、`tst_shield` **9/9**、`tst_load` **12/12**。**负向对照做了两个**：①把 `tst_config` 两处 `QWriteLocker locker(&lock);` 注释掉重建，`concurrentWriters` 直接 SIGSEGV（`rc=139`）；②把 `Load.cpp` 嗅探的 `.trimmed()` 去掉重建，`blankLineBeforeXml` 变红（0 条弹幕）、其余 11 例不受影响 ⇒ 用例不是空跑。List 与 Danmaku 本体因依赖整套服务定位器 + APlayer（会拖进 VPlayer/libvlc）暂不独立成测（见 §10-4）。
+- **编译警告**：**42 → 3**（连清两轮：`a5f95fe` 清 6 个位置，`81aab8f` 清最后 1 个；`0c74654` 新增的两个测试目标构建 **0 警告**）。剩下 3 条是**刻意留的**：`-Wimplicit-fallthrough` 1 条（`src\src\Model\Running.cpp:283` 的 `case 1` 落到 `case 0`，入队本来就该两模式同路）、`libvlc_video_set_subtitle_file` 2 条（`src\src\Player\VPlayer.cpp:476`，VLC 3 标弃用但照常可用，换 VLC 4 才必须改）。
 - **i18n**：源码全英文串，中文走 `dist\locale\zh_CN\bililocal.qm`（187/187 全译，含繁体）。改 UI 文案后：lupdate → 补译 → lrelease → 部署 qm。
 - **运行库**：VLC **3.0.24**（d3d11 直出）；`dist\plugins` 里**混住着 Qt 的四个插件目录**（`platforms\` `imageformats\` `mediaservice\` `styles\`），整目录替换 VLC 时必须把它们合并到顶层，否则 Qt 起不来（流程见 §9）。dist 只带 exe 实际导入的 5 个 Qt DLL（Concurrent/Core/Gui/Network/Widgets）。
 - **配置**：`Output=Embed` 已是唯一输出（键保留但代码不再读）；`Immediate=True`；`HardwareDecode` 已无消费者（d3d11 固定开启，`Arguments` 手写 `--avcodec-hw=`/`--vout=` 仍可覆盖）。
@@ -94,6 +99,8 @@
 | `600b369` | 审计第 5 批（渲染层，批准后解冻）：①`OpenGLAtlasMgr::squeeze()` 不再当场 `delete`（由 `timeChanged` 直连进来、paintGL 之外没有当前上下文），改挪进 `graveyard`、由 `collect()` 在 `OpenGLRender::draw()` 里真删；②`timeChanged/reach` 两个 lambda 加 `!d->resource.isNull()` 守卫；③`~OpenGLEmbedRenderPrivate` 补齐拆卸（disconnect 两路 begin、removeEventFilter+delete、`delete surface`）；④延迟 `nudge` 改用 `QSharedPointer<bool> alive` 失效标记 |
 | `30466b0` | 弹幕白方块（用户报"弹幕变成白色方块"）：六个 shader 首行的 `precision lowp float;` 被 Qt 的 `#define lowp` 展开成 `precision  float;` ⇒ 桌面 GLSL 语法错误、程序没链接上，代码却照旧 `glDrawArrays` ⇒ 每条弹幕被固定管线画成纯白矩形。删掉六行后 `syntax error\|Link Failed` 归零、弹幕恢复白色描边文字 |
 | `7bf39d2` | 同一视频弹幕重复（用户报"同样的弹幕会出现两次"）：List 里同时存在模板 `%{Path}/%{File}.xml`（正斜杠）与"命令行带 xml 打开"登记的绝对路径（反斜杠），`Load` 按 source 字符串全等去重失效 ⇒ 加载两次。`case Records:` 改按 `QFileInfo::canonicalFilePath()`（取不到退回 `cleanPath(fromNativeSeparators())`）本轮去重；实测 `Load: processed` 两条→一条 |
+| `0c74654` | 单测第 3 轮（模型层补覆盖）：`tst_shield` 9 例（空/坏正则跳过、m/u/t 往返、isBlocked 全语义、aboutToSave 落盘往返——顺带坐实了 Shield 构造连接无上下文对象这个隐性约束）+ `tst_load` 12 例（真文件真嗅探：BOM/空行两大历史回归、四格式分支、AcFun 兜底、缺文件报错、队列顺序、延迟平移）；负向对照 = 去 `.trimmed()` 后 `blankLineBeforeXml` 变红。fixture 的两个教训见 §6-43/44 |
+| `0f25480` | 钩子注释纠偏：`EmbedPrivate.cpp` 的"正式构建不编译"改为"无条件编进所有构建"（§8 的 ⚠️ 项结案）；纯注释改动，exe 尺寸不变重新部署 |
 
 ---
 
@@ -185,6 +192,8 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 40. **桌面 GL 的 shader 里不要写 `precision lowp float;`**：Qt 为桌面 GL 预置 `#define lowp`/`mediump`/`highp`（展开为空），这行变成 `precision  float;` ⇒ 桌面 GLSL 语法错误，表现为 `syntax error, unexpected IDENTIFIER` + `Program Link Failed`；程序没链接上而代码照旧 `glDrawArrays`，于是每条弹幕被固定管线画成**纯白方块**。排查入口：`msg.log` 里 `Program Link Failed` 的条数（本机曾累积 35550 条，每帧 `bind()` 都重试）
 41. **同一视频在 List 里可能挂多条指向同一份弹幕的规则**：模板展开成正斜杠、"命令行带 xml 打开"登记的绝对路径是反斜杠，`Load` 按 source 字符串全等去重失效 ⇒ 同一份 xml 加载两次、弹幕整屏重复。`List` 的 `case Records:` 现按 `QFileInfo::canonicalFilePath()`（取不到退回 `cleanPath(fromNativeSeparators())`）本轮去重；用户 List 里那两条规则原样保留
 42. **别用 exe 的 SHA256 判断"是不是同一份源码编的"**：同一构建树重复 clean 重建只差 4 字节（PE 时间戳/校验和），但把同样的源码导到另一个目录重建，尺寸一模一样（931,840 B）却有 2,692 字节不同（代码/数据区 2,688），成因未定。要证明源码同源，认 git 提交号。
+43. **Load 的 xml 嗅探只认 `<packet>`/`<i>`/`<c>` 三种头**：裸 `<l i=` 内容（AcFunLocalizer 真文件必有 `<c>` 包裹）三个分支全不命中 ⇒ 默认构造的 `ResultDelegate` ⇒ **静默 0 条弹幕**。给 `tst_load` 写 fixture 时踩到；"能被认出"本身就是格式契约的一部分
+44. **QtTest 的 `QVERIFY`/`QFAIL` 宏展开成 `return;`，只能用在 void 函数**：放进返回 QString/bool 的辅助函数直接编译错（`qtestcase.h:66`）。测试辅助函数一律 void + 出参
 
 ---
 
@@ -195,10 +204,11 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 
 ---
 
-## 8. 工具脚本（`tools\`，13 个）与验证钩子
+## 8. 工具脚本（`tools\`，14 个）与验证钩子
 
 | 脚本 | 用途 |
 | --- | --- |
+| `run-tests.ps1` | **一键门禁**：4 个单测目标（parse/config/shield/load）逐个 qmake+make+运行，输出各自 Totals，任一失败退出码 1（`-NoBuild` 只跑不编） |
 | `setcfg.py <key> <value>` | 改 `Config.txt` 任意键（布尔/数字/字符串自动识别） |
 | `pwc.ps1` | **PrintWindow(PW_RENDERFULLCONTENT) 抓窗口**——抓视频/底栏用这个 |
 | `shot.ps1` | BitBlt 抓屏（D3D/GL 层会黑，仅参考） |
@@ -217,7 +227,7 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 - `BILILOCAL_EMBED_TEST=1`：`EWindow` 每 300ms 注入鼠标事件（第 30/50 拍双击验证全屏闭环、第 35 拍单击验证暂停），配 `msg.log` 判读。
 - `BILILOCAL_UI_TEST=prefer/editor/both`：自动打开 Prefer（逐页巡览，标题带页码「设置 - N」）与 Editor——**验证对话框用这个**，配 `tools\verify_ui3.ps1`。
 - 悬停验证：每 60 拍循环「扫掠→(600,320) 压 14 拍（验证静止不解冻）→第 56 拍右键」，起播后自动跳 10%；旧闭环（双击全屏/单击暂停）需另加 `BILILOCAL_EMBED_CLICK=1`。`msg.log` 找 `hover: freeze/release`。
-- ⚠️ `BILILOCAL_EMBED_TEST` 是**无条件编进发布 exe** 的（`BiliLocal.pro:120`），靠环境变量触发；`EmbedPrivate.cpp:31` 那句"正式构建不编译"的注释与事实不符。
+- `BILILOCAL_EMBED_TEST` **无条件编进发布 exe**（`BiliLocal.pro` 的 DEFINES），靠环境变量触发；源码注释已与事实对齐（`0f25480` 纠掉"正式构建不编译"的旧说法），之所以不改成 release 剔除，是因为悬停/子菜单等外部验证脚本都依赖发布 exe 里的钩子。
 
 **PS 5.1 铁律**：一律 `-NoProfile -ExecutionPolicy Bypass -File`；脚本存 UTF-8 带 BOM、**不写中文字面量**；`$Pid` 只读、`Move/Cli/lp` 是别名；`Start-Process -RedirectStandardError` 别配 `-Wait`；子进程会继承 stdout 管道（给 `UseShellExecute=$false` 的启动加 stdio 重定向，否则调用方假死）。
 
@@ -229,7 +239,13 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 - MinGW **8.1.0**：`deps\Tools\mingw810_64\bin`
 - VLC **3.0.24**：运行库在 `dist`。升级方法：官网下 win64 安装包静默解包（`/S`），替换 `dist` 的 `libvlc`/`libvlccore`/`plugins`，**必须把 plugins 里 Qt 的 `platforms`/`imageformats`/`mediaservice`/`styles` 四目录合并到顶层**；`lua\` 与 `opengl32sw.dll` 本播放器用不到（实测可去，**10-25 决定保留**，升级时按原样回填）；再按「先验证再删」裁掉 gui/stream_out/access_output 等对 libvlc 无用的类别（10-25 那次升级就是漏了验证、把新树放成嵌套 `plugins\plugins` 才多背 142M：替换后先改名/移动留证，启动播放确认无恙再删）。构建用头文件/导入库在 `deps\thirdparty`（3.0.21 SDK，libvlc API 兼容）。
 - Python：`C:\Users\23239\.dsh\dsh-runtimes\dsh-next-primary-runtime\dependencies\python\python.exe`（系统 `python` 是 Store 存根，跑了等于没跑）
-- VC 运行库（VLC3 需要）：系统已装 vcruntime140/140_1/msvcp140——**dist 未自带**，换机器先装 [vc_redist.x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)，或把三个 DLL 拷进 dist
+- VC 运行库（VLC3 需要）：**dist 已自带**（2026-10-25 从系统 System32 拷入 vcruntime140 123,472 B / vcruntime140_1 47,264 B / msvcp140 553,552 B，v14.50.35719.0，拷入后启动冒烟通过）。换机器无需再装；如需更新再取 [vc_redist.x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+- **deps 来源与归档（2026-10-25 补）**：
+  - `deps\thirdparty`（VLC 3.0.21 SDK，1.4M）→ 已归档 `deps\archive\vlc-sdk-3.0.21-win64.zip`（SHA256 `857CE77B…`，18 条目 = `include/vlc/*.h` + `lib/amd64`）。再生途径：VideoLAN 官方存档 libvlc 3.0.21 win64 7z 里的 `sdk\`
+  - `deps\5.15.2\mingw81_64`（501M）：Qt 官方存档 5.15.2 的 mingw81_64 组件（download.qt.io/archive/qt/5.15/5.15.2/）
+  - `deps\Tools\mingw810_64`（465M）：Qt 5.15.2 配套的 MinGW 8.1.0（download.qt.io 存档 Tools 分类）
+  - `deps\dl\vlc-2.2.8-win64.zip`：SHA256 `DD2AD3B5…`（vmem 考古用，勿删）
+  - Qt/MinGW 近 1G **不做本地压缩归档**：官方存档仍可下载，本地快照的维护成本大于收益；真正难再生的是 thirdparty，已归档解决
 - 网络盘：`Z:` = RaiDrive 挂载 WebDAV，读速 0.1–45 MB/s 抖动；读慢时播放器"未响应"属挂载问题
 
 ---
@@ -239,8 +255,31 @@ Copy-Item build\release\BiliLocal.exe ..\dist\ -Force
 1. 大 xml 异步解析：**仅当**哪天录播 xml 大到可感知卡顿时再做（别用 `QFutureWatcher`，见 §7-1）。
 2. 渲染层（`EmbedPrivate`/`ARender`/`OpenGL*`）：已在 `600b369` 修过一轮（图集纹理在 paintGL 里删、析构补齐 surface/过滤器/连接、延迟 nudge 加存活标记），**再动要先讲清现象并给证据**。
 3. 待用户拍板的**加功能**项（没批准前不要动）：编辑器按弹幕类型上色（模式 4/5/6 淡色底）、底栏静音/上一集/下一集/截图按钮。
+4. 模型层剩余覆盖（List/Danmaku 本体）：独立成测需要更大的桩面（APlayer 会拖进 VPlayer/libvlc），暂缓；现有 37 例已盖住嗅探与屏蔽语义这两个 bug 高发区。
 
 > 2026-10-25 裁定并结案：**dist 不再瘦身**（`lua\` 1.1M + `opengl32sw.dll` 21M 实测可去，决定保留）；**Z: 长时段观察不再挂账**（RaiDrive 链路抖动，日常播到不对劲再查）。
+
+---
+
+## 11. Qt 6 迁移纸面预案（未启动，仅备案）
+
+> 原则：**先不动**（2026-10-25 用户裁定）。触发条件：安全事件、Qt 5.15 官方二进制不可得、或新硬件逼着换工具链。以下为 2026-10-25 全库 grep 的实测排查，真要迁移时按单核对。
+
+- **工具链耦合**：Qt 6 Windows 官方包只有 MSVC——MinGW 路线意味着同时换编译器（新 mingw-w64）和构建系统（qmake → CMake）。想解耦风险，第一步只换编译器（保持 Qt 5.15），框架另算。
+- **全库命中清单**（除下列各项外，QRegExp / QDesktopWidget / qrand / toTime_t / `QString::SkipEmptyParts` / `toList()`/`toSet()` / `QFontMetrics::width` 均 **0 命中**）：
+
+| 项 | 位置 | Qt 6 处置 |
+| --- | --- | --- |
+| `QTextCodec`（唯一硬移除项） | `Parse.cpp:9-48`（弹幕文件编码嗅探） | 换 `QStringDecoder` 或引 Qt6::Core5Compat；全库仅此一处 |
+| `AA_UseHighDpiPixmaps` | `Local.cpp:188` | Qt 6 恒开该行为，删行即可 |
+| `AA_UseOpenGLES` | `Local.cpp:194` | 语义要重验（Qt 6 的 GL/ANGLE 策略变了） |
+| `QOpenGLWindow`/`QOpenGLFunctions` | `Render/OpenGL` 5 个文件 | 类仍在；上下文/GLSL 策略重验——§6-36/40 的坑要重新走一遍 |
+| `QtConcurrent::blockingMappedReduced` | `Parse.cpp` | Qt 6 同名（Qt6::Concurrent），签名未变 |
+| `Qt::SkipEmptyParts` | `Parse.cpp:379` | 已是 Qt 6 兼容写法 ✓ |
+
+- **高风险区**：`d98327b` 的 DPI 工作（150% 屏 PassThrough 取整、逐档 dpr 绘制）建立在 Qt 5 的开关式高 DPI 之上，Qt 6 恒开高 DPI 后必须重测。
+- **不受影响**：libvlc 侧（VPlayer/Embed 直出）与 Qt 版本无关；§6-18/23/24/25 的输入路由坑是窗口系统层面，大半仍成立。
+- **量级预估**：CMake 化 + QTextCodec 改写 + 渲染层重验 ≈ 2–4 个会话；动手前先重读本文件 §6。
 
 ---
 

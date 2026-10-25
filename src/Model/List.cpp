@@ -234,11 +234,24 @@ List::List(QObject *parent)
 		case Records:
 		{
 			QFileInfo info(cur->data(FileRole).toString());
+			// 同一个视频可能挂了两条指向同一份弹幕的规则：一条模板 "%{Path}/%{File}.xml"，
+			// 一条命令行带 xml 打开时存下来的绝对路径。两者替换完只差分隔符（正斜杠/反斜杠），
+			// 而 Load 按 source 字符串全等去重，于是同一份 xml 被加载两次、弹幕整屏重复。
+			// 这里先比较规范化路径，路径取不到（文件不在）时退回只清洗分隔符的写法。
+			QSet<QString> loaded;
 			for (int i = 0; i < cur->rowCount(); ++i){
-				Load *load = lApp->findObject<Load>();
 				QStandardItem *d = cur->child(i);
 				QString danmaku = d->data(CodeRole).toString();
 				danmaku.replace("%{File}", info.completeBaseName()).replace("%{Path}", info.absolutePath());
+				QString key = QFileInfo(danmaku).canonicalFilePath();
+				if (key.isEmpty()){
+					key = QDir::cleanPath(QDir::fromNativeSeparators(danmaku));
+				}
+				if (loaded.contains(key)){
+					continue;
+				}
+				loaded.insert(key);
+				Load *load = lApp->findObject<Load>();
 				Load::Task task = load->codeToTask(danmaku);
 				task.delay = d->data(List::TimeRole).value<qint64>();
 				load->enqueue(task);

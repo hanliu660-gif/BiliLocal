@@ -43,6 +43,7 @@ public slots:
 	void    play() override;
 	void    stop(bool manually = true) override;
 	int     getState() override { return state; }
+	bool    snapshot(QString path = QString()) override;
 
 	void    setTime(qint64 time) override;
 	qint64  getTime() override;

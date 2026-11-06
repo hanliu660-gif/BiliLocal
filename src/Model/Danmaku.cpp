@@ -111,18 +111,26 @@ QVariant Danmaku::data(const QModelIndex &index, int role) const
 				return Qt::AlignCenter;
 			}
 			break;
-		case Qt::BackgroundRole:
-			switch (comment.mode){
-			case 7:
-				return QColor(200, 255, 200);
-			case 8:
-				return QColor(255, 255, 160);
+		case Qt::BackgroundRole: {
+			const bool dark = (qApp != nullptr && qApp->palette().color(QPalette::Base).lightness() < 128);
+			switch (comment.mode) {
+			case 4: // 底端弹幕（柔和淡蓝）
+				return dark ? QColor(40, 75, 120) : QColor(215, 235, 255);
+			case 5: // 顶端弹幕（柔和淡橙）
+				return dark ? QColor(110, 70, 40) : QColor(255, 230, 210);
+			case 6: // 逆向弹幕（柔和淡紫）
+				return dark ? QColor(85, 55, 115) : QColor(245, 220, 255);
+			case 7: // 高级/定位弹幕（柔和淡绿）
+				return dark ? QColor(40, 95, 55) : QColor(200, 255, 200);
+			case 8: // 代码弹幕（柔和淡黄）
+				return dark ? QColor(95, 95, 40) : QColor(255, 255, 160);
 			default:
 				break;
 			}
-			// 1-6 是普通弹幕（滚动/底端/顶端/逆向），没有专属底色；这里必须显式返回
-			// 空值，否则会穿透到下面的 case ModeRole，把 mode 整数当背景刷交出去
+			// 模式 1-3 是常规滚动弹幕，保留透明/默认底色，避免列表视觉过载；
+			// 此处必须显式返回空值，防止穿透到下方的 ModeRole 将整型当背景画刷返回
 			return QVariant();
+		}
 		case ModeRole:
 			return comment.mode;
 		case FontRole:
@@ -397,9 +405,11 @@ void Danmaku::parse(int flag)
 		}
 		
 		//Regexp Shield
-		Shield *shield = lApp->findObject<Shield>();
-		for (Comment *c : d->danm) {
-			c->blocked = c->blocked || shield->isBlocked(*c);
+		Shield *shield = lApp ? lApp->findObject<Shield>() : nullptr;
+		if (shield) {
+			for (Comment *c : d->danm) {
+				c->blocked = c->blocked || shield->isBlocked(*c);
+			}
 		}
 	}
 	if (flag & ModelReset) {

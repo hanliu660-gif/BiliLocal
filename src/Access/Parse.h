@@ -42,9 +42,14 @@ namespace Parse
 			}
 		}
 
-		operator Result()
+		Result get() const
 		{
 			return data == nullptr ? Result() : data->get();
+		}
+
+		operator Result() const
+		{
+			return get();
 		}
 	};
 

@@ -75,11 +75,16 @@ namespace UI
 		QSlider *timeS;
 		QSlider *volmS;
 		QPushButton *playB;
+		QPushButton *prevB;
+		QPushButton *nextB;
 		QPushButton *openB;
 		QPushButton *danmB;
 		QPushButton *rateB;
 		QPushButton *prefB;
 		QPushButton *fullB;
+		QPushButton *snapB;
+		QPushButton *muteB;
+		int muteVolume;
 		QAction *playA;
 		QIcon playI, pausI;
 		QPropertyAnimation *animation;

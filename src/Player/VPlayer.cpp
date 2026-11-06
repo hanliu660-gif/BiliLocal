@@ -5,6 +5,12 @@
 #include "../Utils.h"
 #include "../Render/ARender.h"
 #include <functional>
+#include <QStandardPaths>
+#include <QDateTime>
+#include <QDir>
+#include <QClipboard>
+#include <QTimer>
+#include <QImage>
 
 namespace
 {
@@ -497,4 +503,35 @@ void VPlayer::event(APlayer::Event type)
 		emit errorOccurred(UnknownError);
 		break;
 	}
+}
+
+bool VPlayer::snapshot(QString path)
+{
+	if (!mp || state == Stop){
+		return false;
+	}
+	QString targetPath = path;
+	if (targetPath.isEmpty()){
+		QString dir = Config::getValue("/Player/SnapshotDir",
+			QStandardPaths::writableLocation(QStandardPaths::PicturesLocation) + "/BiliLocal");
+		QDir().mkpath(dir);
+		QFileInfo fi(getMedia());
+		QString baseName = fi.baseName().isEmpty() ? QStringLiteral("BiliLocal") : fi.baseName();
+		QString timeStr = QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss_zzz"));
+		targetPath = QString("%1/%2_%3.png").arg(dir, baseName, timeStr);
+	}
+	QByteArray utf8Path = QDir::toNativeSeparators(targetPath).toUtf8();
+	int rc = libvlc_video_take_snapshot(mp, 0, utf8Path.constData(), 0, 0);
+	if (rc == 0){
+		// 稍候读取图片写入剪贴板并发送成功信号（libvlc 异步落盘，需要极短延迟等待文件写入完成）
+		QTimer::singleShot(250, [this, targetPath](){
+			QImage img(targetPath);
+			if (!img.isNull()){
+				qApp->clipboard()->setImage(img);
+			}
+			emit snapshotTaken(targetPath);
+		});
+		return true;
+	}
+	return false;
 }

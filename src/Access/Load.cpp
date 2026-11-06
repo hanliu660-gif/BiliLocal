@@ -39,6 +39,13 @@ Load::Load(QObject *parent)
 	setObjectName("Load");
 }
 
+Load::~Load()
+{
+	if (workerThread && workerThread->isRunning()){
+		workerThread->wait(3000);
+	}
+}
+
 Load::Task Load::codeToTask(QString code)
 {
 	Task task;
@@ -75,57 +82,67 @@ void Load::processNext()
 	}
 	const Task task = queue.dequeue();
 
-	QFile file(task.code);
-	if (!file.open(QIODevice::ReadOnly)){
-		qWarning("Load: cannot open %s", qPrintable(task.code));
-		emit errorOccured(1);
-		QMetaObject::invokeMethod(this, "processNext", Qt::QueuedConnection);
-		return;
-	}
-	QByteArray data = file.readAll();
-	file.close();
-	// 录播姬等工具写出的 xml 带 UTF-8 BOM，不剥掉的话下面的 startsWith("<?xml") 会失配，
-	// 整个文件会被当成 AcFun 的 JSON 去解析，结果是 0 条弹幕。
-	if (data.startsWith("\xEF\xBB\xBF")) {
-		data.remove(0, 3);
-	}
+	QThread *thread = QThread::create([this, task](){
+		QFile file(task.code);
+		if (!file.open(QIODevice::ReadOnly)){
+			QMetaObject::invokeMethod(this, [this, task](){
+				qWarning("Load: cannot open %s", qPrintable(task.code));
+				emit errorOccured(1);
+				processNext();
+			}, Qt::QueuedConnection);
+			return;
+		}
+		QByteArray data = file.readAll();
+		file.close();
 
-	Parse::ResultDelegate result;
-	// 前面有空行/空白的 xml 以前会被当成 AcFun JSON（结果是 0 条弹幕），
-	// 所以先 trim 再判类型；判不出来的仍走 AcFun 兜底，与原来的行为一致。
-	const QByteArray head = data.left(512).trimmed();
-	if (head.startsWith("[Script Info]")){
-		result = Parse::parseComment(data, Utils::ASS);
-	}
-	else if (head.startsWith('<')){
-		if (head.indexOf("<packet>") != -1){
-			result = Parse::parseComment(data, Utils::Niconico);
+		// 录播姬等工具写出的 xml 带 UTF-8 BOM，不剥掉的话下面的 startsWith("<?xml") 会失配，
+		// 整个文件会被当成 AcFun 的 JSON 去解析，结果是 0 条弹幕。
+		if (data.startsWith("\xEF\xBB\xBF")) {
+			data.remove(0, 3);
 		}
-		else if (head.indexOf("<i>") != -1){
-			result = Parse::parseComment(data, Utils::Bilibili);
-		}
-		else if (head.indexOf("<c>") != -1){
-			result = Parse::parseComment(data, Utils::AcfunLocalizer);
-		}
-	}
-	else {
-		result = Parse::parseComment(data, Utils::AcFun);
-	}
 
-	Record load;
-	load.source = task.code;
-	load.access = task.code;
-	load.string = QFileInfo(task.code).fileName();
-	result.onFinish([&load, &task](QVector<Comment> &&r) mutable {
-		load.danmaku.swap(r);
+		Parse::ResultDelegate result;
+		// 前面有空行/空白的 xml 以前会被当成 AcFun JSON（结果是 0 条弹幕），
+		// 所以先 trim 再判类型；判不出来的仍走 AcFun 兜底，与原来的行为一致。
+		const QByteArray head = data.left(512).trimmed();
+		if (head.startsWith("[Script Info]")){
+			result = Parse::parseComment(data, Utils::ASS);
+		}
+		else if (head.startsWith('<')){
+			if (head.indexOf("<packet>") != -1){
+				result = Parse::parseComment(data, Utils::Niconico);
+			}
+			else if (head.indexOf("<i>") != -1){
+				result = Parse::parseComment(data, Utils::Bilibili);
+			}
+			else if (head.indexOf("<c>") != -1){
+				result = Parse::parseComment(data, Utils::AcfunLocalizer);
+			}
+		}
+		else {
+			result = Parse::parseComment(data, Utils::AcFun);
+		}
+
+		Record load;
+		load.source = task.code;
+		load.access = task.code;
+		load.string = QFileInfo(task.code).fileName();
+		load.danmaku = result.get();
 		if (task.delay != 0) {
 			load.delay = task.delay;
 			for (Comment &iter : load.danmaku) {
-				iter.time += load.delay;
+				iter.time += task.delay;
 			}
 		}
-		lApp->findObject<Danmaku>()->append(std::move(load));
+
+		QMetaObject::invokeMethod(this, [this, task, load = std::move(load)]() mutable {
+			lApp->findObject<Danmaku>()->append(std::move(load));
+			qWarning("Load: processed %s, pool=%d", qPrintable(task.code), lApp->findObject<Danmaku>()->getPool().size());
+			processNext();
+		}, Qt::QueuedConnection);
 	});
-	qWarning("Load: processed %s, pool=%d", qPrintable(task.code), lApp->findObject<Danmaku>()->getPool().size());
-	QMetaObject::invokeMethod(this, "processNext", Qt::QueuedConnection);
+
+	workerThread = thread;
+	connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+	thread->start();
 }

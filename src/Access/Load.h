@@ -27,6 +27,8 @@
 #pragma once
 
 #include <QtCore>
+#include <QPointer>
+#include <QThread>
 
 class Comment;
 class Record;
@@ -52,6 +54,7 @@ public:
 	Task codeToTask(QString code);
 
 	explicit Load(QObject *parent = nullptr);
+	~Load();
 
 signals:
 	void errorOccured(int state);
@@ -70,5 +73,6 @@ private slots:
 
 private:
 	QQueue<Task> queue;
-	bool processing = false;	// 已有 processNext 在队列里待跑，防重复投递
+	bool processing = false;	// 已有任务在后台/队列待跑，防重复投递
+	QPointer<QThread> workerThread;
 };

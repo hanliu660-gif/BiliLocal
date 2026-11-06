@@ -67,6 +67,9 @@ set(BILILOCAL_SOURCES
 	# INTERFACE_WIDGET
 	src/UI/Widget/Editor.cpp
 	src/UI/Widget/Home.cpp
+	src/UI/Widget/HomeShortcuts.cpp
+	src/UI/Widget/HomeContextMenu.cpp
+	src/UI/Widget/HomeGestures.cpp
 	src/UI/Widget/Info.cpp
 	src/UI/Widget/Menu.cpp
 	src/UI/Widget/Prefer.cpp
@@ -103,6 +106,9 @@ set(BILILOCAL_HEADERS
 	src/UI/InterfacePrivate.h
 	src/UI/Widget/Editor.h
 	src/UI/Widget/Home.h
+	src/UI/Widget/HomeShortcuts.h
+	src/UI/Widget/HomeContextMenu.h
+	src/UI/Widget/HomeGestures.h
 	src/UI/Widget/Info.h
 	src/UI/Widget/Menu.h
 	src/UI/Widget/Prefer.h
@@ -219,9 +225,15 @@ bili_test(tst_list
 	LIBS Qt6::Network Qt6::Concurrent
 )
 
+bili_test(tst_danmaku
+	SOURCES test/tst_danmaku.cpp src/Model/Danmaku.cpp src/Model/Shield.cpp src/Config.cpp
+	HEADERS src/Model/Danmaku.h src/Model/Comment.h src/Model/Shield.h src/Config.h src/Local.h
+)
+
 enable_testing()
-add_test(NAME tst_parse  COMMAND tst_parse)
-add_test(NAME tst_config COMMAND tst_config)
-add_test(NAME tst_shield COMMAND tst_shield)
-add_test(NAME tst_load   COMMAND tst_load)
-add_test(NAME tst_list   COMMAND tst_list)
+add_test(NAME tst_parse   COMMAND tst_parse)
+add_test(NAME tst_config  COMMAND tst_config)
+add_test(NAME tst_shield  COMMAND tst_shield)
+add_test(NAME tst_load    COMMAND tst_load)
+add_test(NAME tst_list    COMMAND tst_list)
+add_test(NAME tst_danmaku COMMAND tst_danmaku)

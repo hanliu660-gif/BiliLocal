@@ -88,11 +88,13 @@ signals:
 	void timeChanged(qint64 time);
 	void rateChanged(double rate);
 	void volumeChanged(int volume);
+	void snapshotTaken(QString path);
 
 public slots:
 	virtual void    play() = 0;
 	virtual void    stop(bool manually = true) = 0;
 	virtual int     getState() = 0;
+	virtual bool    snapshot(QString path = QString()) { Q_UNUSED(path); return false; }
 
 	virtual void    setTime(qint64 time) = 0;
 	virtual qint64  getTime() = 0;

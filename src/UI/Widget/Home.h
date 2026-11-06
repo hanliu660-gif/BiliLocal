@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Editor.h"
 #include "Info.h"
@@ -20,6 +20,9 @@
 
 namespace UI
 {
+	class HomeShortcuts;
+	class HomeGestures;
+
 	class Home : public QWidget
 	{
 		Q_OBJECT
@@ -28,21 +31,13 @@ namespace UI
 
 		void warning(QString title, QString text);
 
-	private:
-		QTimer *timer;
-		QTimer *delay;
-		QTimer *holdTimer;
-		QTimer *clickTimer;
-		bool speedHold;
-		double prevRate;
-		int prevVolume;
+		UI::Menu *menuWidget() const { return menu; }
+		UI::Info *infoWidget() const { return info; }
+		HomeShortcuts *shortcutsController() const { return shortcuts; }
 
-		QAction *quitA;
-		QAction *fullA;
-		QAction *confA;
-		QAction *toggA;
-		QAction *listA;
-		QMenu *spd;
+	private:
+		HomeShortcuts  *shortcuts;
+		HomeGestures   *gestures;
 		QPointer<QDialog> msg;
 
 		UI::Menu *menu;
@@ -54,15 +49,7 @@ namespace UI
 		Running *running;
 		ARender *arender;
 
-		QPoint sta;
-		QPoint wgd;
-
-		bool seekdrag;
-		qint64 lastMove;
 		bool wasMaximized;
-
-		int  infoHeight() const;
-		void seekTo(QPoint p, bool commit);
 
 		virtual void closeEvent(QCloseEvent *e) override;
 		virtual void dragEnterEvent(QDragEnterEvent *e) override;
@@ -76,11 +63,11 @@ namespace UI
 
 		QSize parseSize(QString string);
 		void setGeometry(QSize size, bool center);
-		void showContextMenu(QPoint p);
 
-	private slots:
+	public slots:
 		// 私有非槽时 Prefer 里 QMetaObject::invokeMethod(widget,"setWindowFlags")
 		// 找不到方法会静默失败——置顶设置改完不生效，要等播放状态变化才应用
 		void setWindowFlags();
+		void applyFullScreen(bool b);
 	};
 }

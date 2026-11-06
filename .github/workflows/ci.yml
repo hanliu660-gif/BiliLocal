@@ -1,4 +1,4 @@
-# BiliLocal CI：只编 5 个单测目标并运行（单测不链 libvlc，不需要 VLC SDK）。
+# BiliLocal CI：只编 6 个单测目标并运行（50 例；单测不链 libvlc，不需要 VLC SDK）。
 # Phase 2 起单 job：Qt 6.8 + MSVC（不钉 -G，用 runner 镜像的默认 VS，坑 51）；
 # qmake/MinGW 线已随 Qt6 迁移删除。主程序 + hook-gate 留在本机验证（CI 虚机的
 # D3D11/GL 不可信，见交接文档 §8）。Qt 经 aqt 安装并缓存。

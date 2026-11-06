@@ -59,7 +59,7 @@
 
 **迁移状态（✅ 2026-10-26 结案，tag `v0.7.0-qt6`）**：
 
-- **源码**：`master` = 最新提交 `72a99e0`（文档 31 版，积压功能与重构全量收官结案）← `40338ad`（文档 23 版快照）← `bf618b1` ← `dafc3d9` ← `8f15d86`（坑 55 修复）。
+- **源码**：`master` = 最新提交 `ccd5417`（文档同步收尾）← `c0ac591`（文档 31 版快照）← `72a99e0`（**代码末态**，积压功能与重构全量收官结案）← `40338ad`（文档 23 版快照）← `bf618b1` ← `dafc3d9` ← `8f15d86`（坑 55 修复）。（2026-11-07 06:08 勘误同步：把散落在 `src\README.md` / §8 / CI 注释 / 上层 `APP\AGENTS.md` 的旧测试计数全量对齐为「6 目标 50 例」，HEAD 与 dist SHA 一并对齐；§2.1 沿革、§9 SDK 验证与 §10 任务书里的旧计数是当时史实，按原样保留。）
 - **现役成品**：`dist\BiliLocal.exe` **1,003,008 B / SHA256 `f30a9743…`**（Qt 6.8.3 msvc2022_64，构建树 `build-cmake6\`）——**这就是日常在用的 dist**。对调时裁掉 Qt5 杂项：MinGW 三件套（libgcc/libstdc++/libwinpthread）、`d3dcompiler_47.dll`、Qt5 时代 `qt.qm`——pefile 扫 libvlc/libvlccore/全部插件的导入表实证零依赖；换上 Qt6 自带 `qt_zh_CN.qm`/`qt_zh_TW.qm`（QFileDialog 等 Qt 内建文案的翻译）。hook-gate 对调后复验 PASS。
 - **回滚位**：`dist-qt5\`（Qt5/MinGW 线最后成品整树归档，956,928 B / `6C55F692…`）；源码锚 tag `v0.6.0-qt5-final`；deps 的 Qt5/MinGW 工具链（约 1.4G）按"默认倾向留"保留，要裁再说一声。
 - **验收记录**：Phase 3 功能清单全过；性能回归（反应变慢 + 关闭长卡顿）定位与修复见坑 55；千夏复验通过。
@@ -244,11 +244,11 @@ Copy-Item C:\DSH\APP\BiliLocal\build-cmake6\Release\BiliLocal.exe C:\DSH\APP\Bil
 
 ---
 
-## 8. 工具脚本（`tools\`，16 个）与验证钩子
+## 8. 工具脚本（`tools\`，18 个）与验证钩子
 
 | 脚本 | 用途 |
 | --- | --- |
-| `run-tests.ps1` | **一键门禁**（pre-push 调它）：`cmake --build build-cmake6` + `ctest -C Release`（5 目标 41 例），任一失败退出码 1；路径相对脚本位置，要求 build-cmake6 已 configure |
+| `run-tests.ps1` | **一键门禁**（pre-push 调它）：`cmake --build build-cmake6` + `ctest -C Release`（6 目标 50 例），任一失败退出码 1；路径相对脚本位置，要求 build-cmake6 已 configure |
 | `hook-gate.ps1` | **GUI 钩子门禁**：以 `BILILOCAL_EMBED_TEST=1` 起播放器播本地 fixture，断言 `msg.log` 三个标记（`seeked to 10%` / `hover: freeze` / `hover: release`），全中才退出码 0；`-Media` 可换 Z: 真实录播做对照；`-Dist` 指定运行时根（并行树如 `dist-msvc` 必传，否则 staging 会把 dist 的 MinGW DLL 盖进 MSVC 树）；**非运行时根的 exe 会自动 stage DLL+junction**（坑 46） |
 | `gen-media.py` | 生成 hook-gate 的本地 fixture 到 `tools\.media\`：`sample-60s.y4m`（裸 YUV4MPEG2 流，libvlc 原生可播，本机无转码器也能造视频）+ 同名 xml（**0.05s 间隔高密度弹幕**，原因见 §6-45） |
 | `close-probe.ps1` | **关闭计时探针**（坑 55 的 A/B 仪器）：PostMessage WM_CLOSE（不抢焦点），量「开窗时长」与「关窗→进程退出」，close+2s 采 CPU，打印 msg.log 尾部 |
@@ -273,7 +273,7 @@ Copy-Item C:\DSH\APP\BiliLocal\build-cmake6\Release\BiliLocal.exe C:\DSH\APP\Bil
 - 悬停验证：每 60 拍循环「扫掠→(600,320) 压 14 拍（验证静止不解冻）→第 56 拍右键」，起播后自动跳 10%；旧闭环（双击全屏/单击暂停）需另加 `BILILOCAL_EMBED_CLICK=1`。`msg.log` 找 `hover: freeze/release`。
 - `BILILOCAL_EMBED_TEST` **无条件编进发布 exe**（`BiliLocal.pro` 的 DEFINES），靠环境变量触发；源码注释已与事实对齐（`0f25480` 纠掉"正式构建不编译"的旧说法），之所以不改成 release 剔除，是因为悬停/子菜单等外部验证脚本都依赖发布 exe 里的钩子。
 
-**GitHub Actions CI（`.github/workflows/ci.yml`；2026-10-25 MinGW 首绿，2026-10-26 起单 job 换 Qt 6.8）**：push 到 master 触发。runner 上 aqt 装 Qt 6.8.3 win64_msvc2022_64 + qt5compat（`qttools` 不是 6.x 模块名，lrelease 在 base 包里——坑 52；装完落盘验 `bin\Qt6Core.dll`），不指定 `-G`（坑 51），`BILILOCAL_BUILD_APP=OFF` 只编 5 个测试目标并 `ctest`（41 例）；Qt 走 actions/cache（key `qt-6.8.3-msvc2022-v1`，命中后秒级）。主程序编译与 hook-gate 留本机（CI 虚机 D3D11/GL 不可信）。查运行状态：认证 API 或 Actions 徽章 SVG（`actions/workflows/ci.yml/badge.svg`）。
+**GitHub Actions CI（`.github/workflows/ci.yml`；2026-10-25 MinGW 首绿，2026-10-26 起单 job 换 Qt 6.8）**：push 到 master 触发。runner 上 aqt 装 Qt 6.8.3 win64_msvc2022_64 + qt5compat（`qttools` 不是 6.x 模块名，lrelease 在 base 包里——坑 52；装完落盘验 `bin\Qt6Core.dll`），不指定 `-G`（坑 51），`BILILOCAL_BUILD_APP=OFF` 只编 6 个测试目标并 `ctest`（50 例）；Qt 走 actions/cache（key `qt-6.8.3-msvc2022-v1`，命中后秒级）。主程序编译与 hook-gate 留本机（CI 虚机 D3D11/GL 不可信）。查运行状态：认证 API 或 Actions 徽章 SVG（`actions/workflows/ci.yml/badge.svg`）。
 
 **PS 5.1 铁律**：一律 `-NoProfile -ExecutionPolicy Bypass -File`；脚本存 UTF-8 带 BOM、**不写中文字面量**；`$Pid` 只读、`Move/Cli/lp` 是别名；`Start-Process -RedirectStandardError` 别配 `-Wait`；子进程会继承 stdout 管道（给 `UseShellExecute=$false` 的启动加 stdio 重定向，否则调用方假死）。
 
@@ -289,7 +289,7 @@ Copy-Item C:\DSH\APP\BiliLocal\build-cmake6\Release\BiliLocal.exe C:\DSH\APP\Bil
 - Python：`C:\Users\23239\.dsh\dsh-runtimes\dsh-next-primary-runtime\dependencies\python\python.exe`（系统 `python` 是 Store 存根，跑了等于没跑）
 - VC 运行库（VLC3 需要）：**dist 已自带**（2026-10-25 从系统 System32 拷入 vcruntime140 123,472 B / vcruntime140_1 47,264 B / msvcp140 553,552 B，v14.50.35719.0，拷入后启动冒烟通过）。换机器无需再装；如需更新再取 [vc_redist.x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)
 - **deps 来源与归档（2026-10-25 补）**：
-  - `deps\thirdparty`（**VLC 3.0.24 SDK**，同日从 3.0.21 刷新）→ 归档 `deps\archive\vlc-sdk-3.0.24-win64.zip`（SHA256 `7BD12CD7…`）。**注意**：官方 7z 的 lib 只有 MSVC `.lib`——现行 `lib/amd64` 里的 `.def`+`.dll.a` 是 `gendef dist\libvlc.dll` 提取导出表、`dlltool -m i386:x86-64 --as-flags=--64` 从**出货运行库本体**再生成的，`include/` 为官方 3.0.24 头；链接验证 = 41 例 + hook-gate 全绿、警告仍是那 2 条已知项。**Phase 1 增补（2026-10-26）**：`lib\msvc\` 里放了官方 `libvlc.lib`/`libvlccore.lib`（267,386 / 609,922 B）+ `vlc.lib`/`vlccore.lib` 转发桩（18/22 B），从 `deps\dl\vlc-3.0.24-win64.7z` 的 `sdk\lib\` 用 `7zr.exe e` 再取（MSVC 线直接链它，不再走 gendef/dlltool）
+  - `deps\thirdparty`（**VLC 3.0.24 SDK**，同日从 3.0.21 刷新）→ 归档 `deps\archive\vlc-sdk-3.0.24-win64.zip`（SHA256 `7BD12CD7…`）。**注意**：官方 7z 的 lib 只有 MSVC `.lib`——现行 `lib/amd64` 里的 `.def`+`.dll.a` 是 `gendef dist\libvlc.dll` 提取导出表、`dlltool -m i386:x86-64 --as-flags=--64` 从**出货运行库本体**再生成的，`include/` 为官方 3.0.24 头；链接验证 = 41 例（当时基线）+ hook-gate 全绿、警告仍是那 2 条已知项。**Phase 1 增补（2026-10-26）**：`lib\msvc\` 里放了官方 `libvlc.lib`/`libvlccore.lib`（267,386 / 609,922 B）+ `vlc.lib`/`vlccore.lib` 转发桩（18/22 B），从 `deps\dl\vlc-3.0.24-win64.7z` 的 `sdk\lib\` 用 `7zr.exe e` 再取（MSVC 线直接链它，不再走 gendef/dlltool）
   - `deps\dl\vlc-3.0.24-win64.7z`：SHA256 `1ED59C09…`（download.videolan.org，`sdk/` 子树 112 条目）
   - `deps\archive\vlc-sdk-3.0.21-win64.zip`：旧 SDK 存档保留（SHA256 `857CE77B…`）
   - `deps\5.15.2\mingw81_64`（501M）：Qt 官方存档 5.15.2 的 mingw81_64 组件（download.qt.io/archive/qt/5.15/5.15.2/）

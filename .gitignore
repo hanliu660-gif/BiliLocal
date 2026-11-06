@@ -20,3 +20,6 @@ bin
 # hand-authored icon resource for the CMake build (the *.rc ignore above
 # targets legacy MSVC scaffolding)
 !res/BiliLocal.rc
+
+# generated hook-gate media fixture (repo copy of tools/)
+tools/.media/

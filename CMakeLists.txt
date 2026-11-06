@@ -37,6 +37,8 @@ set(THIRDPARTY "${CMAKE_CURRENT_SOURCE_DIR}/../deps/thirdparty" CACHE PATH "VLC 
 
 # CI 上只编测试（单测不链 libvlc，不需要 SDK）；主程序默认仍随全量构建
 option(BILILOCAL_BUILD_APP "Build the main application (needs the VLC SDK)" ON)
+option(BILILOCAL_BUILD_TEST_HOOKS
+	"Compile in-process GUI test hooks (BILILOCAL_EMBED_TEST) into the app; OFF gives a clean release build" ON)
 
 # ---- 主程序 ---------------------------------------------------------------
 
@@ -155,12 +157,14 @@ else()
 endif()
 
 # 与 qmake 逐项对齐：单平台三件套 + 验证钩子（运行时由 BILILOCAL_EMBED_TEST
-# 环境变量触发）；Debug 另加 GRAPHIC_DEBUG
+# 环境变量触发）。默认仍编进发布 exe，因为 hook-gate / verify_hover /
+# verify_submenu 都依赖它；BILILOCAL_BUILD_TEST_HOOKS=OFF 可出干净构建。
+# Debug 另加 GRAPHIC_DEBUG
 target_compile_definitions(BiliLocal PRIVATE
 	BACKEND_VLC
 	RENDER_OPENGL
 	INTERFACE_WIDGET
-	BILILOCAL_EMBED_TEST
+	$<$<BOOL:${BILILOCAL_BUILD_TEST_HOOKS}>:BILILOCAL_EMBED_TEST>
 	$<$<CONFIG:Debug>:GRAPHIC_DEBUG>
 )
 

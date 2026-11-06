@@ -113,6 +113,25 @@ caught the upstream ASS color bug and several regressions of our own:
 ctest --test-dir build-cmake6 -C Release
 ```
 
+## Verification scripts
+
+The four gate/forensics scripts are versioned in `tools/` in this repo. The
+local deployment copy lives one level up at `<project root>/tools/`; keep the
+two byte-identical (edit here, then copy back). All paths are resolved by
+walking up to the project root or overridden on the command line — nothing is
+hard-coded to a machine.
+
+- `tools/run-tests.ps1` — build + full CTest gate, also used by the local
+  `pre-push` hook (`-Root` overrides the project root).
+- `tools/hook-gate.ps1` — launches the player with `BILILOCAL_EMBED_TEST=1`
+  against a generated fixture and asserts three `msg.log` markers
+  (`-Exe` / `-Dist` / `-Media` / `-Python` / `-Root`).
+- `tools/gen-media.py` — builds the `.media/` fixture (no transcoder needed).
+- `tools/dumpscan.py` — WER minidump forensics (needs `minidump` + `pefile`).
+
+GUI hooks are compiled into the app by default because these scripts depend on
+them; configure with `-DBILILOCAL_BUILD_TEST_HOOKS=OFF` for a clean build.
+
 ## Lineage
 
 - Upstream: `AncientLysine/BiliLocal` @ `9d1cb05` (0.4.2, 2016)

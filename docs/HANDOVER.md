@@ -64,7 +64,7 @@
 - **回滚位**：`dist-qt5\`（Qt5/MinGW 线最后成品整树归档，956,928 B / `6C55F692…`）；源码锚 tag `v0.6.0-qt5-final`；deps 的 Qt5/MinGW 工具链（约 1.4G）按"默认倾向留"保留，要裁再说一声。
 - **验收记录**：Phase 3 功能清单全过；性能回归（反应变慢 + 关闭长卡顿）定位与修复见坑 55；千夏复验通过。
 - **构建树收敛**：只余 `build-cmake6\`（现役）。qmake 的 `build\` + 6 个测试树（Phase 2 删）、CMake 死线 `build-cmake\`（382M）/`build-cmake-msvc\`（196M）（本次删）全部清空。
-- **CI**：单 job `unit` = Qt 6.8.3 msvc2022_64 + qt5compat（缓存 key `qt-6.8.3-msvc2022-v1`）；`hook-gate.ps1`/`perfrun.ps1` 的默认 exe 路径已随对调自动指向 Qt6 版（都用 `dist\`）。
+- **CI**：双 job（`unit` + `build-app`）：`unit` = Qt 6.8.3 msvc2022_64 + qt5compat（缓存 key `qt-6.8.3-msvc2022-v1`）；`hook-gate.ps1`/`perfrun.ps1` 的默认 exe 路径已随对调自动指向 Qt6 版（都用 `dist\`）。
 
 
 
@@ -78,7 +78,8 @@
 - **配置**：`Output=Embed` 已是唯一输出（键保留但代码不再读）；`Immediate=True`；`HardwareDecode` 已无消费者（d3d11 固定开启，`Arguments` 手写 `--avcodec-hw=`/`--vout=` 仍可覆盖）。
 - **备份**：git 历史 = 本地 `src\.git` + GitHub 双保险；锚点 tag：`v0.7.0-qt6`（迁移结案）/ `v0.6.0-qt5-final`（Qt5 末态）/ `v0.5.0-vmem`（考古，重编需自备 VLC 2.2.8）。
 - **未决事项**：**全部积压功能与重构清单已 100% 全量结案**（Home.cpp 拆解、大 xml 异步解析、Danmaku 模型单测解耦、编辑器弹幕类型着色、底栏上一集/下一集/静音/截图全量控制与紧凑排版均已结案落地）。长线仅保留远期独立事项：Phase 4 VLC 4（等上游 4.0 final 发布）。
-- **CI**：`.github/workflows/ci.yml`——push 到 master 触发，**单 job（Phase 2 起）**：runner 上 aqt 装 Qt 6.8.3 msvc2022_64 + qt5compat（不钉 `-G`，坑 51；装完落盘验 `Qt6Core.dll`，坑 52），`BILILOCAL_BUILD_APP=OFF` 只编测试目标并 ctest（6 目标 50 例）；Qt 走 actions/cache（key `qt-6.8.3-msvc2022-v1`）。查状态：认证 API 或徽章 SVG。**每次 push 都会跑，红了不许推**。
+- **CI**：`.github/workflows/ci.yml`——push 到 master 触发，**双 job（2026-11-07 起：unit + build-app）**：runner 上 aqt 装 Qt 6.8.3 msvc2022_64 + qt5compat（不钉 `-G`，坑 51；装完落盘验 `Qt6Core.dll`，坑 52），`BILILOCAL_BUILD_APP=OFF` 只编测试目标并 ctest（6 目标 50 例）；Qt 走 actions/cache（key `qt-6.8.3-msvc2022-v1`）。查状态：认证 API 或徽章 SVG。**每次 push 都会跑，红了不许推**。
+- **验证链入库（2026-11-07）**：`src\tools\` 收录 4 个核心门禁/取证脚本（与仓库外 `tools\` 逐字节一致，改为向上探测项目根 + 命令行覆盖，无写死绝对路径）；CMake 增 `BILILOCAL_BUILD_TEST_HOOKS`（默认 ON、行为不变，OFF 出干净构建，本机实测完整编译通过）；CI 增 `build-app` job（官方 VLC SDK + 完整编译主程序 + hooks OFF 验证）。脚本用法与同步约定见 `src\README.md`。
 - **验证分工**：agent 工具几乎全能自验——日志取证（`hover: freeze/release`、`Load: processed … pool=N`、`Program Link Failed` 计数）、进程内钩子注入（双击全屏/单击暂停/悬停扫掠/拍点右键）、时序验证、对话框巡览截图；**用户本人只做"真实右键点到弹幕"这一个动作**（物理点击过不了三层窗口栈的焦点/显示盲区，合成事件替代不了，见 `a4b5acf`）与主观体验类验收。
 
 ### 2.1 版本沿革（根因与证据都在 git 提交信息里）
@@ -264,7 +265,7 @@ Copy-Item C:\DSH\APP\BiliLocal\build-cmake6\Release\BiliLocal.exe C:\DSH\APP\Bil
 | `dumpwins.ps1` / `uia_name.ps1` | 列进程全部窗口 / 用 UIA Name 读标题与矩形（`GetWindowTextW` 对 Qt 标题不可靠） |
 | `verify_hover.ps1` / `verify_submenu.ps1` | 悬停冻结与右键子菜单的外部验证（QMenu 对 PrintWindow 不透明，用 `CopyFromScreen`） |
 
-（历史上几十个 `fs*/popcheck*/stuckslide*` 一次性脚本已删；`tools\` 从未入 git，**不可找回**。）
+（历史上几十个 `fs*/popcheck*/stuckslide*` 一次性脚本已删；`tools\` 从未入 git；**2026-11-07 起 4 个核心脚本（run-tests / hook-gate / gen-media / dumpscan）的可移植副本已入仓库 `src/tools/`，与本机副本逐字节一致、路径全参数化**，其余一次性脚本仍不可找回。）
 
 **进程内自动化验证钩子**（比外部投递消息可靠——后者会被 Qt 按真实光标位置路由而失准）：
 
@@ -273,7 +274,7 @@ Copy-Item C:\DSH\APP\BiliLocal\build-cmake6\Release\BiliLocal.exe C:\DSH\APP\Bil
 - 悬停验证：每 60 拍循环「扫掠→(600,320) 压 14 拍（验证静止不解冻）→第 56 拍右键」，起播后自动跳 10%；旧闭环（双击全屏/单击暂停）需另加 `BILILOCAL_EMBED_CLICK=1`。`msg.log` 找 `hover: freeze/release`。
 - `BILILOCAL_EMBED_TEST` **无条件编进发布 exe**（`BiliLocal.pro` 的 DEFINES），靠环境变量触发；源码注释已与事实对齐（`0f25480` 纠掉"正式构建不编译"的旧说法），之所以不改成 release 剔除，是因为悬停/子菜单等外部验证脚本都依赖发布 exe 里的钩子。
 
-**GitHub Actions CI（`.github/workflows/ci.yml`；2026-10-25 MinGW 首绿，2026-10-26 起单 job 换 Qt 6.8）**：push 到 master 触发。runner 上 aqt 装 Qt 6.8.3 win64_msvc2022_64 + qt5compat（`qttools` 不是 6.x 模块名，lrelease 在 base 包里——坑 52；装完落盘验 `bin\Qt6Core.dll`），不指定 `-G`（坑 51），`BILILOCAL_BUILD_APP=OFF` 只编 6 个测试目标并 `ctest`（50 例）；Qt 走 actions/cache（key `qt-6.8.3-msvc2022-v1`，命中后秒级）。主程序编译与 hook-gate 留本机（CI 虚机 D3D11/GL 不可信）。查运行状态：认证 API 或 Actions 徽章 SVG（`actions/workflows/ci.yml/badge.svg`）。
+**GitHub Actions CI（`.github/workflows/ci.yml`；2026-10-25 MinGW 首绿，2026-10-26 单 job 换 Qt 6.8，2026-11-07 起加 `build-app` 变双 job）**：push 到 master 触发。runner 上 aqt 装 Qt 6.8.3 win64_msvc2022_64 + qt5compat（`qttools` 不是 6.x 模块名，lrelease 在 base 包里——坑 52；装完落盘验 `bin\Qt6Core.dll`），不指定 `-G`（坑 51），`BILILOCAL_BUILD_APP=OFF` 只编 6 个测试目标并 `ctest`（50 例）；Qt 走 actions/cache（key `qt-6.8.3-msvc2022-v1`，命中后秒级）。主程序编译与 hook-gate 留本机（CI 虚机 D3D11/GL 不可信）。查运行状态：认证 API 或 Actions 徽章 SVG（`actions/workflows/ci.yml/badge.svg`）。
 
 **PS 5.1 铁律**：一律 `-NoProfile -ExecutionPolicy Bypass -File`；脚本存 UTF-8 带 BOM、**不写中文字面量**；`$Pid` 只读、`Move/Cli/lp` 是别名；`Start-Process -RedirectStandardError` 别配 `-Wait`；子进程会继承 stdout 管道（给 `UseShellExecute=$false` 的启动加 stdio 重定向，否则调用方假死）。
 

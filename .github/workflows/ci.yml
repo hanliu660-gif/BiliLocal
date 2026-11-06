@@ -1,4 +1,5 @@
-# BiliLocal CI：只编 6 个单测目标并运行（50 例；单测不链 libvlc，不需要 VLC SDK）。
+# BiliLocal CI：unit = 6 个单测目标（50 例，免 VLC SDK）；
+# build-app = 主程序完整编译（官方 VLC SDK，顺带验证关掉测试钩子也能编）。
 # Phase 2 起单 job：Qt 6.8 + MSVC（不钉 -G，用 runner 镜像的默认 VS，坑 51）；
 # qmake/MinGW 线已随 Qt6 迁移删除。主程序 + hook-gate 留在本机验证（CI 虚机的
 # D3D11/GL 不可信，见交接文档 §8）。Qt 经 aqt 安装并缓存。
@@ -55,3 +56,64 @@ jobs:
         run: |
           $env:PATH = "$env:QT_ROOT\6.8.3\msvc2022_64\bin;" + $env:PATH
           ctest --test-dir build --output-on-failure -C Release
+
+  build-app:
+    needs: unit
+    runs-on: windows-latest
+    env:
+      QT_ROOT: D:\a\qt
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Qt 6.8.3 (msvc2022)
+        uses: actions/cache@v4
+        with:
+          path: D:\a\qt
+          key: qt-6.8.3-msvc2022-v1
+
+      # Cache is warm after the unit job; keep the install as a fallback.
+      - name: Install Qt (msvc2022_64 + qt5compat)
+        shell: pwsh
+        run: |
+          if (Test-Path "$env:QT_ROOT\6.8.3\msvc2022_64\bin\Qt6Core.dll") { exit 0 }
+          pip install aqtinstall
+          aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -m qt5compat -O $env:QT_ROOT
+          if (-not (Test-Path "$env:QT_ROOT\6.8.3\msvc2022_64\bin\Qt6Core.dll")) { exit 1 }
+
+      # The unit job skips the app (BILILOCAL_BUILD_APP=OFF), so a broken
+      # VPlayer.cpp used to stay green. Compile the whole app here with the
+      # official VLC 3.0.24 SDK, normalised to <THIRDPARTY>/include +
+      # <THIRDPARTY>/lib/msvc. Tests hooks are OFF to prove a clean build too.
+      - name: Fetch VLC 3.0.24 SDK
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'vlc.7z'
+          Invoke-WebRequest -Uri 'https://download.videolan.org/pub/videolan/vlc/3.0.24/win64/vlc-3.0.24-win64.7z' -OutFile $archive
+          $7z = 'C:\Program Files\7-Zip\7z.exe'
+          if (-not (Test-Path $7z)) { $7z = (Get-Command 7z -ErrorAction SilentlyContinue).Source }
+          if (-not $7z) { throw '7-Zip not available on runner' }
+          $unpack = Join-Path $env:RUNNER_TEMP 'vlc-unpacked'
+          & $7z x $archive "-o$unpack" -y | Out-Null
+          $header = Get-ChildItem $unpack -Recurse -Filter 'libvlc.h' | Select-Object -First 1
+          if (-not $header) { throw 'libvlc.h not found in VLC SDK archive' }
+          $includeRoot = Split-Path -Parent (Split-Path -Parent $header.FullName)
+          $sdk = Join-Path $env:RUNNER_TEMP 'vlc-sdk'
+          $msvc = Join-Path $sdk 'lib\msvc'
+          New-Item -ItemType Directory -Path (Join-Path $sdk 'include'), $msvc -Force | Out-Null
+          Copy-Item (Join-Path $includeRoot '*') (Join-Path $sdk 'include') -Recurse -Force
+          Get-ChildItem $unpack -Recurse -Filter 'libvlc*.lib' | Copy-Item -Destination $msvc -Force
+          # pitfall 52: external tools can exit 0 without producing anything.
+          if (-not (Test-Path (Join-Path $sdk 'include\vlc\vlc.h'))) { throw 'VLC headers missing' }
+          if (-not (Test-Path (Join-Path $msvc 'libvlc.lib'))) { throw 'libvlc import lib missing' }
+
+      - name: Configure (full app, hooks off)
+        shell: pwsh
+        run: |
+          cmake -A x64 -B build-app -S . `
+            "-DQt6_DIR=$env:QT_ROOT\6.8.3\msvc2022_64\lib\cmake\Qt6" `
+            "-DTHIRDPARTY=$(Join-Path $env:RUNNER_TEMP 'vlc-sdk')" `
+            -DBILILOCAL_BUILD_TEST_HOOKS=OFF
+
+      - name: Build app
+        shell: pwsh
+        run: cmake --build build-app --config Release -j

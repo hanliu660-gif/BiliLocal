@@ -26,6 +26,7 @@
 
 #include "Common.h"
 #include "Running.h"
+#include "Layout.h"
 #include "Danmaku.h"
 #include "../Config.h"
 #include "../Local.h"
@@ -98,6 +99,8 @@ public:
 	// d->draw 列表里"的成员资格判断，比较裸指针值本身不会解引用
 	Graphic *frozen = nullptr;
 	bool pinned = false;
+	// §6-45：滚动弹幕并列最空 lane 的轮换游标，只在 Process::run 的写锁内读写
+	int laneCursor = 0;
 };
 
 Running::Running(QObject *parent)
@@ -174,6 +177,7 @@ void Running::clear(bool soft)
 	d->lock.lockForWrite();
 	// 同上：clear() 丢掉的 Prepare 不会再执行它的 --d->wait，屏障后归零
 	d->wait = 0;
+	d->laneCursor = 0;
 	for (auto iter = d->draw.begin(); iter != d->draw.end();) {
 		Graphic *g = *iter;
 		if (soft && g->stay()) {
@@ -333,10 +337,20 @@ namespace
 					}
 					else break;
 				}
-				//挑选最空闲的位置
-				for (Graphic *iter : wait) {
-					int thin = std::min_element(thick.begin(), thick.end()) - thick.begin();
-					iter->currentRect() = meta.rect[thin];
+			//挑选最空闲的位置
+			for (Graphic *iter : wait) {
+				int thin;
+				if (meta.mode == 4 || meta.mode == 5) {
+					// 顶端/底端固定弹幕必须贴边：保持"第一个最空 lane"的旧语义，
+					// 轮换会把它们甩到屏幕中部，反而破坏定位含义。
+					thin = std::min_element(thick.begin(), thick.end()) - thick.begin();
+				}
+				else {
+					// §6-45：滚动弹幕并列最空时按游标轮换，铺满屏高；
+					// 拥挤度相同则防碰撞能力等价，有唯一最空 lane 时结果不变。
+					thin = Layout::chooseLane(thick.data(), thick.size(), priv->laneCursor);
+				}
+				iter->currentRect() = meta.rect[thin];
 					iter->setIndex();
 					iter->setEnabled(true);
 					priv->wait--;

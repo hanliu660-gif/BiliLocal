@@ -234,6 +234,13 @@ bili_test(tst_danmaku
 	HEADERS src/Model/Danmaku.h src/Model/Comment.h src/Model/Shield.h src/Config.h src/Local.h
 )
 
+# 6-45 regression: lane picking is a standalone header-only helper, so the
+# test needs no renderer / player / service-locator stubs.
+bili_test(tst_layout
+	SOURCES test/tst_layout.cpp
+	HEADERS src/Model/Layout.h
+)
+
 enable_testing()
 add_test(NAME tst_parse   COMMAND tst_parse)
 add_test(NAME tst_config  COMMAND tst_config)
@@ -241,3 +248,4 @@ add_test(NAME tst_shield  COMMAND tst_shield)
 add_test(NAME tst_load    COMMAND tst_load)
 add_test(NAME tst_list    COMMAND tst_list)
 add_test(NAME tst_danmaku COMMAND tst_danmaku)
+add_test(NAME tst_layout  COMMAND tst_layout)

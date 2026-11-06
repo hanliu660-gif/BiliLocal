@@ -59,7 +59,7 @@
 
 **迁移状态（✅ 2026-10-26 结案，tag `v0.7.0-qt6`）**：
 
-- **源码**：`master` = 最新提交（文档 23 版）；最后代码提交 = `8f15d86`（坑 55 修复）← `d5b6383`（文档清扫）← `8bb173f`（**Phase 2**：Qt 6.8.3）← `599dc95`（Phase 1 结案）← `f81e6ee`（Phase 1：MSVC 工具链）← `74a7569`（文档 19 版）。远端已同步。
+- **源码**：`master` = 最新提交 `72a99e0`（文档 31 版，积压功能与重构全量收官结案）← `40338ad`（文档 23 版快照）← `bf618b1` ← `dafc3d9` ← `8f15d86`（坑 55 修复）。
 - **现役成品**：`dist\BiliLocal.exe` **1,003,008 B / SHA256 `f30a9743…`**（Qt 6.8.3 msvc2022_64，构建树 `build-cmake6\`）——**这就是日常在用的 dist**。对调时裁掉 Qt5 杂项：MinGW 三件套（libgcc/libstdc++/libwinpthread）、`d3dcompiler_47.dll`、Qt5 时代 `qt.qm`——pefile 扫 libvlc/libvlccore/全部插件的导入表实证零依赖；换上 Qt6 自带 `qt_zh_CN.qm`/`qt_zh_TW.qm`（QFileDialog 等 Qt 内建文案的翻译）。hook-gate 对调后复验 PASS。
 - **回滚位**：`dist-qt5\`（Qt5/MinGW 线最后成品整树归档，956,928 B / `6C55F692…`）；源码锚 tag `v0.6.0-qt5-final`；deps 的 Qt5/MinGW 工具链（约 1.4G）按"默认倾向留"保留，要裁再说一声。
 - **验收记录**：Phase 3 功能清单全过；性能回归（反应变慢 + 关闭长卡顿）定位与修复见坑 55；千夏复验通过。
@@ -121,12 +121,12 @@
 | `8bb173f` / `f630a70` | **Phase 2**：Qt 6.8.3 全面落地（shader 330 core、Core5Compat、事件坐标/desktop/setCodec/AA_* 全清）+ qmake 遗留删除 + run-tests 改 ctest + CI 换 Qt6 单 job（坑 52–54）；文档 21 版 |
 | `d5b6383` | 文档清扫：README 构建/测试段换 Qt6、沿革补全、全部失效句清理 |
 | `8f15d86` | **坑 55 修复**：atlas 退出零 GL 调用 + collect 批量删（关闭 2.0–8.1s → 2.0–2.1s；4 份 WER 转储取证法入档） |
-| （结案） | **Home.cpp 拆解全景结案**：Step 1 快捷键系统（`HomeShortcuts.h/cpp`，951→742 行）；Step 2 上下文菜单（`HomeContextMenu.h/cpp`，742→543 行）；Step 3 手势与定时器状态机（`HomeGestures.h/cpp`，543→352 行，净减 599 行，缩减 63%）；全屏/DWM 与置顶收敛为原子方法；保留 Prefer 扫描与 pinHover 契约；ctest 41/41 绿、hook-gate PASS |
-| （功能轮） | **底栏原生视频截图与快捷键系统落地**：`libvlc_video_take_snapshot` 直通硬件解码帧（全分辨率无黑屏），保存至 `%USERPROFILE%\Pictures\BiliLocal` 并自动复制至剪贴板；底栏增加 `barIcon(4)` 矢量相机图标按钮；`HomeShortcuts` 增加 `Snap` 动作绑定 `Ctrl+S`（Prefer 可改键）；单测 41 例全绿，hook-gate PASS |
-| （性能轮） | **大 XML 弹幕文件异步线程化与解析优化结案（销账 §7-1）**：`Load::processNext` 后台线程异步化读盘与解析；值语义投递主线程；`raws.reserve` 预分配与 `tag.indexOf("user_hash")` 避免 5 万+ 次正则；单测 41 例全绿，hook-gate PASS |
-| （UI交互轮） | **底栏控制按钮全量落地与排版紧凑化结案**：新增上一集（`prevB` / `PgUp`）、下一集（`nextB` / `PgDn`）、静音切换（`muteB` / `M`）、截图（`snapB` / `Ctrl+S`）；自绘矢量图标 `barIcon(4..8)`；`volumeChanged` 状态双向联动；精简 QSS padding 至 `2px 4px`，`barMinWidth` 控制在 ~644px 严守 720×405 默认视口；定性并排查 `Shield Group 1` 历史配置暗坑；单测 41 例全绿，hook-gate PASS |
-| （UI视觉轮） | **弹幕类型背景色模式着色结案**：`Danmaku.cpp` 扩充 `Qt::BackgroundRole`：模式 4（底端柔蓝）、模式 5（顶端柔橙）、模式 6（逆向柔紫）、模式 7/8（高级淡绿/代码淡黄）；双主题通过 `palette().color(Base).lightness() < 128` 自适应无白底眩光；模式 1-3 常规滚动保持透明默认无底色，严防穿透；单测全绿，hook-gate PASS |
-| （测试解耦） | **Danmaku 模型单测解耦与 CTest 扩容结案（销账 §10-2）**：编写 `test/tst_danmaku.cpp`，覆盖模型契约、乱序时间升序排列、Record 内部去重、同源追加合并、模式 7 JSON 数组/对象高级解析、模式 4/5/6/7/8 浅深色背景上色、delayAll 毫秒平移、正则屏蔽与日期限制过滤、记录移除与清空；加固 `Shield` 空指针守卫；6 目标 50 例单测全绿，hook-gate PASS |
+| `72a99e0` | **Home.cpp 拆解全景结案**：Step 1 快捷键系统（`HomeShortcuts.h/cpp`，951→742 行）；Step 2 上下文菜单（`HomeContextMenu.h/cpp`，742→543 行）；Step 3 手势与定时器状态机（`HomeGestures.h/cpp`，543→352 行，净减 599 行，缩减 63%）；全屏/DWM 与置顶收敛为原子方法；保留 Prefer 扫描与 pinHover 契约；ctest 41/41 绿、hook-gate PASS |
+| `72a99e0` | **底栏原生视频截图与快捷键系统落地**：`libvlc_video_take_snapshot` 直通硬件解码帧（全分辨率无黑屏），保存至 `%USERPROFILE%\Pictures\BiliLocal` 并自动复制至剪贴板；底栏增加 `barIcon(4)` 矢量相机图标按钮；`HomeShortcuts` 增加 `Snap` 动作绑定 `Ctrl+S`（Prefer 可改键）；单测 41 例全绿，hook-gate PASS |
+| `72a99e0` | **大 XML 弹幕文件异步线程化与解析优化结案（销账 §7-1）**：`Load::processNext` 后台线程异步化读盘与解析；值语义投递主线程；`raws.reserve` 预分配与 `tag.indexOf("user_hash")` 避免 5 万+ 次正则；单测 41 例全绿，hook-gate PASS |
+| `72a99e0` | **底栏控制按钮全量落地与排版紧凑化结案**：新增上一集（`prevB` / `PgUp`）、下一集（`nextB` / `PgDn`）、静音切换（`muteB` / `M`）、截图（`snapB` / `Ctrl+S`）；自绘矢量图标 `barIcon(4..8)`；`volumeChanged` 状态双向联动；精简 QSS padding 至 `2px 4px`，`barMinWidth` 控制在 ~644px 严守 720×405 默认视口；定性并排查 `Shield Group 1` 历史配置暗坑；单测 41 例全绿，hook-gate PASS |
+| `72a99e0` | **弹幕类型背景色模式着色结案**：`Danmaku.cpp` 扩充 `Qt::BackgroundRole`：模式 4（底端柔蓝）、模式 5（顶端柔橙）、模式 6（逆向柔紫）、模式 7/8（高级淡绿/代码淡黄）；双主题通过 `palette().color(Base).lightness() < 128` 自适应无白底眩光；模式 1-3 常规滚动保持透明默认无底色，严防穿透；单测全绿，hook-gate PASS |
+| `72a99e0` | **Danmaku 模型单测解耦与 CTest 扩容结案（销账 §10-2）**：编写 `test/tst_danmaku.cpp`，覆盖模型契约、乱序时间升序排列、Record 内部去重、同源追加合并、模式 7 JSON 数组/对象高级解析、模式 4/5/6/7/8 浅深色背景上色、delayAll 毫秒平移、正则屏蔽与日期限制过滤、记录移除与清空；加固 `Shield` 空指针守卫；6 目标 50 例单测全绿，hook-gate PASS |
 
 ---
 

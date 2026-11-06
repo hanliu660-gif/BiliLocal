@@ -77,8 +77,8 @@
 - **运行库**：VLC **3.0.24**（d3d11 直出）；`dist\plugins` 里混住着 Qt 的**三个**插件目录（`platforms\` `imageformats\` `styles\`；mediaservice 随 Qt6 部署取消），整目录替换 VLC 时必须把它们合并到顶层，否则 Qt 起不来（流程见 §9）。dist 只带 exe 实际导入的 **8 个 Qt6 DLL**（Concurrent/Core/Core5Compat/Gui/Network/OpenGL/OpenGLWidgets/Widgets）。
 - **配置**：`Output=Embed` 已是唯一输出（键保留但代码不再读）；`Immediate=True`；`HardwareDecode` 已无消费者（d3d11 固定开启，`Arguments` 手写 `--avcodec-hw=`/`--vout=` 仍可覆盖）。
 - **备份**：git 历史 = 本地 `src\.git` + GitHub 双保险；锚点 tag：`v0.7.0-qt6`（迁移结案）/ `v0.6.0-qt5-final`（Qt5 末态）/ `v0.5.0-vmem`（考古，重编需自备 VLC 2.2.8）。
-- **未决事项**：**Qt6 迁移全部结案（2026-10-26，千夏验收通过）**。挂账清单见 §10 尾部（大 xml 异步解析、Danmaku 本体成测、编辑器上色/底栏按钮、渲染重构、VLC 4）。
-- **CI**：`.github/workflows/ci.yml`——push 到 master 触发，**单 job（Phase 2 起）**：runner 上 aqt 装 Qt 6.8.3 msvc2022_64 + qt5compat（不钉 `-G`，坑 51；装完落盘验 `Qt6Core.dll`，坑 52），`BILILOCAL_BUILD_APP=OFF` 只编测试目标并 ctest（41 例）；Qt 走 actions/cache（key `qt-6.8.3-msvc2022-v1`）。查状态：认证 API 或徽章 SVG。**每次 push 都会跑，红了不许推**。
+- **未决事项**：**全部积压功能与重构清单已 100% 全量结案**（Home.cpp 拆解、大 xml 异步解析、Danmaku 模型单测解耦、编辑器弹幕类型着色、底栏上一集/下一集/静音/截图全量控制与紧凑排版均已结案落地）。长线仅保留远期独立事项：Phase 4 VLC 4（等上游 4.0 final 发布）。
+- **CI**：`.github/workflows/ci.yml`——push 到 master 触发，**单 job（Phase 2 起）**：runner 上 aqt 装 Qt 6.8.3 msvc2022_64 + qt5compat（不钉 `-G`，坑 51；装完落盘验 `Qt6Core.dll`，坑 52），`BILILOCAL_BUILD_APP=OFF` 只编测试目标并 ctest（6 目标 50 例）；Qt 走 actions/cache（key `qt-6.8.3-msvc2022-v1`）。查状态：认证 API 或徽章 SVG。**每次 push 都会跑，红了不许推**。
 - **验证分工**：agent 工具几乎全能自验——日志取证（`hover: freeze/release`、`Load: processed … pool=N`、`Program Link Failed` 计数）、进程内钩子注入（双击全屏/单击暂停/悬停扫掠/拍点右键）、时序验证、对话框巡览截图；**用户本人只做"真实右键点到弹幕"这一个动作**（物理点击过不了三层窗口栈的焦点/显示盲区，合成事件替代不了，见 `a4b5acf`）与主观体验类验收。
 
 ### 2.1 版本沿革（根因与证据都在 git 提交信息里）

@@ -60,7 +60,7 @@
 **迁移状态（✅ 2026-10-26 结案，tag `v0.7.0-qt6`）**：
 
 - **源码**：`master` = 最新提交 `ccd5417`（文档同步收尾）← `c0ac591`（文档 31 版快照）← `72a99e0`（**代码末态**，积压功能与重构全量收官结案）← `40338ad`（文档 23 版快照）← `bf618b1` ← `dafc3d9` ← `8f15d86`（坑 55 修复）。（2026-11-07 06:08 勘误同步：把散落在 `src\README.md` / §8 / CI 注释 / 上层 `APP\AGENTS.md` 的旧测试计数全量对齐为「6 目标 50 例」，HEAD 与 dist SHA 一并对齐；§2.1 沿革、§9 SDK 验证与 §10 任务书里的旧计数是当时史实，按原样保留。）
-- **现役成品**：`dist\BiliLocal.exe` **1,003,008 B / SHA256 `f30a9743…`**（Qt 6.8.3 msvc2022_64，构建树 `build-cmake6\`）——**这就是日常在用的 dist**。对调时裁掉 Qt5 杂项：MinGW 三件套（libgcc/libstdc++/libwinpthread）、`d3dcompiler_47.dll`、Qt5 时代 `qt.qm`——pefile 扫 libvlc/libvlccore/全部插件的导入表实证零依赖；换上 Qt6 自带 `qt_zh_CN.qm`/`qt_zh_TW.qm`（QFileDialog 等 Qt 内建文案的翻译）。hook-gate 对调后复验 PASS。
+- **现役成品**：`dist\BiliLocal.exe` **1,003,008 B / SHA256 `4db980e6…`**（2026-11-07 07:29 含坑 45 修复）（Qt 6.8.3 msvc2022_64，构建树 `build-cmake6\`）——**这就是日常在用的 dist**。对调时裁掉 Qt5 杂项：MinGW 三件套（libgcc/libstdc++/libwinpthread）、`d3dcompiler_47.dll`、Qt5 时代 `qt.qm`——pefile 扫 libvlc/libvlccore/全部插件的导入表实证零依赖；换上 Qt6 自带 `qt_zh_CN.qm`/`qt_zh_TW.qm`（QFileDialog 等 Qt 内建文案的翻译）。hook-gate 对调后复验 PASS。
 - **回滚位**：`dist-qt5\`（Qt5/MinGW 线最后成品整树归档，956,928 B / `6C55F692…`）；源码锚 tag `v0.6.0-qt5-final`；deps 的 Qt5/MinGW 工具链（约 1.4G）按"默认倾向留"保留，要裁再说一声。
 - **验收记录**：Phase 3 功能清单全过；性能回归（反应变慢 + 关闭长卡顿）定位与修复见坑 55；千夏复验通过。
 - **构建树收敛**：只余 `build-cmake6\`（现役）。qmake 的 `build\` + 6 个测试树（Phase 2 删）、CMake 死线 `build-cmake\`（382M）/`build-cmake-msvc\`（196M）（本次删）全部清空。
@@ -69,7 +69,7 @@
 
 
 
-- **exe**：现行 `dist\BiliLocal.exe` = **1,003,008 B / `f30a9743…`**（见上）；归档线 `dist-qt5\BiliLocal.exe` = 956,928 B / `6C55F692…`。**构建可复现性结论**（Qt5 线 2026-10-25 三组实测，原则仍适用，细节见坑 42）：尺寸可复现、字节不完全可复现——**判断"是不是同一份源码"只能看 git 提交号，别比哈希**。
+- **exe**：现行 `dist\BiliLocal.exe` = **1,003,008 B / `4db980e6…`**（见上）；归档线 `dist-qt5\BiliLocal.exe` = 956,928 B / `6C55F692…`。**构建可复现性结论**（Qt5 线 2026-10-25 三组实测，原则仍适用，细节见坑 42）：尺寸可复现、字节不完全可复现——**判断"是不是同一份源码"只能看 git 提交号，别比哈希**。
 - **上游与远端**：上游 `9d1cb05`；回滚 tag `v0.5.0-vmem` = `46b68b9`；远端 `github` = `github.com/hanliu660-gif/BiliLocal`。完整沿革见 §2.1。
 - **单测**：七个目标共 **54 例全绿**（`build-cmake6` + ctest，CI 同配方）：`tst_parse` **9**、`tst_config` **7**、`tst_shield` **9**、`tst_load` **12**、`tst_list` **4**、`tst_danmaku` **9**、`tst_layout` **4**。**负向对照做过三个**（证明用例不是空跑）：①去掉 `tst_config` 的 `QWriteLocker` → `concurrentWriters` SIGSEGV；②去掉 `Load.cpp` 嗅探的 `.trimmed()` → `blankLineBeforeXml` 变红；③把 List 去重短路成 `if (false)` → `tst_list` 双红。GUI 钩子剧本见 `tools\hook-gate.ps1`。Danmaku 模型本体已完成单测解耦与 CTest 挂载（第三十一版结案）。
 - **编译警告**：**MSVC 现役基线 0**（Phase 1 起实测始终 0）。Qt5/MinGW 时代 42→3（3 条刻意保留：Running.cpp fallthrough、VPlayer 的 libvlc deprecation ×2），该基线随 dist-qt5 归档；换 VLC 4 时那 2 条会变硬错误（§10-4）。
@@ -80,6 +80,7 @@
 - **未决事项**：**全部积压功能与重构清单已 100% 全量结案**（Home.cpp 拆解、大 xml 异步解析、Danmaku 模型单测解耦、编辑器弹幕类型着色、底栏上一集/下一集/静音/截图全量控制与紧凑排版均已结案落地）。长线仅保留远期独立事项：Phase 4 VLC 4（等上游 4.0 final 发布）。
 - **CI**：`.github/workflows/ci.yml`——push 到 master 触发，**双 job（2026-11-07 起：unit + build-app）**：runner 上 aqt 装 Qt 6.8.3 msvc2022_64 + qt5compat（不钉 `-G`，坑 51；装完落盘验 `Qt6Core.dll`，坑 52），`BILILOCAL_BUILD_APP=OFF` 只编测试目标并 ctest（7 目标 54 例）；Qt 走 actions/cache（key `qt-6.8.3-msvc2022-v1`）。查状态：认证 API 或徽章 SVG。**每次 push 都会跑，红了不许推**。
 - **坑 45 修复（2026-11-07）**：`Running::Process` 的 lane 选择抽成 `Model/Layout.h` 的 `chooseLane`（并列最空时按游标轮换铺满屏高，唯一最空 lane 行为不变）；**固定弹幕 mode 4/5 保持旧的贴边语义**，只有滚动弹幕启用轮换。新增 `tst_layout` 4 例（稀疏铺满全屏 / 唯一最空不变 / 并列轮换确定 / 空输入安全）；负向对照实测：把 cursor 推进注释掉改回旧行为 → `tst_layout` 红（exit 8），恢复 → 绿。全量 ctest 7 目标 54 例全绿。
+- **坑 45 成品部署（2026-11-07 07:29）**：`dist\BiliLocal.exe` 已换成含修复的新构建（1,003,008 B / SHA256 `4db980e6…`），与 `build-cmake6\Release` 逐字节一致；旧 exe `f30a9743…` 备份在 `%TEMP%\BiliLocal.exe.pre-pitfall45`。部署时无播放器进程运行；低密度弹幕分布变化属视觉行为，按 §0 由用户本人验收。
 - **验证链入库（2026-11-07）**：`src\tools\` 收录 4 个核心门禁/取证脚本（与仓库外 `tools\` 逐字节一致，改为向上探测项目根 + 命令行覆盖，无写死绝对路径）；CMake 增 `BILILOCAL_BUILD_TEST_HOOKS`（默认 ON、行为不变，OFF 出干净构建，本机实测完整编译通过）；CI 增 `build-app` job（官方 VLC SDK + 完整编译主程序 + hooks OFF 验证）。脚本用法与同步约定见 `src\README.md`。
 - **验证分工**：agent 工具几乎全能自验——日志取证（`hover: freeze/release`、`Load: processed … pool=N`、`Program Link Failed` 计数）、进程内钩子注入（双击全屏/单击暂停/悬停扫掠/拍点右键）、时序验证、对话框巡览截图；**用户本人只做"真实右键点到弹幕"这一个动作**（物理点击过不了三层窗口栈的焦点/显示盲区，合成事件替代不了，见 `a4b5acf`）与主观体验类验收。
 

@@ -105,7 +105,7 @@ for translations — the BOM/i18n housekeeping workflow lives in
 
 ## Tests
 
-Seven QtTest targets (54 cases; parse 9, config 7, shield 9, load 12,
+Seven QtTest targets (55 cases; parse 10, config 7, shield 9, load 12,
 list 4, danmaku 9, layout 4) build and run through CTest — the load/parse
 suites caught the upstream ASS color bug and several regressions of our own:
 

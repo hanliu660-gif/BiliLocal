@@ -1,4 +1,4 @@
-# BiliLocal CI：unit = 7 个单测目标（54 例，免 VLC SDK）；
+# BiliLocal CI：unit = 7 个单测目标（55 例，免 VLC SDK）；
 # build-app = 主程序完整编译（官方 VLC SDK，顺带验证关掉测试钩子也能编）。
 # Phase 2 起单 job：Qt 6.8 + MSVC（不钉 -G，用 runner 镜像的默认 VS，坑 51）；
 # qmake/MinGW 线已随 Qt6 迁移删除。主程序 + hook-gate 留在本机验证（CI 虚机的

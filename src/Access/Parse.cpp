@@ -8,6 +8,12 @@
 
 namespace
 {
+	// CVE-2026-107479：QTextCodec 的转换函数把长度收成 int，超大输入会整数截断。
+	// 官方缓解 = 分块 + 带 ConverterState 的重载。QTextDecoder 内部持有该状态，
+	// 能接续跨块的多字节字符 / UTF-16 代理对，结果与整份 toUnicode 等价。
+	// 64 KiB 远低于任何截断阈值，也让每次转换的临时对象保持小。
+	constexpr int DecodeChunkSize = 64 * 1024;
+
 	QTextCodec *codeForData(const QByteArray &data)
 	{
 		QTextCodec *code = QTextCodec::codecForUtfText(data, nullptr);
@@ -52,7 +58,17 @@ namespace
 
 	QString decodeBytes(const QByteArray &data)
 	{
-		return codeForData(data)->toUnicode(data);
+		QTextDecoder decoder(codeForData(data));
+		QString out;
+		out.reserve(data.size());
+		for (qsizetype off = 0; off < data.size(); off += DecodeChunkSize) {
+			const int len = int(qMin<qsizetype>(DecodeChunkSize, data.size() - off));
+			out += decoder.toUnicode(data.constData() + off, len);
+		}
+		if (decoder.hasFailure()) {
+			qWarning("Parse: codec conversion failure in %lld bytes", (long long)data.size());
+		}
+		return out;
 	}
 
 	using namespace Parse;

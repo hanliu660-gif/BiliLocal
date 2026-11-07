@@ -13,6 +13,7 @@
 =========================================================================*/
 
 #include <QtTest>
+#include <QTextCodec>
 #include "../src/Access/Parse.h"
 #include "../src/Utils.h"
 
@@ -116,6 +117,62 @@ private slots:
 	{
 		QCOMPARE(Utils::decodeXml("&amp;&lt;&gt;&nbsp;&quot;", true),
 			QStringLiteral("&<> \""));
+	}
+
+	// CVE-2026-107479 缓解回归：decodeBytes 改成分块 + ConverterState 后，
+	// 大输入必须与整份解码逐字等价，尤其跨 64 KiB 块边界的多字节字符不能断字。
+	// 覆盖 AcfunLocalizer（走 decodeBytes 的整份路径）；Bilibili 主路径本来
+	// 就是按标签片段解码，不吃整份输入。
+	void largeChunkedDecode()
+	{
+		const int count = 5000;
+		QByteArray xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><i>";
+		for (int i = 0; i < count; ++i) {
+			xml += "<l i=\"1.0,1,25,16777215,1234567890,S\"><![CDATA[弹幕测试";
+			xml += QByteArray::number(i);
+			xml += "]]></l>";
+		}
+		xml += "</i>";
+		QVERIFY(xml.size() > 200 * 1024);	// 必须跨过多个块
+		QVector<Comment> r = parseComment(xml, Utils::AcfunLocalizer);
+		QCOMPARE(r.size(), count);
+		QCOMPARE(r.first().string, QStringLiteral("弹幕测试0"));
+		QCOMPARE(r.last().string, QStringLiteral("弹幕测试") + QString::number(count - 1));
+		bool utf8All = true;
+		for (int i = 0; i < count; ++i) {
+			if (r[i].string != QStringLiteral("弹幕测试") + QString::number(i)) {
+				utf8All = false;
+				break;
+			}
+		}
+		QVERIFY(utf8All);	// 每个块边界处的汉字都必须完整
+
+		// GBK：双字节汉字跨块边界；编码名由 XML 声明经 codecForName 选取
+		QTextCodec *gbk = QTextCodec::codecForName("GBK");
+		if (!gbk) {
+			QSKIP("GBK codec unavailable in this Qt build");
+		}
+		QString src = QStringLiteral("<?xml version=\"1.0\" encoding=\"GBK\"?><i>");
+		for (int i = 0; i < count; ++i) {
+			src += QStringLiteral("<l i=\"1.0,1,25,16777215,1234567890,S\"><![CDATA[中文弹幕");
+			src += QString::number(i);
+			src += QStringLiteral("]]></l>");
+		}
+		src += QStringLiteral("</i>");
+		QByteArray data = gbk->fromUnicode(src);
+		QVERIFY(data.size() > 200 * 1024);
+		QVector<Comment> g = parseComment(data, Utils::AcfunLocalizer);
+		QCOMPARE(g.size(), count);
+		QCOMPARE(g.first().string, QStringLiteral("中文弹幕0"));
+		QCOMPARE(g.last().string, QStringLiteral("中文弹幕") + QString::number(count - 1));
+		bool gbkAll = true;
+		for (int i = 0; i < count; ++i) {
+			if (g[i].string != QStringLiteral("中文弹幕") + QString::number(i)) {
+				gbkAll = false;
+				break;
+			}
+		}
+		QVERIFY(gbkAll);	// GBK 双字节汉字不能跨块断字
 	}
 };
 

@@ -356,8 +356,36 @@ Copy-Item C:\DSH\APP\BiliLocal\build-cmake6\Release\BiliLocal.exe C:\DSH\APP\Bil
 > ③deps 裁决（Qt5×2 + MinGW 共 1.4G **决定保留**，作 `v0.6.0-qt5-final` 回滚位）✅；
 > ④Qt5 杂项对账（`qt.qm` / `d3dcompiler_47` / MinGW 三件套经 pefile 导入表实证零依赖后全部裁掉）✅。
 
-**Phase 4 · VLC 4（独立会话，等上游 4.0 final）**
-与 Qt 解耦。必改点已知：`libvlc_video_set_subtitle_file`（现存的 2 条警告在 4.x 头文件里会变硬错误）。可先做纸面差异清单，把考古变成核对。
+**Phase 4 · VLC 4（独立会话，等上游 4.0 final；2026-11-07 裁定：现在完全不上）**
+
+> **裁定**：官方 libVLC 页原文 "The current stable major version of libVLC is version 3, and the preview/development version is version 4"；官网下载页仍是 **3.0.24**（与本机 `dist\` 一致）。Windows 桌面 / libVLC 4 只有 VideoLAN 明确标注 unfinished / unstable / **unsupported** 的 nightly（iOS/tvOS 4.0 有公开 TestFlight beta，与本工程无关）；**无 final、无发布日期、无稳定 Windows SDK（含 MSVC .lib）**。千夏 2026-11-07 裁定：**当前完全没必要上 VLC 4，代码一律不动**；本轮只落盘纸面差异清单。等 4.0 final 发布后，必须按当时头文件重新核对本清单再开工。
+
+**证据基线（2026-11-07）**：VLC `master` 开发分支 `include/vlc/` 的 `libvlc.h`(486 行) / `libvlc_media.h`(719 行) / `libvlc_media_player.h`(3844 行)，`libvlc_events.h` 与 `libvlc_audio.h` 均 **HTTP 404**；官方 `doc/libvlc/CHANGES-v3-to-v4.md`；VideoLAN 官方 libVLC 页与下载页。**master 是开发态，不是 release 契约，final 前函数名/签名仍可能变。**
+
+**三大结构性变化**
+1. **事件系统整体删除**：`libvlc_events.h` 没了，`libvlc_event_manager_t` / `event_attach` / `event_detach` / `libvlc_media_player_event_manager()` 全删；改为对象创建时传 `struct libvlc_media_player_cbs`（`version=0`，LibVLC 只存指针不拷贝，回调结构体必须比 player 活得久且提交后不可改）。`on_state_changed` 取代 Playing/Paused/Stopped，`on_position_changed` 同时给 us + position。
+2. **`libvlc_time_t` 全局毫秒 → 微秒**：官方迁移清单要求 "Convert `(ms)` literals to `(ms * 1000)`"。
+3. 解析/缩略图抽成 `libvlc_parser_t`（本工程未用，可忽略）。
+
+**本工程 API 核对（`VPlayer.cpp` 行号为 2026-11-07 版本）**
+
+| 状态 | API | VLC 4 / 处置 |
+| --- | --- | --- |
+| 删 | `libvlc_event_attach/detach/event_manager` + 5 回调 `sta/mid/hal/end/err`（`:34-60, :292-323`） | → `libvlc_media_player_cbs`；跨线程投递 `APlayer::Event` 的逻辑保留（坑 16/17/20） |
+| 删 | `libvlc_video_set_spu/get_spu`、`*_get_track_description`、`libvlc_track_description_t` / `list_release`、`get_track/set_track`（`:164-223, :475`） | → `get_tracklist` / `select_track` / `get_selected_track` |
+| 删 | `libvlc_video_set_subtitle_file`（`:482`） | → `libvlc_media_player_add_slave(mp, subtitle, psz_uri, true)`；**收 URI**，现在传的是本地路径（`:480`） |
+| 删 | `libvlc_media_player_stop`（`:101/:151/:247`） | → `stop_async()`，须等 `on_state_changed` 报 Stopped |
+| 签名 | `libvlc_media_player_new_from_media`（`:304`） | 加 `cbs` + `cbs_opaque` |
+| 签名 | `libvlc_media_player_set_time`（`:268`） | 加 `bool b_fast` |
+| 保留 | `set_hwnd`(v4 头 `:1574`)、`take_snapshot`(`:2892`)、`get_time/get_length`、`set_rate/get_rate`、`audio_*delay`、`video_*spu_delay`、`media_new_path/get_mrl`、`libvlc_new/release/get_version`、`libvlc_free` | **Embed 直出与原生截图链路保住** |
+| 头文件没了 | `libvlc_events.h`、`libvlc_audio.h` | 音频函数并入 `libvlc_media_player.h` |
+
+**风险分级**
+1. **静默错误（最致命）**：时间 ×1000。编译能过、现有 7 目标 54 例也全绿（测试目标全不链 libvlc，VPlayer 零覆盖），但 `APlayer::timeChanged → Running::moveTime → Danmaku::Comment::time`、续播位置、`List` 的 Time、delay 校准、hook-gate 的 `seeked to 10% (6000)` 全是毫秒。必须在 VPlayer 内做 `ms↔us` 边界，别让微秒漏进模型层。
+2. **编译错误（好办）**：事件 / track / 字幕 / 构造签名，编译器逐条报。
+3. **运行时（最难，编译期发现不了）**：`stop_async` 让析构「先停解码线程再 release」（`:98-105`）的同步假设失效，是坑 55 那类退出时序；`--vout=direct3d11` / `--avcodec-hw=d3d11va` 在 VLC 4 未能确证存续（`modules/video_output` 已无独立 d3d11 目录、只剩 `win32`；`libvlc-module.c` 无 `avcodec-hw` 字面），加上三层窗口栈（坑 18/23/24/25）需整机重验。
+
+**触发条件与纪律**：4.0 **final** + 官方 Windows SDK（含 MSVC `.lib`）+ 保留 3.0.24 整树作回滚位；独立会话 / 独立提交，每阶段全门禁 + hook-gate + 用户人眼清单；**与 Qt 解耦**（本节改动全在 libvlc 侧）。
 
 **每阶段的纪律**：独立提交（Phase 名进提交信息）→ 跑全门禁 → 证据进文档 → 再进下一段。任何一段失败：`git reset`/`revert` + 从 tag 重编即回滚，`deps\` 的 Qt5/MinGW 树不受影响。
 
